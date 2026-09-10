@@ -457,6 +457,43 @@ Verified:
   button row with no overlap at any of the states checked.
 
 --------------------------------------------------------------------------------
+2026-09-10 (continued once more) -- re-synced skeleton annotations
+
+"I updated teh joint annotations" -- a pasted, re-annotated
+flick-skeleton.json dump from the other concurrent session's own
+flick-skeleton-annotator.html tool.
+
+Fixed:
+- Normalized the pasted data (joint key order within each keyframe varied
+  arbitrarily -- sometimes joint2 first, sometimes tip first -- and
+  keyframe numbers weren't sorted) into this project's existing
+  convention (knuckle/joint1/joint2/tip order, keyframes sorted
+  numerically) via a small one-off Node script, rather than hand-editing
+  ~70 keyframes across 8 directions. Cross-checked structurally against
+  the OLD data first: confirmed all 8 directions and all 4 joint names
+  present with no typos, and that every change was purely additive (6 of
+  8 directions gained 2-3 new keyframes each; side-pinky and
+  behind-pinky unchanged; zero keyframes removed anywhere) before
+  trusting it enough to overwrite the live file.
+- Synced the new data to BOTH `data/processed/flick-skeleton.json` (the
+  pretty-printed source of truth) and the embedded `FLICK_SKELETON`
+  literal in `index.html` (a single-line compact copy) -- this project's
+  own documented convention (CODE_SUMMARY.md), since the annotator tool
+  only ever writes the standalone JSON file, never the embedded literal.
+
+Verified:
+- The 2 files are byte-identical once parsed (`JSON.stringify(embedded)
+  === JSON.stringify(file)`) after the sync.
+- `interpolatedLocalPose()` produces a valid, non-NaN pose for every
+  frame 1-20 of all 8 directions (160 checks, 0 issues) against the new
+  keyframe set.
+- Live: spawned a real entity, confirmed the joint-collision debug line
+  tracks the visible finger correctly at frame 1 (idle) AND at frame 15
+  (one of the newly-added keyframes, not present in the old data at
+  all) -- the exact frame most likely to reveal a transcription mistake
+  in the new data, since it has no prior keyframe to fall back to.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

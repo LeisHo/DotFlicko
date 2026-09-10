@@ -20,13 +20,11 @@ work seamlessly from there.
 
 Nothing in progress from this session. The spawn-placement rework (started
 on a `spawn-placement-mode` branch) is complete, merged into `main`, and
-pushed to `origin/main` (commit `3be0ac4`). Save Settings now also writes
-to a git-tracked settings log (ported from Clicko/DickoClicko) — **not yet
-end-to-end verified against the real Vercel deployment** (the user set up
-`GITHUB_TOKEN`/`DEV_PANEL_SAVE_SECRET` on Vercel; a next session should
-confirm a real Save from the live site actually commits to
-`data/processed/dev-panel-settings.json`, since local testing could only
-verify the client-side fallback logic, not the actual GitHub write).
+pushed to `origin/main` (commit `3be0ac4`). Save Settings' git-tracked
+settings log (ported from Clicko/DickoClicko) is **confirmed working
+end-to-end in production** — the user's own live Save clicks on the
+deployed Vercel site committed `data/processed/dev-panel-settings.json`
+straight to GitHub twice, pulled into this repo via a merge.
 
 **Note for a new session:** a *different*, concurrent Claude session has
 also been actively developing this same `index.html` (the ball/collision
@@ -96,6 +94,14 @@ new session should be aware they're there before touching `data/FLICK/`.
   Reset/Save's own styling (it was an unstyled bare `<button>` before);
   the `showAngleDebug` status text moved from y=12 to y=50 so it no
   longer renders behind the Start/Stop/Delete buttons.
+- Skeleton re-annotated (the other concurrent session's own
+  flick-skeleton-annotator.html work): denser keyframes for 6 of 8
+  directions (`behind`, `behind-thumb`, `side-thumb`, `front-thumb`,
+  `front`, `front-pinky` each gained 2-3 new keyframes; `side-pinky`/
+  `behind-pinky` unchanged), purely additive — no keyframes removed, no
+  direction/point keys missing. Synced to both
+  `data/processed/flick-skeleton.json` and the embedded `FLICK_SKELETON`
+  literal in `index.html` (confirmed byte-identical after the sync).
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-
