@@ -362,11 +362,15 @@
                 <div class="dev-section-content"></div>
             </div>
             <div class="dev-section">
-                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Mouse / Rotation">▼ Mouse / Rotation</div>
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Background">▼ Background</div>
                 <div class="dev-section-content"></div>
             </div>
             <div class="dev-section">
-                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Background">▼ Background</div>
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Ball">▼ Ball</div>
+                <div class="dev-section-content"></div>
+            </div>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Collision">▼ Collision</div>
                 <div class="dev-section-content"></div>
             </div>
             <div class="dev-section">
@@ -1457,25 +1461,98 @@
     // tabs show only the built-in "Dev Panel" style group.
     // ================================================================
 
+    // Defaults below reflect "set defaults" from the user's own live-tuned
+    // Copy Settings dump (2026-09-10) -- this project has no git-tracked
+    // settings log (CLAUDE.md §12l/§12m), so for a localStorage-only
+    // project "set defaults" means updating these hardcoded values
+    // directly, not a 3-way merge. Slider max bounds for entityScale/
+    // clickAnimSpeed/peakHoldFrames are widened past their old defaults
+    // using the same value+20% formula the click-to-edit auto-expand
+    // already uses elsewhere in this file, since the tuned values exceed
+    // the old bounds.
     const cfg = {
-        entityScale: 30, entityRotationOffset: 0, clickAnimSpeed: 3,
+        entityScale: 100, clickAnimSpeed: 11.7, peakHoldFrames: 30,
+        // Per-direction Hand Rotation Offset defaults, baked in from a
+        // tuned "Copy Settings" dump per explicit request ("Set Hand
+        // Rotation Offset defaults") — previously every direction
+        // defaulted to 0 (set at runtime by wireRotationOffsetRow()).
+        entityRotationOffsetByDirection: {
+            'behind': -7, 'behind-thumb': 2, 'side-thumb': 11, 'front-thumb': 23,
+            'front': 15, 'front-pinky': -5, 'side-pinky': -3, 'behind-pinky': -16,
+        },
         rotationSmoothing: 1, positionSmoothing: 1, angleOffset: 0,
         backgroundColor: '#1b1f2a',
-        showCenter: true, showAngleDebug: true, hideCursor: true, showHitbox: false,
+        ballGravity: 80, ballRadius: 3, ballColor: '#ff5c5c', ballBounciness: 0.6, ballRespawnRate: 1,
+        jointThickness: 4, thicknessSmoothing: 0.15, collisionIntensity: 1,
+        showCenter: true, showAngleDebug: true, hideCursor: true, showHitbox: false, showJointCollisionLines: false,
     };
 
+    // Labels below still reflect the "Hand ..." rename set as default
+    // from an earlier pasted Copy Settings dump, but the group itself
+    // stays "Entity" (reverted from a brief "Hand Animation" rename, per
+    // explicit request) so the per-direction rotation-offset row below
+    // lands in the same group as every other entity-level control.
+    // Entity Rotation Offset is no longer a single scalar here -- see
+    // ROTATION_OFFSET_CONTROLS/renderRotationOffsetRow() below, which
+    // builds the per-direction dropdown+slider compound row.
     const ENTITY_CONTROLS = [
-        { group: 'Entity', id: 'sliderEntityScale', type: 'slider', label: 'Entity Scale (%vmin):', min: 5, max: 60, step: 0.5, value: cfg.entityScale },
-        { group: 'Entity', id: 'sliderEntityRotationOffset', type: 'slider', label: 'Entity Rotation Offset (Deg):', min: -180, max: 180, step: 1, value: cfg.entityRotationOffset },
-        { group: 'Entity', id: 'sliderClickAnimSpeed', type: 'slider', label: 'Click Anim Speed (x):', min: 0.1, max: 10, step: 0.1, value: cfg.clickAnimSpeed },
+        { group: 'Entity', id: 'sliderEntityScale', type: 'slider', label: 'Hand Scale (%vmin):', min: 5, max: 120, step: 0.5, value: cfg.entityScale },
+        { group: 'Entity', id: 'sliderClickAnimSpeed', type: 'slider', label: 'Hand Anim Speed (x):', min: 0.1, max: 14.04, step: 0.1, value: cfg.clickAnimSpeed },
+        { group: 'Entity', id: 'sliderPeakHoldFrames', type: 'slider', label: 'Peak Frame Hold (Frames):', min: 0, max: 36, step: 1, value: cfg.peakHoldFrames },
     ];
+    // Was its own "Mouse / Rotation" group; consolidated into Entity per
+    // explicit request ("i Moved all those settings into Hand as well").
     const MOUSE_CONTROLS = [
-        { group: 'Mouse / Rotation', id: 'sliderRotationSmoothing', type: 'slider', label: 'Rotation Smoothing (0-1):', min: 0.02, max: 1, step: 0.01, value: cfg.rotationSmoothing },
-        { group: 'Mouse / Rotation', id: 'sliderPositionSmoothing', type: 'slider', label: 'Position Smoothing (0-1):', min: 0.02, max: 1, step: 0.01, value: cfg.positionSmoothing },
-        { group: 'Mouse / Rotation', id: 'sliderAngleOffset', type: 'slider', label: 'Angle Offset (Deg):', min: -180, max: 180, step: 1, value: cfg.angleOffset },
+        { group: 'Entity', id: 'sliderRotationSmoothing', type: 'slider', label: 'Rotation Smoothing (0-1):', min: 0.02, max: 1, step: 0.01, value: cfg.rotationSmoothing },
+        { group: 'Entity', id: 'sliderPositionSmoothing', type: 'slider', label: 'Position Smoothing (0-1):', min: 0.02, max: 1, step: 0.01, value: cfg.positionSmoothing },
+        { group: 'Entity', id: 'sliderAngleOffset', type: 'slider', label: 'Angle Offset (Deg):', min: -180, max: 180, step: 1, value: cfg.angleOffset },
     ];
     const BACKGROUND_CONTROLS = [
         { group: 'Background', id: 'colorBackground', type: 'color', label: 'Background Color:', value: cfg.backgroundColor },
+    ];
+    // Ball falls straight down from top-center, bounces off left/right
+    // walls only (never top/bottom — it's meant to exit off the bottom
+    // and respawn), and reacts to the 3 finger segments. Gravity/radius
+    // are %-based (vh/vmin) per this project's existing unit convention
+    // so they stay proportionally correct across viewport sizes.
+    const BALL_CONTROLS = [
+        { group: 'Ball', id: 'sliderBallGravity', type: 'slider', label: 'Gravity Strength (%vh/s²):', min: 0, max: 300, step: 1, value: cfg.ballGravity },
+        { group: 'Ball', id: 'sliderBallRadius', type: 'slider', label: 'Ball Radius (%vmin):', min: 0.5, max: 15, step: 0.1, value: cfg.ballRadius },
+        { group: 'Ball', id: 'colorBall', type: 'color', label: 'Ball Color:', value: cfg.ballColor },
+        { group: 'Ball', id: 'sliderBallBounciness', type: 'slider', label: 'Ball Bounciness (x):', min: 0, max: 1.5, step: 0.05, value: cfg.ballBounciness },
+        { group: 'Ball', id: 'sliderBallRespawnRate', type: 'slider', label: 'Respawn Rate (s):', min: 0, max: 5, step: 0.1, value: cfg.ballRespawnRate },
+    ];
+    // Joint collision is capsule-shaped (a thick LINE per segment —
+    // knuckle→joint1, joint1→joint2, joint2→tip — not just 4 points),
+    // per explicit correction.
+    //
+    // Joint Collision Thickness is a FIXED size (%vmin, so it still
+    // scales with Entity Scale/viewport, per explicit requirement) —
+    // per direct instruction ("make sure that the collision circles
+    // dont rescale during any frames... unless otherwise told so by
+    // me"), thickness NO LONGER varies with segment speed/animation
+    // frame at all. An earlier version added a speed-derived extension
+    // here (the "scales with the animation frames" request from before
+    // the skeleton was even annotated) plus a smoothing pass to fix the
+    // resulting jumpiness (see CHANGELOG-equivalent history in ETA
+    // History.md) — that entire mechanism is now removed from the
+    // thickness calculation specifically. Don't reintroduce a speed term
+    // into effectiveThicknessPx without a fresh explicit request.
+    //
+    // Collision Intensity is UNCHANGED and still scales with real
+    // segment speed (and therefore with Click Anim Speed automatically,
+    // since that speed is derived from real elapsed time) — only the
+    // circle's SIZE was asked to stop scaling, not the push force.
+    // collisionSpeedSmoothing (still computed every frame regardless of
+    // thickness) exists purely to keep THAT kick force from jumping
+    // abruptly between the skeleton's own sparse, unevenly-spaced
+    // keyframes, the same reasoning as before, now scoped to intensity
+    // only — see jointSpeed's own comment further down.
+    const COLLISION_CONTROLS = [
+        { group: 'Collision', id: 'sliderJointThickness', type: 'slider', label: 'Joint Collision Thickness (%vmin, fixed):', min: 0.5, max: 20, step: 0.1, value: cfg.jointThickness },
+        { group: 'Collision', id: 'sliderThicknessSmoothing', type: 'slider', label: 'Collision Speed Smoothing (0-1):', min: 0.02, max: 1, step: 0.01, value: cfg.thicknessSmoothing },
+        { group: 'Collision', id: 'sliderCollisionIntensity', type: 'slider', label: 'Collision / Flick Intensity (x):', min: 0, max: 5, step: 0.1, value: cfg.collisionIntensity },
+        { group: 'Collision', id: 'checkboxShowJointCollisionLines', type: 'checkbox', label: 'Show Joint Collision Lines' },
     ];
     const DEBUG_CONTROLS = [
         { group: 'Debug', id: 'checkboxShowCenter', type: 'checkbox', label: 'Show Center Point' },
@@ -1484,20 +1561,26 @@
         { group: 'Debug', id: 'checkboxShowHitbox', type: 'checkbox', label: 'Show Entity Bounding Box' },
     ];
 
+    const PROJECT_CONTROL_ARRAYS = [
+        ['ENTITY_CONTROLS', ENTITY_CONTROLS], ['MOUSE_CONTROLS', MOUSE_CONTROLS], ['BACKGROUND_CONTROLS', BACKGROUND_CONTROLS],
+        ['BALL_CONTROLS', BALL_CONTROLS], ['COLLISION_CONTROLS', COLLISION_CONTROLS], ['DEBUG_CONTROLS', DEBUG_CONTROLS],
+    ];
     function renderProjectControls() {
-        [ENTITY_CONTROLS, MOUSE_CONTROLS, BACKGROUND_CONTROLS, DEBUG_CONTROLS].forEach(arr => {
+        PROJECT_CONTROL_ARRAYS.forEach(([name, arr]) => {
             arr.forEach(ctrl => {
                 const content = findGroupContent('desktop', ctrl.group, 'renderProjectControls', ctrl.id);
                 if (content) content.appendChild(buildUniformControlRow(ctrl));
             });
-            registerDevControlArray(arr === ENTITY_CONTROLS ? 'ENTITY_CONTROLS' : arr === MOUSE_CONTROLS ? 'MOUSE_CONTROLS' : arr === BACKGROUND_CONTROLS ? 'BACKGROUND_CONTROLS' : 'DEBUG_CONTROLS', arr);
+            registerDevControlArray(name, arr);
         });
+        renderRotationOffsetRow();
         // Default-checked checkboxes: the row builder never sets .checked,
         // so a true default needs applying explicitly right after render.
         document.getElementById('checkboxShowCenter').checked = cfg.showCenter;
         document.getElementById('checkboxShowAngleDebug').checked = cfg.showAngleDebug;
         document.getElementById('checkboxHideCursor').checked = cfg.hideCursor;
         document.getElementById('checkboxShowHitbox').checked = cfg.showHitbox;
+        document.getElementById('checkboxShowJointCollisionLines').checked = cfg.showJointCollisionLines;
     }
 
     function wireProjectControls() {
@@ -1510,13 +1593,22 @@
             });
         };
         bindSlider('sliderEntityScale', 'entityScale');
-        bindSlider('sliderEntityRotationOffset', 'entityRotationOffset');
         bindSlider('sliderClickAnimSpeed', 'clickAnimSpeed');
+        bindSlider('sliderPeakHoldFrames', 'peakHoldFrames');
         bindSlider('sliderRotationSmoothing', 'rotationSmoothing');
         bindSlider('sliderPositionSmoothing', 'positionSmoothing');
         bindSlider('sliderAngleOffset', 'angleOffset');
+        wireRotationOffsetRow();
+        bindSlider('sliderBallGravity', 'ballGravity');
+        bindSlider('sliderBallRadius', 'ballRadius');
+        bindSlider('sliderBallBounciness', 'ballBounciness');
+        bindSlider('sliderBallRespawnRate', 'ballRespawnRate');
+        bindSlider('sliderJointThickness', 'jointThickness');
+        bindSlider('sliderThicknessSmoothing', 'thicknessSmoothing');
+        bindSlider('sliderCollisionIntensity', 'collisionIntensity');
 
         document.getElementById('colorBackground').addEventListener('input', (e) => { cfg.backgroundColor = e.target.value; });
+        document.getElementById('colorBall').addEventListener('input', (e) => { cfg.ballColor = e.target.value; });
 
         const bindCheckbox = (id, key) => {
             document.getElementById(id).addEventListener('change', (e) => {
@@ -1528,6 +1620,7 @@
         bindCheckbox('checkboxShowAngleDebug', 'showAngleDebug');
         bindCheckbox('checkboxHideCursor', 'hideCursor');
         bindCheckbox('checkboxShowHitbox', 'showHitbox');
+        bindCheckbox('checkboxShowJointCollisionLines', 'showJointCollisionLines');
     }
 
     // ----------------------------------------------------------------
@@ -1540,18 +1633,121 @@
     // oversized PNGs hit).
     // ----------------------------------------------------------------
     const DIRECTIONS = [
-        { key: 'behind',       folder: 'BEHIND',        prefix: '2T -Flabbehind' },
-        { key: 'behind-thumb', folder: 'BEHIND THUMB',  prefix: '2T -BehindThumb' },
-        { key: 'side-thumb',   folder: 'SIDE THUMB',    prefix: '2T -DirectThumb' },
-        { key: 'front-thumb',  folder: 'FRONT THUMB',   prefix: '2T -SideThub' },
-        { key: 'front',        folder: 'FRONT',         prefix: '2T -Flabove' },
-        { key: 'front-pinky',  folder: 'FRONT PINKY',   prefix: '2T -SidePink' },
-        { key: 'side-pinky',   folder: 'SIDE PINKY',    prefix: '2T -DirectPink' },
-        { key: 'behind-pinky', folder: 'BEHIND PINKY',  prefix: '2T -BehindPink' },
+        { key: 'behind',       folder: 'BEHIND',        prefix: '2T -Flabbehind',  label: 'Behind' },
+        { key: 'behind-thumb', folder: 'BEHIND THUMB',  prefix: '2T -BehindThumb', label: 'Behind Thumb' },
+        { key: 'side-thumb',   folder: 'SIDE THUMB',    prefix: '2T -DirectThumb', label: 'Side Thumb' },
+        { key: 'front-thumb',  folder: 'FRONT THUMB',   prefix: '2T -SideThub',    label: 'Front Thumb' },
+        { key: 'front',        folder: 'FRONT',         prefix: '2T -Flabove',     label: 'Front' },
+        { key: 'front-pinky',  folder: 'FRONT PINKY',   prefix: '2T -SidePink',    label: 'Front Pinky' },
+        { key: 'side-pinky',   folder: 'SIDE PINKY',    prefix: '2T -DirectPink',  label: 'Side Pinky' },
+        { key: 'behind-pinky', folder: 'BEHIND PINKY',  prefix: '2T -BehindPink',  label: 'Behind Pinky' },
     ];
     const DIRECTION_FRAME_COUNT = 20;
     function directionFrameUrl(dir, n) {
         return `data/FLICK/2TONED/${encodeURIComponent(dir.folder)}/A/${encodeURIComponent(dir.prefix + '_' + String(n).padStart(3, '0') + '.png')}`;
+    }
+
+    // Hand Rotation Offset is per-direction (8 independent values), but
+    // shown as ONE compound row (label + a direction dropdown + a single
+    // apparent slider) rather than 8 separate rows, per explicit request.
+    // Implemented as 8 REAL slider/value DOM elements (only the one
+    // matching the dropdown's current selection is visible) rather than 1
+    // slider backed by a JS map alone - this is what makes each
+    // direction's value survive switching the dropdown without hitting
+    // Save (it's never "forgotten", it's just hidden - a genuinely
+    // separate, always-live DOM element with its own state), and it also
+    // means Copy/Save/Reset cover all 8 for free via the same generic
+    // registerDevControlArray()/captureAllRegisteredControlValues()
+    // machinery every other control here already uses, with zero changes
+    // to that engine.
+    const ROTATION_OFFSET_CONTROLS = [
+        { id: 'selectRotationOffsetDirection' },
+        ...DIRECTIONS.map(dir => ({ id: 'sliderRotOffset_' + dir.key })),
+    ];
+    // Which direction's slider is visible by default — cosmetic only
+    // (doesn't change any of the 8 real offset values), matching the
+    // same tuned snapshot the defaults above came from.
+    const ROTATION_OFFSET_DEFAULT_DIRECTION = 'behind-pinky';
+    function renderRotationOffsetRow() {
+        const content = findGroupContent('desktop', 'Entity', 'renderRotationOffsetRow', 'rowRotationOffset');
+        if (!content) return;
+        const row = document.createElement('div');
+        row.className = 'dev-row';
+
+        const label = document.createElement('span');
+        label.className = 'dev-label';
+        label.textContent = 'Hand Rotation Offset (Deg):';
+        row.appendChild(label);
+
+        const select = document.createElement('select');
+        select.className = 'dev-select';
+        select.id = 'selectRotationOffsetDirection';
+        DIRECTIONS.forEach(dir => {
+            const opt = document.createElement('option');
+            opt.value = dir.key;
+            opt.textContent = dir.label;
+            select.appendChild(opt);
+        });
+        select.value = ROTATION_OFFSET_DEFAULT_DIRECTION;
+        row.appendChild(select);
+
+        DIRECTIONS.forEach(dir => {
+            const isDefaultVisible = dir.key === ROTATION_OFFSET_DEFAULT_DIRECTION;
+            const defaultValue = cfg.entityRotationOffsetByDirection[dir.key] ?? 0;
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.className = 'dev-slider';
+            slider.id = 'sliderRotOffset_' + dir.key;
+            slider.min = -180; slider.max = 180; slider.step = 1;
+            slider.value = defaultValue;
+            if (!isDefaultVisible) slider.style.display = 'none';
+            row.appendChild(slider);
+
+            const value = document.createElement('span');
+            value.className = 'dev-value';
+            value.id = 'valueRotOffset_' + dir.key;
+            value.textContent = String(defaultValue);
+            if (!isDefaultVisible) value.style.display = 'none';
+            row.appendChild(value);
+        });
+
+        content.appendChild(row);
+        registerDevControlArray('ROTATION_OFFSET_CONTROLS', ROTATION_OFFSET_CONTROLS);
+    }
+    function wireRotationOffsetRow() {
+        // cfg.entityRotationOffsetByDirection already holds the real
+        // defaults (set directly on the cfg object above) — this only
+        // wires the live 'input' listeners, it no longer overwrites them.
+        DIRECTIONS.forEach(dir => {
+            const slider = document.getElementById('sliderRotOffset_' + dir.key);
+            slider.addEventListener('input', (e) => {
+                cfg.entityRotationOffsetByDirection[dir.key] = parseFloat(e.target.value);
+                document.getElementById('valueRotOffset_' + dir.key).textContent = e.target.value;
+            });
+        });
+        document.getElementById('selectRotationOffsetDirection').addEventListener('change', (e) => {
+            DIRECTIONS.forEach(dir => {
+                const isSelected = dir.key === e.target.value;
+                document.getElementById('sliderRotOffset_' + dir.key).style.display = isSelected ? '' : 'none';
+                document.getElementById('valueRotOffset_' + dir.key).style.display = isSelected ? '' : 'none';
+            });
+        });
+    }
+
+    // cfg.peakHoldFrames extra frames at the sequence's midpoint (the last
+    // A-forward frame, playSequence index N-1, immediately before it
+    // reverses) - not baked into playSequence itself (which stays a plain
+    // forward+reverse array, still shared/cached per direction regardless
+    // of the live slider value) but resolved here so a live change to the
+    // slider takes effect immediately, including mid-playback.
+    function playSequenceLength(n, hold) {
+        return (2 * n - 1) + hold;
+    }
+    function resolvePlaySequenceIndex(virtualIndex, n, hold) {
+        if (virtualIndex < n) return virtualIndex;
+        if (virtualIndex < n + hold) return n - 1;
+        return virtualIndex - hold;
     }
 
     // Lazy-loaded per direction (only the directions the mouse actually
@@ -1598,6 +1794,375 @@
     // The very first direction is needed immediately (idle pose before
     // any mouse movement) — warm it eagerly so there's no blank frame.
     ensureDirectionLoaded(DIRECTIONS[0].key);
+
+    // ----------------------------------------------------------------
+    // Finger skeleton data (authored via
+    // scripts/active/flick-skeleton-annotator.html, source of truth kept
+    // in sync at data/processed/flick-skeleton.json): per direction, a
+    // handful of keyframes each giving {knuckle, joint1, joint2, tip} as
+    // normalized (0-1) fractions of that frame's own image box, in the
+    // SAME unrotated "pointing up" orientation the entity is drawn in
+    // before rotationRad is applied — so the exact same rotate+translate
+    // used for rendering also carries this data into world space.
+    //
+    // Embedded directly as a literal rather than fetch()'d at runtime —
+    // an earlier version used fetch('data/processed/flick-skeleton.json'),
+    // which silently never resolved when this page is opened via plain
+    // file:// (confirmed: fetch() of a local relative resource is blocked
+    // under a file:// / non-http origin, while the <img> tags used for
+    // the animation frames elsewhere in this file are NOT subject to that
+    // same restriction — so the entity animated normally while the ball
+    // never collided with it, with no visible error). This project's own
+    // dev-mode gate explicitly treats file:// as a normal, supported way
+    // to open it, so this data can't depend on a server existing.
+    // Keep this literal in sync with data/processed/flick-skeleton.json
+    // any time the skeleton is re-annotated.
+    // ----------------------------------------------------------------
+    const FLICK_SKELETON = {"behind":{"1":{"knuckle":{"x":0.521,"y":0.562},"joint1":{"x":0.521,"y":0.417},"joint2":{"x":0.523,"y":0.49},"tip":{"x":0.524,"y":0.568}},"8":{"knuckle":{"x":0.523,"y":0.545},"joint1":{"x":0.52,"y":0.426},"joint2":{"x":0.52,"y":0.394},"tip":{"x":0.52,"y":0.377}},"10":{"knuckle":{"x":0.52,"y":0.556},"joint1":{"x":0.519,"y":0.432},"joint2":{"x":0.52,"y":0.397},"tip":{"x":0.52,"y":0.365}},"12":{"knuckle":{"x":0.52,"y":0.539},"joint1":{"x":0.52,"y":0.42},"joint2":{"x":0.523,"y":0.374},"tip":{"x":0.52,"y":0.328}},"14":{"knuckle":{"x":0.524,"y":0.562},"joint1":{"x":0.523,"y":0.423},"joint2":{"x":0.52,"y":0.348},"tip":{"x":0.52,"y":0.299}},"16":{"knuckle":{"x":0.524,"y":0.554},"joint1":{"x":0.517,"y":0.42},"joint2":{"x":0.517,"y":0.345},"tip":{"x":0.52,"y":0.284}},"18":{"knuckle":{"x":0.521,"y":0.562},"joint1":{"x":0.516,"y":0.446},"joint2":{"x":0.517,"y":0.357},"tip":{"x":0.517,"y":0.299}},"20":{"knuckle":{"x":0.519,"y":0.556},"joint1":{"x":0.519,"y":0.472},"joint2":{"x":0.517,"y":0.394},"tip":{"x":0.514,"y":0.331}}},"behind-thumb":{"1":{"knuckle":{"x":0.537,"y":0.51},"joint1":{"x":0.496,"y":0.438},"joint2":{"x":0.476,"y":0.487},"tip":{"x":0.487,"y":0.551}},"4":{"knuckle":{"x":0.53,"y":0.513},"joint1":{"x":0.5,"y":0.417},"joint2":{"x":0.479,"y":0.452},"tip":{"x":0.479,"y":0.504}},"7":{"knuckle":{"x":0.53,"y":0.51},"joint1":{"x":0.51,"y":0.415},"joint2":{"x":0.483,"y":0.426},"tip":{"x":0.477,"y":0.47}},"9":{"knuckle":{"x":0.536,"y":0.519},"joint1":{"x":0.514,"y":0.406},"joint2":{"x":0.487,"y":0.383},"tip":{"x":0.473,"y":0.423}},"11":{"knuckle":{"x":0.538,"y":0.519},"joint1":{"x":0.523,"y":0.406},"joint2":{"x":0.507,"y":0.38},"tip":{"x":0.49,"y":0.374}},"15":{"knuckle":{"x":0.541,"y":0.525},"joint1":{"x":0.537,"y":0.409},"joint2":{"x":0.533,"y":0.339},"tip":{"x":0.519,"y":0.305}},"17":{"knuckle":{"x":0.546,"y":0.525},"joint1":{"x":0.547,"y":0.409},"joint2":{"x":0.548,"y":0.348},"tip":{"x":0.547,"y":0.281}},"20":{"knuckle":{"x":0.543,"y":0.533},"joint1":{"x":0.557,"y":0.432},"joint2":{"x":0.57,"y":0.362},"tip":{"x":0.585,"y":0.302}}},"side-thumb":{"1":{"knuckle":{"x":0.513,"y":0.51},"joint1":{"x":0.47,"y":0.429},"joint2":{"x":0.443,"y":0.475},"tip":{"x":0.456,"y":0.533}},"4":{"knuckle":{"x":0.514,"y":0.51},"joint1":{"x":0.48,"y":0.415},"joint2":{"x":0.447,"y":0.441},"tip":{"x":0.446,"y":0.499}},"8":{"knuckle":{"x":0.521,"y":0.53},"joint1":{"x":0.501,"y":0.412},"joint2":{"x":0.463,"y":0.389},"tip":{"x":0.443,"y":0.42}},"11":{"knuckle":{"x":0.526,"y":0.519},"joint1":{"x":0.513,"y":0.417},"joint2":{"x":0.483,"y":0.36},"tip":{"x":0.464,"y":0.348}},"14":{"knuckle":{"x":0.53,"y":0.513},"joint1":{"x":0.534,"y":0.429},"joint2":{"x":0.516,"y":0.342},"tip":{"x":0.5,"y":0.302}},"17":{"knuckle":{"x":0.531,"y":0.516},"joint1":{"x":0.543,"y":0.438},"joint2":{"x":0.546,"y":0.36},"tip":{"x":0.547,"y":0.293}},"20":{"knuckle":{"x":0.53,"y":0.516},"joint1":{"x":0.551,"y":0.455},"joint2":{"x":0.574,"y":0.394},"tip":{"x":0.595,"y":0.325}}},"front-thumb":{"1":{"knuckle":{"x":0.484,"y":0.501},"joint1":{"x":0.466,"y":0.426},"joint2":{"x":0.449,"y":0.47},"tip":{"x":0.46,"y":0.53}},"4":{"knuckle":{"x":0.487,"y":0.496},"joint1":{"x":0.476,"y":0.429},"joint2":{"x":0.452,"y":0.444},"tip":{"x":0.454,"y":0.504}},"7":{"knuckle":{"x":0.487,"y":0.493},"joint1":{"x":0.483,"y":0.417},"joint2":{"x":0.46,"y":0.403},"tip":{"x":0.444,"y":0.435}},"10":{"knuckle":{"x":0.496,"y":0.496},"joint1":{"x":0.491,"y":0.406},"joint2":{"x":0.477,"y":0.365},"tip":{"x":0.449,"y":0.368}},"14":{"knuckle":{"x":0.493,"y":0.513},"joint1":{"x":0.504,"y":0.412},"joint2":{"x":0.5,"y":0.348},"tip":{"x":0.483,"y":0.302}},"17":{"knuckle":{"x":0.497,"y":0.51},"joint1":{"x":0.511,"y":0.417},"joint2":{"x":0.513,"y":0.365},"tip":{"x":0.513,"y":0.296}},"20":{"knuckle":{"x":0.506,"y":0.525},"joint1":{"x":0.516,"y":0.455},"joint2":{"x":0.526,"y":0.383},"tip":{"x":0.54,"y":0.339}}},"front":{"1":{"knuckle":{"x":0.483,"y":0.484},"joint1":{"x":0.481,"y":0.423},"joint2":{"x":0.479,"y":0.481},"tip":{"x":0.48,"y":0.539}},"6":{"knuckle":{"x":0.483,"y":0.51},"joint1":{"x":0.477,"y":0.403},"joint2":{"x":0.479,"y":0.435},"tip":{"x":0.477,"y":0.481}},"10":{"knuckle":{"x":0.48,"y":0.49},"joint1":{"x":0.48,"y":0.42},"joint2":{"x":0.479,"y":0.391},"tip":{"x":0.479,"y":0.362}},"14":{"knuckle":{"x":0.479,"y":0.475},"joint1":{"x":0.481,"y":0.4},"joint2":{"x":0.48,"y":0.342},"tip":{"x":0.479,"y":0.296}},"17":{"knuckle":{"x":0.483,"y":0.475},"joint1":{"x":0.484,"y":0.394},"joint2":{"x":0.481,"y":0.342},"tip":{"x":0.479,"y":0.296}},"20":{"knuckle":{"x":0.48,"y":0.487},"joint1":{"x":0.481,"y":0.429},"joint2":{"x":0.483,"y":0.383},"tip":{"x":0.483,"y":0.334}}},"front-pinky":{"1":{"knuckle":{"x":0.48,"y":0.481},"joint1":{"x":0.506,"y":0.42},"joint2":{"x":0.527,"y":0.472},"tip":{"x":0.514,"y":0.53}},"3":{"knuckle":{"x":0.472,"y":0.496},"joint1":{"x":0.499,"y":0.409},"joint2":{"x":0.523,"y":0.444},"tip":{"x":0.521,"y":0.499}},"7":{"knuckle":{"x":0.469,"y":0.499},"joint1":{"x":0.484,"y":0.409},"joint2":{"x":0.514,"y":0.394},"tip":{"x":0.531,"y":0.426}},"11":{"knuckle":{"x":0.47,"y":0.493},"joint1":{"x":0.472,"y":0.403},"joint2":{"x":0.491,"y":0.354},"tip":{"x":0.516,"y":0.342}},"16":{"knuckle":{"x":0.466,"y":0.499},"joint1":{"x":0.453,"y":0.417},"joint2":{"x":0.457,"y":0.336},"tip":{"x":0.466,"y":0.29}},"20":{"knuckle":{"x":0.464,"y":0.513},"joint1":{"x":0.449,"y":0.444},"joint2":{"x":0.436,"y":0.391},"tip":{"x":0.425,"y":0.348}}},"side-pinky":{"1":{"knuckle":{"x":0.491,"y":0.519},"joint1":{"x":0.536,"y":0.429},"joint2":{"x":0.56,"y":0.478},"tip":{"x":0.538,"y":0.542}},"5":{"knuckle":{"x":0.483,"y":0.516},"joint1":{"x":0.517,"y":0.412},"joint2":{"x":0.548,"y":0.426},"tip":{"x":0.56,"y":0.493}},"7":{"knuckle":{"x":0.483,"y":0.533},"joint1":{"x":0.509,"y":0.403},"joint2":{"x":0.546,"y":0.406},"tip":{"x":0.561,"y":0.446}},"10":{"knuckle":{"x":0.481,"y":0.53},"joint1":{"x":0.494,"y":0.409},"joint2":{"x":0.523,"y":0.362},"tip":{"x":0.55,"y":0.374}},"12":{"knuckle":{"x":0.48,"y":0.53},"joint1":{"x":0.484,"y":0.403},"joint2":{"x":0.507,"y":0.345},"tip":{"x":0.531,"y":0.325}},"15":{"knuckle":{"x":0.477,"y":0.554},"joint1":{"x":0.464,"y":0.415},"joint2":{"x":0.472,"y":0.354},"tip":{"x":0.486,"y":0.296}},"16":{"knuckle":{"x":0.48,"y":0.539},"joint1":{"x":0.462,"y":0.409},"joint2":{"x":0.463,"y":0.331},"tip":{"x":0.473,"y":0.284}},"20":{"knuckle":{"x":0.473,"y":0.548},"joint1":{"x":0.447,"y":0.455},"joint2":{"x":0.423,"y":0.391},"tip":{"x":0.4,"y":0.328}}},"behind-pinky":{"1":{"knuckle":{"x":0.487,"y":0.504},"joint1":{"x":0.54,"y":0.429},"joint2":{"x":0.554,"y":0.472},"tip":{"x":0.543,"y":0.545}},"5":{"knuckle":{"x":0.484,"y":0.504},"joint1":{"x":0.527,"y":0.42},"joint2":{"x":0.557,"y":0.444},"tip":{"x":0.563,"y":0.484}},"8":{"knuckle":{"x":0.479,"y":0.519},"joint1":{"x":0.509,"y":0.42},"joint2":{"x":0.541,"y":0.394},"tip":{"x":0.564,"y":0.435}},"12":{"knuckle":{"x":0.473,"y":0.53},"joint1":{"x":0.49,"y":0.435},"joint2":{"x":0.511,"y":0.348},"tip":{"x":0.544,"y":0.336}},"15":{"knuckle":{"x":0.47,"y":0.545},"joint1":{"x":0.463,"y":0.417},"joint2":{"x":0.476,"y":0.336},"tip":{"x":0.496,"y":0.281}},"17":{"knuckle":{"x":0.467,"y":0.542},"joint1":{"x":0.463,"y":0.449},"joint2":{"x":0.457,"y":0.36},"tip":{"x":0.464,"y":0.284}},"20":{"knuckle":{"x":0.473,"y":0.536},"joint1":{"x":0.456,"y":0.461},"joint2":{"x":0.433,"y":0.36},"tip":{"x":0.412,"y":0.307}}}};
+
+    const SKELETON_POINTS = ['knuckle', 'joint1', 'joint2', 'tip'];
+    // Nearest keyframe at-or-before / at-or-after a given frame number,
+    // same logic as the annotator tool's own nearestKeyframes(). Frame
+    // keys in the JSON are strings (JSON object keys), sorted numerically.
+    function nearestSkeletonKeyframes(dirFrames, frameNumber) {
+        const keys = Object.keys(dirFrames).map(Number).sort((a, b) => a - b);
+        let before = null, after = null;
+        for (const k of keys) {
+            if (k <= frameNumber) before = k;
+            if (k >= frameNumber && after === null) after = k;
+        }
+        return { before, after };
+    }
+    // Local (unrotated, normalized 0-1) pose for a direction+frame,
+    // linearly interpolated between the nearest keyframes. Returns null
+    // if that direction has no skeleton data at all (not yet loaded, or
+    // never annotated).
+    function interpolatedLocalPose(directionKey, frameNumber) {
+        if (!FLICK_SKELETON || !FLICK_SKELETON[directionKey]) return null;
+        const dirFrames = FLICK_SKELETON[directionKey];
+        if (dirFrames[frameNumber]) return dirFrames[frameNumber];
+        const { before, after } = nearestSkeletonKeyframes(dirFrames, frameNumber);
+        if (before == null && after == null) return null;
+        if (before == null) return dirFrames[after];
+        if (after == null) return dirFrames[before];
+        if (before === after) return dirFrames[before];
+        const t = (frameNumber - before) / (after - before);
+        const a = dirFrames[before], b = dirFrames[after];
+        const out = {};
+        SKELETON_POINTS.forEach(pk => {
+            if (!a[pk] || !b[pk]) return;
+            out[pk] = { x: a[pk].x + (b[pk].x - a[pk].x) * t, y: a[pk].y + (b[pk].y - a[pk].y) * t };
+        });
+        return out;
+    }
+    // The real underlying frame number (1-20) the currently-drawn image
+    // corresponds to — mirrors resolvePlaySequenceIndex()'s own forward/
+    // hold/reverse logic exactly, but returns a FRAME NUMBER (for
+    // skeleton lookup) rather than a playSequence array index (for image
+    // lookup). Idle (not playing) is always frame 1 — frames[0].
+    function currentRealFrameNumber() {
+        if (!playing || !playSequenceFrozen) return 1;
+        const n = DIRECTION_FRAME_COUNT, hold = Math.round(cfg.peakHoldFrames);
+        const totalLen = playSequenceLength(n, hold);
+        const virtualIndex = Math.min(playFrameIndex, totalLen - 1);
+        if (virtualIndex < n) return virtualIndex + 1;
+        if (virtualIndex < n + hold) return n;
+        const shifted = virtualIndex - hold;
+        return (2 * n - 1) - shifted;
+    }
+
+    // ----------------------------------------------------------------
+    // Ball: falls from top-center, gravity-driven, bounces off the left/
+    // right viewport edges only (never top/bottom — it's meant to exit
+    // off the bottom and respawn after a delay), and reacts to the 3
+    // finger segments (knuckle→joint1, joint1→joint2, joint2→tip) as
+    // thick capsules. `ball` is null while waiting to respawn.
+    // ----------------------------------------------------------------
+    // Starts null (not spawned via an immediate call here) so the first
+    // real spawn happens inside updateBallAndCollision()'s own respawn
+    // path, on the first real requestAnimationFrame — same reasoning as
+    // hasMouse gating entityX/Y above: window.innerWidth/innerHeight can
+    // briefly read 0 at script-parse time before layout settles.
+    let ball = null;
+    let ballRespawnCountdown = 0;
+    // Rising-edge state for the auto-trigger below (ballInFlickTriggerZone) —
+    // tracked continuously (even while a flick is already playing, or no
+    // ball exists) so a ball that's been sitting inside the zone the whole
+    // time a flick was already playing doesn't immediately re-fire the
+    // instant that flick ends; only a genuine false->true transition
+    // fires. Reset to false whenever there's no ball to evaluate.
+    let wasInFlickTriggerZone = false;
+    function spawnBall() {
+        const radiusPx = Math.min(window.innerWidth, window.innerHeight) * (cfg.ballRadius / 100);
+        // hasEnteredFrame stays false for the initial fall from this
+        // off-screen-above spawn point, so the top-edge collision below
+        // doesn't bounce it right back out before it's ever been seen -
+        // see that check's own comment.
+        return { x: window.innerWidth / 2, y: -radiusPx * 2, vx: 0, vy: 0, hasEnteredFrame: false };
+    }
+
+    // Nearest point on segment AB to point P, plus t (0=A, 1=B) — needed
+    // both for the push direction/overlap and for interpolating that
+    // exact point's own velocity between the 2 endpoints' velocities.
+    function nearestPointOnSegment(px, py, ax, ay, bx, by) {
+        const abx = bx - ax, aby = by - ay;
+        const lenSq = abx * abx + aby * aby;
+        let t = lenSq > 0 ? ((px - ax) * abx + (py - ay) * aby) / lenSq : 0;
+        t = Math.max(0, Math.min(1, t));
+        return { x: ax + abx * t, y: ay + aby * t, t };
+    }
+
+    // Auto-trigger boundary for the flick sequence: true when the ball is
+    // within the union of the joint-collision capsules across EVERY frame
+    // (1..DIRECTION_FRAME_COUNT) of the current direction's flick
+    // animation — not just whatever pose is currently on screen. Per
+    // explicit correction ("the vicinity is defined by the collision
+    // bodies at ANY point within the animation sequence, not just the
+    // peak point"): an earlier version checked only frame
+    // DIRECTION_FRAME_COUNT (the fully-extended peak) alone, which was
+    // judged too narrow — a ball sitting somewhere the fingers only pass
+    // through mid-swing, never reaching the fully-extended peak's own
+    // position, wouldn't have triggered it.
+    //
+    // Reuses the exact same local->world transform and thickness math
+    // updateBallAndCollision() already uses for the LIVE pose (drawW/
+    // drawH from entityScale+aspect, entityX/entityY/rotationRad for the
+    // rigid transform, cfg.jointThickness for capsule half-width) — this
+    // is deliberately the SAME geometry the real collision already uses,
+    // just evaluated once per candidate frame instead of only the one
+    // currently playing, so "vicinity" means exactly "would touch the
+    // hand at some point during a real flick," not an arbitrary separate
+    // distance.
+    function ballInFlickTriggerZone(ball, directionKey, rotationRad) {
+        if (!ball) return false;
+        const vmin = Math.min(window.innerWidth, window.innerHeight);
+        const radiusPx = vmin * (cfg.ballRadius / 100);
+        const thicknessPx = vmin * (cfg.jointThickness / 100);
+        const minDist = thicknessPx / 2 + radiusPx;
+        const size = vmin * (cfg.entityScale / 100);
+        const refImg = ensureDirectionLoaded(directionKey).frames[0];
+        const aspect = (refImg && refImg.complete && refImg.naturalWidth > 0) ? (refImg.naturalHeight / refImg.naturalWidth) : 1;
+        const drawW = size, drawH = size * aspect;
+        const cos = Math.cos(rotationRad), sin = Math.sin(rotationRad);
+        const segments = [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']];
+
+        for (let frameNumber = 1; frameNumber <= DIRECTION_FRAME_COUNT; frameNumber++) {
+            const pose = interpolatedLocalPose(directionKey, frameNumber);
+            if (!pose) continue;
+            const world = {};
+            SKELETON_POINTS.forEach(pk => {
+                const p = pose[pk];
+                if (!p) return;
+                const lx = (p.x - 0.5) * drawW, ly = (p.y - 0.5) * drawH;
+                world[pk] = { x: entityX + lx * cos - ly * sin, y: entityY + lx * sin + ly * cos };
+            });
+            for (const [aKey, bKey] of segments) {
+                const a = world[aKey], b = world[bKey];
+                if (!a || !b) continue;
+                const nearest = nearestPointOnSegment(ball.x, ball.y, a.x, a.y, b.x, b.y);
+                if (Math.hypot(ball.x - nearest.x, ball.y - nearest.y) < minDist) return true;
+            }
+        }
+        return false;
+    }
+
+    // Previous frame's LOCAL (unrotated, untranslated — relative to the
+    // entity's own center, before rotationRad/entityX/entityY are
+    // applied) joint pixel positions, per point key. Deliberately LOCAL,
+    // not world-space: an earlier version derived velocity from WORLD
+    // position deltas, which also picked up the entity's own translation
+    // (mouse movement) and rotation (mouse angle changing) as "joint
+    // speed" — reported directly: "as i move the mouse, the collision
+    // circle sometimes becomes huge... should stay the same size unless
+    // i change the animation scale itself." Local-space deltas isolate
+    // the flick animation's OWN motion from how fast the whole hand is
+    // being swung around by the mouse — rotation/translation are rigid
+    // transforms and don't change a vector's magnitude, so this local
+    // speed is still valid to use directly against world-space distances
+    // (thickness, collision push) with no unit conversion needed. This
+    // is what still makes "thickness/intensity scale with the animation
+    // frames, and with Click Anim Speed" emerge from real motion (a
+    // faster-playing flick has faster real frame-to-frame LOCAL joint
+    // motion) — now correctly independent of mouse movement, and
+    // (per explicit request) still scales with Entity Scale, since a
+    // bigger entity means a bigger real pixel distance between the same
+    // normalized keyframe positions.
+    //
+    // prevDirectionKey/prevEntityScale, alongside prevJointLocal: still
+    // occurring after the fix above (per direct report: "less frequent,
+    // but when it does happen, the collision circle is even bigger than
+    // before") because a DIRECTION SWITCH is itself a discontinuity, not
+    // real motion — the 8 direction sets are independently-authored art,
+    // not rotations of one asset, so "knuckle" in e.g. 'behind' and
+    // 'front-thumb' sit at unrelated local coordinates. Comparing this
+    // frame's pose against the PREVIOUS frame's pose from a DIFFERENT
+    // direction (whenever the mouse crosses one of the 8 angle-sector
+    // boundaries) produced a large synthetic "velocity" out of a pose
+    // jump that was never real animated motion — rare (only on a sector
+    // crossing) but large (comparing 2 unrelated hand poses), matching
+    // the reported pattern exactly. A live Entity Scale slider drag is
+    // the same class of bug (jointLocal is derived from drawW/drawH,
+    // which depend on cfg.entityScale) — cheap to guard the same way.
+    // Whenever either changes since the prior frame, this frame's
+    // velocity is simply skipped (treated as no prior data) rather than
+    // computed across the discontinuity.
+    let prevJointLocal = null;
+    let prevDirectionKey = null;
+    let prevEntityScale = null;
+    // Exponentially-smoothed per-point speed (a plain scalar, px/s) —
+    // see thicknessSmoothing's own comment above COLLISION_CONTROLS for
+    // why this exists (raw frame-to-frame speed steps abruptly between
+    // sparse, unevenly-spaced skeleton keyframes). Only a scalar is ever
+    // needed downstream (thickness, and the collision kick's magnitude —
+    // its DIRECTION always comes from the ball/segment geometry, never
+    // from this), so only the magnitude is smoothed, not a full vector.
+    let smoothedJointSpeed = {};
+
+    function updateBallAndCollision(dt, rotationRad) {
+        const w = window.innerWidth, h = window.innerHeight;
+        const vmin = Math.min(w, h);
+
+        // Current local + world-space joint positions for
+        // currentDirectionKey's interpolated local pose. World-space uses
+        // the SAME rotate+translate render() uses for the sprite itself;
+        // local-space (pre-rotation/translation) is what velocity is
+        // derived from — see prevJointLocal's own comment above.
+        const localPose = interpolatedLocalPose(currentDirectionKey, currentRealFrameNumber());
+        let jointWorld = null, jointLocal = null;
+        if (localPose) {
+            const size = vmin * (cfg.entityScale / 100);
+            const refImg = ensureDirectionLoaded(currentDirectionKey).frames[0];
+            const aspect = (refImg && refImg.complete && refImg.naturalWidth > 0) ? (refImg.naturalHeight / refImg.naturalWidth) : 1;
+            const drawW = size, drawH = size * aspect;
+            const cos = Math.cos(rotationRad), sin = Math.sin(rotationRad);
+            jointWorld = {};
+            jointLocal = {};
+            SKELETON_POINTS.forEach(pk => {
+                const p = localPose[pk];
+                if (!p) return;
+                // Local point in the sprite's own unrotated pixel space,
+                // centered on the entity origin (drawImage draws centered
+                // at -drawW/2..drawW/2, same as the sprite itself).
+                const lx = (p.x - 0.5) * drawW, ly = (p.y - 0.5) * drawH;
+                jointLocal[pk] = { x: lx, y: ly };
+                jointWorld[pk] = {
+                    x: entityX + lx * cos - ly * sin,
+                    y: entityY + lx * sin + ly * cos,
+                };
+            });
+        }
+        // A direction switch or a live Entity Scale change is a
+        // discontinuity, not real motion — skip velocity for this one
+        // frame rather than comparing across it (see this function's own
+        // leading comment for why).
+        const continuous = currentDirectionKey === prevDirectionKey && cfg.entityScale === prevEntityScale;
+        const jointVel = {};
+        if (jointLocal && prevJointLocal && continuous && dt > 0) {
+            SKELETON_POINTS.forEach(pk => {
+                if (!jointLocal[pk] || !prevJointLocal[pk]) return;
+                jointVel[pk] = { x: (jointLocal[pk].x - prevJointLocal[pk].x) / dt, y: (jointLocal[pk].y - prevJointLocal[pk].y) / dt };
+            });
+        }
+        prevJointLocal = jointLocal;
+        prevDirectionKey = currentDirectionKey;
+        prevEntityScale = cfg.entityScale;
+
+        // Smooth the raw per-point speed over time — snaps instantly
+        // (factor=1, no blending) on a discontinuity (!continuous) so a
+        // direction switch's already-correct "0 speed" doesn't get
+        // smeared forward from whatever the smoothed value happened to
+        // be a moment ago.
+        const smoothFactor = continuous ? expSmoothFactor(cfg.thicknessSmoothing, dt) : 1;
+        const jointSpeed = {};
+        SKELETON_POINTS.forEach(pk => {
+            const raw = jointVel[pk] ? Math.hypot(jointVel[pk].x, jointVel[pk].y) : 0;
+            const prevSpeed = smoothedJointSpeed[pk] ?? raw;
+            const next = prevSpeed + (raw - prevSpeed) * smoothFactor;
+            smoothedJointSpeed[pk] = next;
+            jointSpeed[pk] = next;
+        });
+
+        // Respawn cycle
+        if (!ball) {
+            ballRespawnCountdown -= dt;
+            if (ballRespawnCountdown <= 0) ball = spawnBall();
+        }
+
+        if (ball) {
+            const radiusPx = vmin * (cfg.ballRadius / 100);
+            ball.vy += vmin * (cfg.ballGravity / 100) * dt; // %vh/s² of the viewport's own min dimension, matching this project's other %vmin-based sizes
+            ball.x += ball.vx * dt;
+            ball.y += ball.vy * dt;
+
+            // Left/right walls — always. Bottom — never (that's the exit/
+            // respawn edge, handled below). Top — collides too, EXCEPT
+            // during the ball's initial fall from its off-screen-above
+            // spawn point (spawnBall() starts it at y = -radiusPx*2, well
+            // above the top edge, specifically so it visibly falls INTO
+            // frame) — bouncing off the top edge during that entry would
+            // just reflect it straight back out before it's ever seen.
+            // hasEnteredFrame latches true the first frame the ball's own
+            // top edge reaches y=0 (i.e. it's now at least partially
+            // visible) and never resets, so every later moment — a strong
+            // joint-collision kick launching it back up past the top,
+            // for instance — does bounce normally.
+            if (ball.y - radiusPx >= 0) ball.hasEnteredFrame = true;
+
+            if (ball.x < radiusPx) { ball.x = radiusPx; ball.vx = -ball.vx * cfg.ballBounciness; }
+            else if (ball.x > w - radiusPx) { ball.x = w - radiusPx; ball.vx = -ball.vx * cfg.ballBounciness; }
+            if (ball.hasEnteredFrame && ball.y < radiusPx) { ball.y = radiusPx; ball.vy = -ball.vy * cfg.ballBounciness; }
+
+            // Joint-segment collision — 3 capsules (knuckle→joint1,
+            // joint1→joint2, joint2→tip), resolved sequentially (adequate
+            // for a single ball against 3 segments, not a rigorous
+            // simultaneous solve).
+            if (jointWorld) {
+                const segments = [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']];
+                segments.forEach(([aKey, bKey]) => {
+                    const a = jointWorld[aKey], b = jointWorld[bKey];
+                    if (!a || !b) return;
+                    const nearest = nearestPointOnSegment(ball.x, ball.y, a.x, a.y, b.x, b.y);
+                    const speedA = jointSpeed[aKey] ?? 0, speedB = jointSpeed[bKey] ?? 0;
+                    const speed = speedA + (speedB - speedA) * nearest.t; // still drives the collision KICK below, no longer the circle's size
+                    const thicknessPx = vmin * (cfg.jointThickness / 100); // fixed — never varies by frame/speed, per explicit instruction
+
+                    const dx = ball.x - nearest.x, dy = ball.y - nearest.y;
+                    const dist = Math.hypot(dx, dy);
+                    const minDist = thicknessPx / 2 + radiusPx;
+                    if (dist < minDist) {
+                        const nx = dist > 0.0001 ? dx / dist : 0, ny = dist > 0.0001 ? dy / dist : -1;
+                        const overlap = minDist - dist;
+                        ball.x += nx * overlap;
+                        ball.y += ny * overlap;
+                        ball.vx += nx * speed * cfg.collisionIntensity;
+                        ball.vy += ny * speed * cfg.collisionIntensity;
+                    }
+                });
+            }
+
+            // Auto-trigger: the ball crossing INTO the flick's own
+            // reachable zone (see ballInFlickTriggerZone's own comment)
+            // starts the sequence exactly as a real click would, without
+            // requiring one. Rising-edge only (wasInFlickTriggerZone) —
+            // a ball that's simply sitting in the zone doesn't keep
+            // re-triggering every frame, and !playing keeps a ball that
+            // entered the zone mid-flick from double-triggering the
+            // instant that flick ends while it's still sitting there.
+            const inTriggerZone = ballInFlickTriggerZone(ball, currentDirectionKey, rotationRad);
+            if (inTriggerZone && !wasInFlickTriggerZone && !playing) triggerFlick();
+            wasInFlickTriggerZone = inTriggerZone;
+
+            // Fully below the bottom edge — gone, start the respawn timer.
+            if (ball.y - radiusPx > h) {
+                ball = null;
+                ballRespawnCountdown = cfg.ballRespawnRate;
+            }
+        } else {
+            wasInFlickTriggerZone = false;
+        }
+
+        return { jointWorld, jointSpeed };
+    }
 
     // ----------------------------------------------------------------
     // Canvas + mouse tracking
@@ -1683,28 +2248,55 @@
         return 1 - Math.pow(1 - smoothing, dt * 60);
     }
 
-    canvas.addEventListener('pointerdown', () => {
-        if (playing) return;
+    // Shared by a real click AND the ball-proximity auto-trigger
+    // (ballInFlickTriggerZone, checked inside updateBallAndCollision) —
+    // both just start the same forward+reverse play sequence for
+    // whichever direction is currently active.
+    function triggerFlick() {
         playing = true;
         playFrameIndex = 0;
         playFrameAccum = 0;
         playSequenceFrozen = ensureDirectionLoaded(currentDirectionKey).playSequence;
+    }
+    canvas.addEventListener('pointerdown', () => {
+        if (playing) return;
+        triggerFlick();
     });
 
+    // Fixed-timestep physics — step() always advances by exactly FIXED_DT
+    // (1/60s), never the raw/jittery per-real-frame delta. Previously
+    // every physics quantity here (gravity integration, position,
+    // playback frame advancement, and — critically — the hand's own
+    // joint velocity that sizes the ball-collision kick) was driven
+    // directly by real elapsed time, which is never bit-for-bit identical
+    // between 2 separate runs even with 100% identical inputs (a static
+    // mouse position included) — confirmed as the actual explanation for
+    // a direct report ("if i leave my mouse in one location... how come
+    // the outcome of the ball's trajectory isnt identical everytime")
+    // before this fix: real requestAnimationFrame timing jitters run to
+    // run, and this sim's collision response is sensitive enough to that
+    // jitter for it to compound into a visibly different trajectory.
+    // update() (below) still runs once per real animation frame, an
+    // accumulator pattern lets it run step() 0, 1, or several times to
+    // catch up to real elapsed time — this is what makes 2 runs with the
+    // same inputs now produce numerically identical motion after the
+    // same NUMBER of steps, regardless of real frame-timing noise.
+    const FIXED_DT = 1 / 60;
+    const MAX_FRAME_DT = 0.25; // caps the catch-up burst after e.g. a backgrounded tab
+    let accumulator = 0;
     let lastTime = performance.now();
-    function update(now) {
-        const rawDt = Math.min(0.25, (now - lastTime) / 1000);
-        lastTime = now;
+    let lastStepResult = null;
 
+    function step(dt) {
         const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
         if (!hasMouse) { mouseX = cx; mouseY = cy; entityX = cx; entityY = cy; }
 
-        const posFactor = expSmoothFactor(cfg.positionSmoothing, rawDt);
+        const posFactor = expSmoothFactor(cfg.positionSmoothing, dt);
         entityX += (mouseX - entityX) * posFactor;
         entityY += (mouseY - entityY) * posFactor;
 
         const targetAngle = mouseAngleFromCenter(mouseX, mouseY, cx, cy);
-        const rotFactor = expSmoothFactor(cfg.rotationSmoothing, rawDt);
+        const rotFactor = expSmoothFactor(cfg.rotationSmoothing, dt);
         entityAngleDeg = angleLerp(entityAngleDeg, targetAngle, rotFactor);
 
         const dirIndex = directionIndexForAngle(targetAngle);
@@ -1712,9 +2304,10 @@
         if (!playing) ensureDirectionLoaded(currentDirectionKey);
 
         if (playing && playSequenceFrozen) {
-            playFrameAccum += rawDt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
+            playFrameAccum += dt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
             playFrameIndex = Math.floor(playFrameAccum);
-            if (playFrameIndex >= playSequenceFrozen.length) {
+            const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, Math.round(cfg.peakHoldFrames));
+            if (playFrameIndex >= totalLen) {
                 playing = false;
                 playSequenceFrozen = null;
                 playFrameIndex = 0;
@@ -1722,11 +2315,56 @@
             }
         }
 
-        render(targetAngle, dirIndex);
+        const rotationRad = (entityAngleDeg + 180 + (cfg.entityRotationOffsetByDirection[currentDirectionKey] || 0)) * Math.PI / 180;
+        const { jointWorld, jointSpeed } = updateBallAndCollision(dt, rotationRad);
+
+        return { targetAngle, dirIndex, rotationRad, jointWorld, jointSpeed };
+    }
+
+    function update(now) {
+        // Self-healing canvas size check. resizeCanvas() only otherwise
+        // runs once at boot plus on a real 'resize' event — if
+        // window.innerWidth/innerHeight read 0 at that first boot call (a
+        // real, reproduced-in-this-session early-page-life quirk, same
+        // class already documented in this workspace for mobile Safari/
+        // Chrome, and the same root cause already fixed for mouseX/
+        // entityX above), the canvas permanently sticks at 0×0 unless the
+        // user happens to resize their window afterward — which, on a
+        // static desktop session, most users never do. A 0×0 canvas isn't
+        // just a rendering bug: `#scene.cursor-hidden{cursor:none}` (Hide
+        // OS Cursor) has nothing left to apply that rule TO, since the
+        // element covers zero real screen area — this is the likely root
+        // cause of "hide OS cursor doesn't work" reports. Checked every
+        // frame (cheap: 2 comparisons) rather than only once, so it also
+        // self-heals from a real live window resize, not just the boot-
+        // time case. Display sizing, not simulation — deliberately stays
+        // outside the fixed-step loop below.
+        const dpr = window.devicePixelRatio || 1;
+        if (canvas.width !== Math.round(window.innerWidth * dpr) || canvas.height !== Math.round(window.innerHeight * dpr)) {
+            resizeCanvas();
+        }
+
+        const frameDt = Math.min(MAX_FRAME_DT, (now - lastTime) / 1000);
+        lastTime = now;
+        accumulator += frameDt;
+        while (accumulator >= FIXED_DT) {
+            lastStepResult = step(FIXED_DT);
+            accumulator -= FIXED_DT;
+        }
+
+        // render() still runs once per real frame (not once per fixed
+        // step) — on a high-refresh-rate display a given callback may run
+        // 0 steps (accumulator hasn't reached FIXED_DT yet), so this
+        // renders whatever the most recent step produced rather than
+        // nothing. lastStepResult is only null before the very first
+        // step has ever run.
+        if (lastStepResult) {
+            render(lastStepResult.targetAngle, lastStepResult.dirIndex, lastStepResult.rotationRad, lastStepResult.jointWorld, lastStepResult.jointSpeed);
+        }
         requestAnimationFrame(update);
     }
 
-    function render(targetAngle, dirIndex) {
+    function render(targetAngle, dirIndex, rotationRad, jointWorld, jointSpeed) {
         const w = window.innerWidth, h = window.innerHeight;
         ctx.fillStyle = cfg.backgroundColor;
         ctx.fillRect(0, 0, w, h);
@@ -1746,7 +2384,10 @@
 
         let img;
         if (playing && playSequenceFrozen) {
-            img = playSequenceFrozen[Math.min(playFrameIndex, playSequenceFrozen.length - 1)];
+            const hold = Math.round(cfg.peakHoldFrames);
+            const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, hold);
+            const virtualIndex = Math.min(playFrameIndex, totalLen - 1);
+            img = playSequenceFrozen[resolvePlaySequenceIndex(virtualIndex, DIRECTION_FRAME_COUNT, hold)];
         } else {
             img = ensureDirectionLoaded(currentDirectionKey).frames[0];
         }
@@ -1758,7 +2399,6 @@
             drawH = size * (img.naturalHeight / img.naturalWidth);
         }
 
-        const rotationRad = (entityAngleDeg + 180 + cfg.entityRotationOffset) * Math.PI / 180;
         ctx.save();
         ctx.translate(entityX, entityY);
         ctx.rotate(rotationRad);
@@ -1771,6 +2411,41 @@
             ctx.strokeRect(-drawW / 2, -drawH / 2, drawW, drawH);
         }
         ctx.restore();
+
+        // Joint collision debug lines — drawn at the FIXED collision
+        // thickness (Joint Collision Thickness alone — no longer speed-
+        // derived, per explicit instruction: "collision circles will
+        // never rescale during the animation sequence unless otherwise
+        // told so by me"), matching updateBallAndCollision()'s own
+        // per-segment thicknessPx exactly, so the boundary the ball
+        // actually reacts to is directly visible at all times.
+        if (cfg.showJointCollisionLines && jointWorld) {
+            ctx.save();
+            ctx.strokeStyle = '#ffcf5c';
+            ctx.globalAlpha = 0.55;
+            ctx.lineCap = 'round';
+            ctx.lineWidth = vmin * (cfg.jointThickness / 100);
+            [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']].forEach(([aKey, bKey]) => {
+                const a = jointWorld[aKey], b = jointWorld[bKey];
+                if (!a || !b) return;
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+
+        // Ball
+        if (ball) {
+            const radiusPx = vmin * (cfg.ballRadius / 100);
+            ctx.save();
+            ctx.fillStyle = cfg.ballColor;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, radiusPx, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
 
         if (cfg.showAngleDebug) {
             ctx.save();
@@ -1785,6 +2460,40 @@
     requestAnimationFrame((t) => { lastTime = t; requestAnimationFrame(update); });
 
     initDevPanelEngine();
+
+    // One-time-per-load migration: this panel's Entity group was briefly
+    // named "Hand Animation", and a separate "Mouse / Rotation" group
+    // existed, before both were consolidated back into "Entity" per
+    // explicit request. Anyone whose browser already saved settings
+    // during that window has a sectionOrder referencing those 2 names —
+    // applySectionOrder() (the generic engine, unchanged) correctly, BY
+    // DESIGN, recreates any saved group it doesn't recognize as a
+    // .dev-section already in the static HTML (that's what lets a real
+    // user-created "+ Add Group" group survive a reload) — it has no way
+    // to tell those 2 renamed-away names apart from a genuine custom
+    // group, so they silently come back as empty-looking ghost groups
+    // every load. Prune them here instead: move whatever rows they still
+    // claim into Entity (their current code home) rather than deleting
+    // them, then remove the now-empty stale section. Runs after
+    // initDevPanelEngine() so it can clean up whatever that just
+    // restored from localStorage; cheap and idempotent, so it's fine to
+    // run on every load rather than gating it behind a one-time flag —
+    // once a real Save happens post-migration, the live DOM (already
+    // clean) is what gets captured, so the stale names stop reappearing
+    // in localStorage too.
+    (function pruneStaleDevPanelGroups() {
+        const STALE_GROUP_NAMES = ['Hand Animation', 'Mouse / Rotation'];
+        const entityContent = findGroupContent('desktop', 'Entity', 'pruneStaleDevPanelGroups', 'migration');
+        document.querySelectorAll('#desktopTabContent > .dev-section > .dev-section-title').forEach(titleEl => {
+            if (!STALE_GROUP_NAMES.includes(titleEl.dataset.sid)) return;
+            const section = titleEl.parentElement;
+            const content = section.querySelector(':scope > .dev-section-content');
+            if (entityContent && content) {
+                Array.from(content.children).forEach(row => entityContent.appendChild(row));
+            }
+            section.remove();
+        });
+    })();
 </script>
 </body>
 </html>
