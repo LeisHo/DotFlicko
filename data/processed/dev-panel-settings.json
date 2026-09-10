@@ -1,6 +1,6 @@
 {
   "controls": {
-    "sliderEntityScale": 100,
+    "sliderEntityScale": 76,
     "sliderClickAnimSpeed": 11.7,
     "sliderPeakHoldFrames": 30,
     "sliderRotationSmoothing": 1,
@@ -230,14 +230,17 @@
   },
   "sectionCollapseState": {
     "desktop:Dev Panel": true,
-    "desktop:Entity": true,
+    "desktop:Entity": false,
     "desktop:Background": true,
     "desktop:Ball": true,
     "desktop:Collision": true,
-    "desktop:Debug": false,
+    "desktop:Debug": true,
     "mobile:Dev Panel": false,
     "landscape:Dev Panel": false
   },
-  "devTextOverrides": {},
+  "devTextOverrides": {
+    "desktop:Dev Panel": null,
+    "desktop:Entity": "HAND"
+  },
   "textEditModeEnabled": false
 }
