@@ -20,7 +20,13 @@ work seamlessly from there.
 
 Nothing in progress from this session. The spawn-placement rework (started
 on a `spawn-placement-mode` branch) is complete, merged into `main`, and
-pushed to `origin/main` (commit `3be0ac4`).
+pushed to `origin/main` (commit `3be0ac4`). Save Settings now also writes
+to a git-tracked settings log (ported from Clicko/DickoClicko) — **not yet
+end-to-end verified against the real Vercel deployment** (the user set up
+`GITHUB_TOKEN`/`DEV_PANEL_SAVE_SECRET` on Vercel; a next session should
+confirm a real Save from the live site actually commits to
+`data/processed/dev-panel-settings.json`, since local testing could only
+verify the client-side fallback logic, not the actual GitHub write).
 
 **Note for a new session:** a *different*, concurrent Claude session has
 also been actively developing this same `index.html` (the ball/collision
@@ -72,8 +78,17 @@ new session should be aware they're there before touching `data/FLICK/`.
   placement line (%vmin, defaults 0) — a manual fix for directions that
   aren't visually centered.
 - Hand Rotation Offset and Animation X Offset defaults re-baked to tuned
-  sets from pasted Copy Settings dumps (twice, as tuning continued);
-  `angleOffset` default set to 180.
+  sets from pasted Copy Settings dumps (several times, as tuning
+  continued); `angleOffset` default set to 180.
+- Delete mode's hit-test now checks actual pixel opacity, not just an
+  entity's bounding box — fixes a real reported bug where clicking one
+  entity could delete a different, nearby one whenever their (heavily
+  padded) bounding boxes overlapped.
+- Save Settings now writes to a git-tracked settings log
+  (`data/processed/dev-panel-settings.json`), ported from Clicko/
+  DickoClicko's own established 3-tier implementation (Vercel/GitHub API
+  → File System Access API → local download/session fallback) rather than
+  localStorage only — see README.md for the Vercel env var setup.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

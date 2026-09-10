@@ -12,32 +12,68 @@ don't let real content drift into this file instead of those.
 
 ## How to run it
 
-<Exact steps to run/use the project. No build step? Say so. Needs a server,
-an API key, a specific Python/Node version? State it here precisely — this
-is the one doc a new person (or a fresh AI chat) needs to get the thing
-running without guessing.>
+Single-file, no build step: open `index.html` directly, or serve the folder
+with any static file server. Append `?dev=1` (or run on localhost/127.0.0.1,
+or open as a bare local `file://`) to see the dev panel.
+
+### Dev panel Save Settings (git-tracked, ported from Clicko/DickoClicko)
+
+Save Settings/Reset try 3 tiers in order (see the big comment above
+`saveDevPanelSettings()`/`loadDevPanelSettingsAsync()` in `index.html` for
+the full picture):
+1. **This Vercel API** (`api/save-settings.js`) — works from any device,
+   including a phone with no filesystem access of its own. **Requires the
+   one-time setup below before it does anything.**
+2. **File System Access API** — a native save-file picker, direct local
+   disk write. Desktop Chromium only, and only meaningful against a real
+   local checkout (not a random visitor's disk on the deployed site).
+3. **Local save prompt + this tab's own session cache, and the old
+   localStorage key** — last resort when opened as a bare local file with
+   no server at all, or neither tier above is available.
+
+Until the two env vars below are set on the Vercel project, tier 1 does
+nothing (Save silently falls through to tier 2 or 3 instead) — that's
+expected until this is set up, not a sign of a bug:
+
+1. **`GITHUB_TOKEN`** — a GitHub fine-grained personal access token,
+   scoped to only this repo (`LeisHo/DotFlicko`), with **Contents: Read
+   and write** permission and nothing else. Create one at
+   github.com → Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens.
+2. **`DEV_PANEL_SAVE_SECRET`** — an anti-abuse shared token (not a real
+   secret — it also lives in the page's own client-side source, same as
+   any other value there). Set it to `PkrbMti03M6xm3FEThYXa8gGW_08BOGj`
+   (the value already embedded in `index.html`'s `DEV_PANEL_SAVE_SECRET`
+   constant — the same value Clicko/DickoClicko's own Vercel projects use,
+   since this is one workspace-wide shared token, not a per-project one)
+   — or change both to a new value together if you'd rather generate your
+   own.
+
+Add both under the Vercel project → Settings → Environment Variables,
+then redeploy. `GITHUB_REPO`, `GITHUB_BRANCH`, and `SETTINGS_FILE_PATH`
+are optional overrides (see `api/save-settings.js`) — the defaults
+already match this repo (`LeisHo/DotFlicko`, branch `main`).
 
 ## Project structure
 
 ```
 DOTFLICKO/
-├── src/                     <what actually ships — see docs/CODE_SUMMARY.md>
-├── data/                    <project data; see CLAUDE.md for what lives here>
+├── index.html               <the entire app — markup, styles, and JS inline>
+├── api/                     <save-settings.js — Vercel serverless function, see above>
+├── data/
+│   ├── FLICK/2TONED/         <the 8 directions' frame PNG sequences>
+│   └── processed/            <flick-skeleton.json, and the git-tracked
+│                              settings log Save Settings writes to>
+├── scripts/active/           <flick-skeleton-annotator.html>
 ├── docs/                    <README (pointer only — this file), PROJECT_SUMMARY.md,
-│                             CODE_SUMMARY.md, PROJECT_PROGRESS.md, CHANGELOG.txt,
-│                             and any HANDOFF doc(s)>
-├── scripts/
-│   ├── active/               <scripts still run regularly>
-│   └── archived/              <one-off scripts that already did their job>
-├── logs/                    <log entries from tests, audits, queries, etc>
-├── results/                 <raw results of tests/runs>
-└── tests/                   <if a real test suite exists>
+│                             CODE_SUMMARY.md, PROJECT_PROGRESS.md, CHANGELOG.txt>
 ```
 
-<Adjust this tree to the project's actual layout — this is the standard
-skeleton (CLAUDE.md §11), not every project needs every folder. A project
-small enough to justify a single-file architecture can skip most of this
-and say so explicitly in its own CLAUDE.md instead.>
+This is otherwise a single-file project (see project `CLAUDE.md` for why)
+— `api/` is the one small, necessary exception (a Vercel serverless
+function can't live inside `index.html`); the rest of the workspace-standard
+scaffold (`src/`, `scripts/archive/`, `logs/`, `results/`, `tests/`) mostly
+stays unused for this project.
 
 ## Known limitations
 

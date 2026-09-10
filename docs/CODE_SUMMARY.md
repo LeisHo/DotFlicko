@@ -3,20 +3,25 @@ DOTFLICKO -- CODE SUMMARY
 
 Status: see ../README.md for the project-structure layout and how to run it;
 this file is a quick orientation pointer into the actual code, not a
-duplicate of the README's tree. Reflects the `spawn-placement-mode` branch
-(uncommitted) -- a real architecture rework from the original mouse-
-anchored single-entity version; see ../CHANGELOG.txt for the full history
-of how it got here.
+duplicate of the README's tree. Reflects `main` post-merge of the
+`spawn-placement-mode` rework (a real architecture change from the
+original mouse-anchored single-entity version) plus the git-tracked Save
+Settings port; see ../CHANGELOG.txt for the full history of how it got here.
 
 --------------------------------------------------------------------------------
 FILE MAP
 
-- `index.html` -- the entire app (~3100 lines as of 2026-09-10). One
+- `index.html` -- the entire app (~3300 lines as of 2026-09-10). One
   `<canvas id="scene">` for the animation, always-visible Start/Stop/Delete
   buttons (`.sim-controls`, top-left, independent of the dev panel), one
   `<div id="devPanel">` (built from the workspace's TEMPLATE_DEV_PANEL.html
   engine, §12) for the dev panel, one inline `<script>` for everything
-  else. No build step, no dependencies.
+  else. No build step, no dependencies (see `api/` below for the one
+  small exception).
+- `api/save-settings.js` -- Vercel serverless function backing the dev
+  panel's Save Settings button (git-tracked settings log, CLAUDE.md §12l);
+  ported from Clicko/DickoClicko's own established implementation. See
+  README.md for the required Vercel env var setup.
 - `scripts/active/flick-skeleton-annotator.html` -- a separate single-file
   tool (another concurrent session's own work) for hand-annotating the
   knuckle/joint1/joint2/tip keyframes that live in `data/processed/
@@ -88,8 +93,14 @@ Inside `index.html`'s single `<script>`, in roughly this order:
    entity's state is ever shared with another's. Manual click-to-flick is
    retired entirely; the ball-proximity auto-trigger (#7) is the only way
    any entity's flick sequence starts. `hitTestEntitySprite()` (Delete
-   mode, #9) is a separate, broader hit-test against an entity's own drawn
-   bounding box (the same rectangle Show Hitbox draws), distinct from
+   mode, #9) is a separate hit-test checking BOTH an entity's own drawn
+   bounding box (the same rectangle Show Hitbox draws) AND actual per-pixel
+   opacity at the click point (`getDirectionAlphaCanvas()`/
+   `isOpaqueAtLocalPoint()`, a per-direction cached full-res canvas read
+   once per click, not per-frame) — a bounding-box-only test was found to
+   delete the wrong entity whenever 2 overlapping entities' boxes
+   overlapped and a click landed in one's transparent padding that
+   happened to cover a neighbor's actual visible hand. Distinct from
    `hitTestEntityDot()`'s tiny anchor-point radius used for dragging.
 7. **Ball + collision** (`spawnBall()`, `updateBallAndCollision()`,
    `ballInFlickTriggerZone()`) -- gravity-driven ball, SWEPT capsule
@@ -323,13 +334,58 @@ GOTCHAS
   geometry does.
 - `hitTestEntitySprite()` (Delete mode) transforms a click point into an
   entity's own LOCAL unrotated space (rotate by `-entityRotationRad(entity)`,
-  the inverse of the render/collision transform) and tests it against the
-  SAME bounding rectangle Show Hitbox draws -- deliberately NOT the same
-  hit-test as `hitTestEntityDot()` (a small fixed-radius circle around just
-  the base/end points, used for dragging). Delete mode needs "click
-  anywhere on the entity," dragging needs "click exactly on one of its 2
-  handles" -- don't merge these into one hit-test function, they answer
-  genuinely different questions.
+  the inverse of the render/collision transform), then requires BOTH a hit
+  against the bounding rectangle Show Hitbox draws AND actual pixel opacity
+  at that point (`isOpaqueAtLocalPoint()`) -- a bounding-box-only version
+  was a real, reported bug: entities placed close together have heavily
+  overlapping boxes (sprites carry a lot of transparent padding), so a
+  click meant for one entity's visible hand could land inside a
+  DIFFERENT, closer-in-array (topmost-rendered) entity's box at a
+  transparent point and delete the wrong one. A box hit on a transparent
+  pixel now falls through to check entities further underneath rather
+  than stopping there. Deliberately NOT the same hit-test as
+  `hitTestEntityDot()` (a small fixed-radius circle around just the
+  base/end points, used for dragging) -- Delete mode needs "click
+  anywhere VISIBLE on the entity," dragging needs "click exactly on one
+  of its 2 handles" -- don't merge these into one hit-test function, they
+  answer genuinely different questions.
+- `getDirectionAlphaCanvas()` draws a direction's frame-1 image to an
+  offscreen canvas ONCE per direction (cached in
+  `directionAlphaCanvasCache`), at FULL natural resolution -- this is safe
+  (unlike the old, removed anchor-point scan) because it only ever runs on
+  a rare, human-paced `pointerdown` click while Delete mode is active,
+  never per-frame/per-render, and `isOpaqueAtLocalPoint()`'s own
+  `getImageData()` call reads exactly 1 pixel, not the whole image. Don't
+  call `getDirectionAlphaCanvas()`/`isOpaqueAtLocalPoint()` from any
+  per-frame code path (render/collision) without re-deriving this safety
+  reasoning first.
+- **Save Settings writes to a git-tracked settings log (CLAUDE.md §12l),
+  ported from Clicko/DickoClicko's own established 3-tier implementation**
+  (`writeSettingsViaApi()`/`readSettingsViaApi()` → `api/save-settings.js`
+  → GitHub Contents API; then `getGitSettingsFileHandle()`/
+  `writeGitSettingsLog()`/`readGitSettingsLog()` → File System Access API;
+  then `downloadSettingsAsFile()` + sessionStorage + the old
+  `DEV_PANEL_LOCALSTORAGE_KEY` as a final fallback) -- see the big comment
+  above `saveDevPanelSettings()` in `index.html`, and `README.md`, for the
+  full picture and the required Vercel env vars (`GITHUB_TOKEN`,
+  `DEV_PANEL_SAVE_SECRET`). Unlike Clicko/DickoClicko, this project's
+  snapshot IS `captureFullDevPanelState()`'s own existing return value
+  used as-is (not a hand-split values/order/panelGeometry/textOverrides
+  object) -- this project's `DEV_PANEL_LAYOUT` is a single shared object,
+  not split per device tab the way Clicko/DickoClicko's panel geometry is,
+  so there's no "other tab's geometry" to separately merge in. Don't
+  reintroduce that manual splitting without first confirming
+  `DEV_PANEL_LAYOUT` has actually become per-tab in the meantime.
+- `resetDevPanelSettings()` is called fire-and-forget at boot (not
+  awaited) -- its own Tier 1 read is a network fetch that can resolve well
+  after the page's synchronous boot sequence finishes. The page runs on
+  its own hardcoded `cfg` defaults until/unless that resolves with
+  something actually saved, same pattern as Clicko/DickoClicko's own boot
+  sequence. `DEV_PANEL_SAVE_SECRET`'s value (`PkrbMti03M6xm3FEThYXa8gGW_08BOGj`)
+  is the same workspace-wide shared token Clicko/DickoClicko already use --
+  don't generate a new one without also updating `api/save-settings.js`'s
+  own expected value AND the Vercel project's `DEV_PANEL_SAVE_SECRET` env
+  var to match.
 - Toggling Delete mode on (`setDeleteMode(true)`) clears any in-progress
   `pendingSpawnStart`/`draggingEntity`/`draggingPoint`, and `setRunning(true)`
   (Start) forces Delete mode off -- the 3 interaction modes (placing,

@@ -347,6 +347,83 @@ Merged/Pushed:
   (1cb92c5..3be0ac4).
 
 --------------------------------------------------------------------------------
+2026-09-10 (continued once more) -- git-tracked Save Settings, Delete
+mode accuracy fix, further dev-panel default bakes
+
+3 requests: "reference Clicko and DickoClicko and implement the non local
+save" (Save Settings had been localStorage-only); "the delete button isnt
+accurate... make sure the delete button only triggers when i am click
+directly on teh visible part of the entity"; 2 more rounds of Hand
+Rotation Offset / Animation X Offset default bakes from pasted dumps.
+
+Added:
+- Save Settings now writes to a git-tracked settings log
+  (`data/processed/dev-panel-settings.json`), not just `localStorage` --
+  ported from Clicko/DickoClicko's own already-proven 3-tier
+  implementation (read directly from both projects' `index.html`/
+  `api/save-settings.js` rather than re-derived from memory): Tier 1, a
+  new `api/save-settings.js` Vercel serverless function committing via
+  GitHub's Contents API (works from any device, including phones with no
+  filesystem access); Tier 2, the File System Access API for a direct
+  local disk write (desktop Chromium, local dev only); Tier 3, a download
+  prompt + sessionStorage + the old `DEV_PANEL_LOCALSTORAGE_KEY` as a
+  last resort. Reuses the exact same workspace-wide shared
+  `DEV_PANEL_SAVE_SECRET` value Clicko/DickoClicko already use (confirmed
+  identical in both their `index.html` source). Adapted (not a literal
+  copy) to this project's own simpler snapshot shape:
+  `captureFullDevPanelState()`'s existing single flat object is used
+  as-is, since (unlike Clicko/DickoClicko) this project's
+  `DEV_PANEL_LAYOUT` isn't split per device tab, so there's no separate
+  per-tab geometry merging needed. Boot now calls `resetDevPanelSettings()`
+  fire-and-forget (not awaited), matching Clicko/DickoClicko's own async
+  boot pattern, since Tier 1's read is a real network fetch. Documented
+  the required Vercel env var setup (`GITHUB_TOKEN`, `DEV_PANEL_SAVE_SECRET`)
+  in README.md, mirroring DickoClicko's own README section.
+
+Fixed:
+- Delete mode deleted the WRONG entity whenever 2 placed entities' drawn
+  bounding boxes overlapped (very common -- these sprites carry a lot of
+  transparent padding) and a click meant for one entity's visible hand
+  landed, within a different (topmost-checked) entity's own box, on a
+  point that was transparent in THAT entity's own image. Added a real
+  per-pixel opacity check (`getDirectionAlphaCanvas()`/
+  `isOpaqueAtLocalPoint()`): a bounding-box hit now also requires the
+  actual pixel at that point to be opaque in that entity's own frame-1
+  image, checked against a per-direction cached full-resolution offscreen
+  canvas (safe to draw at full res here, unlike the old removed anchor-
+  point scan, since this only runs on a rare human-paced click while
+  Delete mode is active, never per-frame) -- a box hit on a transparent
+  pixel now falls through to check entities further underneath instead of
+  stopping there.
+- Hand Rotation Offset and Animation X Offset defaults re-baked twice more
+  from newly pasted Copy Settings dumps as tuning continued (most recent:
+  behind: 1, behind-thumb: 2, side-thumb: 0, front-thumb: 1, front: -1,
+  front-pinky: 1, side-pinky: -1, behind-pinky: 0 for rotation; behind:
+  -0.5, behind-thumb: -1.5, side-thumb: -0.5, front-thumb: 0.5, front: 0,
+  front-pinky: 0, side-pinky: 0, behind-pinky: -0.5 for X offset).
+
+Verified:
+- The git-tracked Save Settings port's CLIENT-SIDE logic against the local
+  test server (no real Vercel function behind it): `writeSettingsViaApi()`
+  and `readSettingsViaApi()` both fail/return null gracefully (HTTP 501,
+  then a 404-equivalent) rather than throwing; the full
+  `loadDevPanelSettingsAsync()` chain falls through all 3 tiers to `null`
+  cleanly with nothing saved anywhere; `getGitSettingsFileHandle('read',
+  false)` returns null without prompting, as designed for a boot-time/
+  Reset read. Did NOT verify the actual GitHub-committing behavior end-to-
+  end against the real deployed Vercel site (no known deployment URL to
+  test against in this session) -- flagged as an open item in
+  PROJECT_PROGRESS.md for a session that can reach the live deployment.
+- The Delete-mode fix directly: 2 entities placed 60px apart (heavily
+  overlapping ~346px-wide bounding boxes) -- confirmed `hitTestEntitySprite()`
+  now correctly resolves a click on either entity's own actual wrist/hand
+  pixels to THAT entity specifically (not the topmost-checked one), and a
+  click on empty background between/around both returns no hit at all;
+  reproduced the exact reported symptom with a real click via the actual
+  Delete button and confirmed the correct (clicked) entity was removed,
+  leaving the other one intact.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

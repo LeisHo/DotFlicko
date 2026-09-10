@@ -1400,25 +1400,249 @@
             window.prompt('Copy:', text);
         }
     }
-    function saveDevPanelSettings() {
-        const status = document.getElementById('devSaveSyncStatus');
+    // ================================================================
+    // Save Settings: git-tracked settings log (CLAUDE.md §12l), ported
+    // from Clicko/DickoClicko's own established 3-tier implementation
+    // rather than re-deriving it — this project's own DEV_PANEL_LOCALSTORAGE_KEY
+    // and localStorage-only Save/Reset (above) are now the LAST-RESORT
+    // tier only, not the primary mechanism; see each tier's own comment
+    // in saveDevPanelSettings()/loadDevPanelSettingsAsync() below.
+    //
+    // Unlike Clicko/DickoClicko, this project's own captureFullDevPanelState()/
+    // applyFullDevPanelState() already bundle EVERYTHING (controls, layout,
+    // all 3 device-tab styles, section order/collapse, text overrides) into
+    // ONE flat snapshot object — so this port reuses that existing snapshot
+    // shape directly as the git-log payload, rather than porting Clicko/
+    // DickoClicko's own hand-split values/order/panelGeometry/textOverrides
+    // fields (which exist there because THEIR panel geometry is split per
+    // device tab and needs separate merging — this project's own
+    // DEV_PANEL_LAYOUT is a single shared object, already captured whole).
+    //
+    // True only for a genuine local-development context (bare local file,
+    // or a local dev server) — false for a real deployed origin, even
+    // though that origin's own protocol is a normal https:// that would
+    // otherwise pass a bare "not file:" check.
+    const IS_LOCAL_CONTEXT = location.protocol === 'file:' ||
+        location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    // Same convention as this workspace's other projects (CLAUDE.md §12b) —
+    // used here only to gate Tier 2's native file picker (GIT_LOG_WRITABLE
+    // below), not to hide the whole dev panel (which already defaults
+    // hidden via its own `hidden` class regardless of DEV_MODE).
+    const DEV_MODE = IS_LOCAL_CONTEXT || location.search.includes('dev=1');
+    // Tier 2 (File System Access API) only makes sense against a real
+    // local checkout (localhost/127.0.0.1), never a deployed origin (no
+    // locally-tracked repo file for that write to be meaningfully
+    // "tracked" through) and never file: (no server behind the page at
+    // all for the write to be tracked through either) — layered ON TOP of
+    // IS_LOCAL_CONTEXT since that itself still counts file: as local.
+    const GIT_LOG_WRITABLE = DEV_MODE && IS_LOCAL_CONTEXT && location.protocol !== 'file:' && 'showSaveFilePicker' in window;
+    const GIT_SETTINGS_FILENAME = 'dev-panel-settings.json';
+    const IDB_NAME = 'dotflicko';
+    const IDB_STORE = 'handles';
+    const IDB_HANDLE_KEY = 'gitSettingsFileHandle';
+    const SESSION_FALLBACK_KEY = 'dotflicko.sessionSettings';
+
+    // Shared anti-abuse token for /api/save-settings — NOT a real secret
+    // (ships in this public page's source, same as every other client-side
+    // value here); it exists only to keep a random visitor from spamming
+    // commits to the repo. Must match the DEV_PANEL_SAVE_SECRET env var set
+    // on the Vercel project. Reuses the exact same value Clicko/DickoClicko
+    // already use, since this is one workspace-wide shared secret
+    // (CLAUDE.md §12l), not a per-project one.
+    const DEV_PANEL_SAVE_SECRET = 'PkrbMti03M6xm3FEThYXa8gGW_08BOGj';
+
+    // Tier 1: a Vercel serverless function (api/save-settings.js) that
+    // commits straight to data/processed/dev-panel-settings.json via
+    // GitHub's Contents API. The ONLY tier that works from a device with
+    // no local filesystem access of its own (e.g. a phone visiting the
+    // deployed site with ?dev=1). Returns {ok, error} rather than a bare
+    // boolean so the function's own error responses (missing env vars,
+    // secret mismatch, GitHub API failure) can be surfaced directly.
+    async function writeSettingsViaApi(data) {
         try {
-            localStorage.setItem(DEV_PANEL_LOCALSTORAGE_KEY, JSON.stringify(captureFullDevPanelState()));
-            if (status) { status.textContent = 'saved'; setTimeout(() => { status.textContent = ''; }, 1500); }
-        } catch (e) {
-            if (status) status.textContent = 'save failed';
+            const resp = await fetch('/api/save-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Dev-Panel-Secret': DEV_PANEL_SAVE_SECRET },
+                body: JSON.stringify(data),
+            });
+            const body = await resp.json().catch(() => ({}));
+            if (resp.ok && body.ok === true) return { ok: true };
+            return { ok: false, error: body.error || `HTTP ${resp.status}` };
+        } catch (err) {
+            return { ok: false, error: 'offline or unreachable: ' + String((err && err.message) || err) };
         }
     }
-    function loadDevPanelSettings() {
+    async function readSettingsViaApi() {
         try {
-            const raw = localStorage.getItem(DEV_PANEL_LOCALSTORAGE_KEY);
-            return raw ? JSON.parse(raw) : null;
-        } catch (e) {
+            const resp = await fetch('/data/processed/dev-panel-settings.json', { cache: 'no-store' });
+            if (!resp.ok) return null; // e.g. 404 before the file exists yet
+            return await resp.json();
+        } catch (err) {
             return null;
         }
     }
-    function resetDevPanelSettings() {
-        applyFullDevPanelState(loadDevPanelSettings());
+
+    // Tier 3 last resort: when nothing above reached the git-tracked log at
+    // all, hand the user a real file they can save themselves.
+    function downloadSettingsAsFile(data) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = GIT_SETTINGS_FILENAME;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    function idbOpen() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(IDB_NAME, 1);
+            req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+    async function idbGet(key) {
+        const db = await idbOpen();
+        return new Promise((resolve, reject) => {
+            const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+    async function idbSet(key, val) {
+        const db = await idbOpen();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            tx.objectStore(IDB_STORE).put(val, key);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
+    // mode: 'read' (boot/Reset — never prompts) or 'readwrite' (Save — may
+    // prompt, since it always runs from a real click/keydown user gesture).
+    async function getGitSettingsFileHandle(mode, promptIfMissing) {
+        if (!('showSaveFilePicker' in window)) return null;
+        let handle = null;
+        try { handle = await idbGet(IDB_HANDLE_KEY); } catch (err) { handle = null; }
+        if (handle) {
+            try {
+                let perm = await handle.queryPermission({ mode }); // never shows UI
+                if (perm !== 'granted' && promptIfMissing) {
+                    perm = await handle.requestPermission({ mode }); // needs a user gesture
+                }
+                if (perm === 'granted') return handle;
+            } catch (err) { /* handle stale/revoked — fall through to re-prompt */ }
+        }
+        if (!promptIfMissing) return null; // boot-time/Reset read: never force a picker with no gesture behind it
+        try {
+            handle = await window.showSaveFilePicker({
+                suggestedName: GIT_SETTINGS_FILENAME,
+                types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+            });
+            await idbSet(IDB_HANDLE_KEY, handle);
+            return handle;
+        } catch (err) {
+            return null; // user cancelled the picker, or the API is blocked
+        }
+    }
+    async function writeGitSettingsLog(data) {
+        const handle = await getGitSettingsFileHandle('readwrite', true);
+        if (!handle) return false;
+        try {
+            const writable = await handle.createWritable();
+            await writable.write(JSON.stringify(data, null, 2));
+            await writable.close();
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+    async function readGitSettingsLog() {
+        const handle = await getGitSettingsFileHandle('read', false);
+        if (!handle) return null;
+        try {
+            const file = await handle.getFile();
+            return JSON.parse(await file.text());
+        } catch (err) {
+            return null; // missing/empty/corrupt file, or permission not actually granted
+        }
+    }
+
+    async function saveDevPanelSettings() {
+        const status = document.getElementById('devSaveSyncStatus');
+        const flash = (text) => { if (status) { status.textContent = text; setTimeout(() => { status.textContent = ''; }, 1500); } };
+        const snapshot = captureFullDevPanelState();
+
+        // Tier 1: Vercel/GitHub API — works from any device, so try it
+        // whenever a real server is behind the page at all.
+        if (location.protocol !== 'file:') {
+            const result = await writeSettingsViaApi(snapshot);
+            if (result.ok) { flash('saved to repo'); return; }
+            // A genuinely deployed page must NEVER fall through to a
+            // local-save mechanism (Tier 2's native picker, or Tier 3's
+            // download dialog) — report the real failure and stop.
+            if (!IS_LOCAL_CONTEXT) {
+                console.error('[saveDevPanelSettings] Vercel/GitHub API write failed:', result.error);
+                flash('save failed');
+                return;
+            }
+        }
+
+        // Tier 2: direct local disk write via the File System Access API.
+        // Local dev only — never reached on a real deployment (guard above).
+        if (GIT_LOG_WRITABLE) {
+            const ok = await writeGitSettingsLog(snapshot);
+            if (ok) { flash('saved'); return; }
+            // fall through to Tier 3 rather than reporting outright failure
+        }
+
+        // Tier 3: nothing above reached the git-tracked log at all — hand
+        // the user a real downloadable file AND stash it in this tab's own
+        // sessionStorage (never a persistent local default), rather than
+        // failing outright, and say so honestly rather than claiming a
+        // real git-log save. Also keeps the old localStorage key updated
+        // as a final belt-and-braces fallback for this exact browser.
+        try {
+            downloadSettingsAsFile(snapshot);
+            sessionStorage.setItem(SESSION_FALLBACK_KEY, JSON.stringify(snapshot));
+            localStorage.setItem(DEV_PANEL_LOCALSTORAGE_KEY, JSON.stringify(snapshot));
+            flash('saved (session only)');
+        } catch (e) {
+            flash('save failed');
+        }
+    }
+
+    async function loadDevPanelSettingsAsync() {
+        let snap = null;
+        // Tier 1: the git-tracked settings log is just a static asset once
+        // committed, so a plain fetch works on ANY server.
+        if (location.protocol !== 'file:') {
+            snap = await readSettingsViaApi();
+        }
+        // Tier 2: this browser's own previously-granted File System Access handle.
+        if (!snap && GIT_LOG_WRITABLE) {
+            snap = await readGitSettingsLog();
+        }
+        // Tier 3: this tab's own sessionStorage fallback, then the old
+        // localStorage key as a final fallback.
+        if (!snap) {
+            try { snap = JSON.parse(sessionStorage.getItem(SESSION_FALLBACK_KEY)); } catch (err) { snap = null; }
+        }
+        if (!snap) {
+            try {
+                const raw = localStorage.getItem(DEV_PANEL_LOCALSTORAGE_KEY);
+                snap = raw ? JSON.parse(raw) : null;
+            } catch (err) { snap = null; }
+        }
+        return snap;
+    }
+
+    async function resetDevPanelSettings() {
+        applyFullDevPanelState(await loadDevPanelSettingsAsync());
     }
 
     function initDevPanelEngine() {
@@ -1485,7 +1709,13 @@
         syncSlidersFromState();
         syncColorPickersFromState();
 
-        applyFullDevPanelState(loadDevPanelSettings());
+        // Fire-and-forget: the git-tracked settings log's own Tier 1 read
+        // is a network fetch, so this resolves asynchronously (possibly
+        // well after this synchronous boot sequence finishes) rather than
+        // blocking startup on it — matches Clicko/DickoClicko's own
+        // established boot pattern. The page runs with its own hardcoded
+        // defaults until/unless this resolves with something saved.
+        resetDevPanelSettings();
     }
 
     // ================================================================
@@ -1512,8 +1742,8 @@
         // Rotation Offset defaults") — previously every direction
         // defaulted to 0 (set at runtime by wireRotationOffsetRow()).
         entityRotationOffsetByDirection: {
-            'behind': 0, 'behind-thumb': 2, 'side-thumb': 3, 'front-thumb': 5,
-            'front': 0, 'front-pinky': -5, 'side-pinky': -4, 'behind-pinky': 3,
+            'behind': 1, 'behind-thumb': 2, 'side-thumb': 0, 'front-thumb': 1,
+            'front': -1, 'front-pinky': 1, 'side-pinky': -1, 'behind-pinky': 0,
         },
         // Per-direction Animation X Offset — a manual perpendicular-to-the-
         // placement-line correction (%vmin), added to the sprite/collision
@@ -1525,8 +1755,8 @@
         // Defaults baked in from a tuned "Copy Settings" dump per explicit
         // request ("Set X Offset and Hand Rotation Offset defaults").
         entityXOffsetByDirection: {
-            'behind': -2, 'behind-thumb': -1.5, 'side-thumb': 0.5, 'front-thumb': 0,
-            'front': 2, 'front-pinky': 0, 'side-pinky': -1, 'behind-pinky': -2.5,
+            'behind': -0.5, 'behind-thumb': -1.5, 'side-thumb': -0.5, 'front-thumb': 0.5,
+            'front': 0, 'front-pinky': 0, 'side-pinky': 0, 'behind-pinky': -0.5,
         },
         rotationSmoothing: 1, positionSmoothing: 1, angleOffset: 180,
         backgroundColor: '#1b1f2a',
@@ -2686,13 +2916,56 @@
         return null;
     }
 
-    // Delete mode's own hit-test: a click anywhere within an entity's own
-    // drawn bounding box (the SAME rectangle Show Hitbox draws — transform
-    // the click point into the entity's local unrotated space, same
-    // rotate-by-negative-angle trick used to invert the render/collision
-    // transform), not just its small anchor dot — matches "click any
-    // placed entity" more literally than reusing hitTestEntityDot's tiny
-    // radius would.
+    // Per-direction offscreen canvas holding that direction's idle (frame 1)
+    // pixels at full natural resolution — drawn ONCE per direction (cached),
+    // used ONLY for delete-mode's per-pixel opacity check below. Safe to
+    // draw at full res here (unlike the old, removed anchor-point scan):
+    // this only ever runs on a rare, human-paced pointerdown click while
+    // Delete mode is active, never per-frame/per-render, and a single
+    // drawImage() with no pixel readback is cheap regardless of source size
+    // — the actual getImageData() call below reads exactly 1 pixel.
+    const directionAlphaCanvasCache = {};
+    function getDirectionAlphaCanvas(directionKey) {
+        if (directionAlphaCanvasCache[directionKey]) return directionAlphaCanvasCache[directionKey];
+        const img = ensureDirectionLoaded(directionKey).frames[0];
+        if (!img || !img.complete || img.naturalWidth === 0) return null;
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        const entry = { ctx, w: img.naturalWidth, h: img.naturalHeight };
+        directionAlphaCanvasCache[directionKey] = entry;
+        return entry;
+    }
+    // (localX,localY) is a point already known to fall within [left,left+drawW]
+    // x [top,top+drawH] (the entity's own bounding box, in the SAME local
+    // unrotated space hitTestEntitySprite computes) — maps it to a fraction
+    // of that box, then to the source image's own natural pixel coordinates,
+    // and reads that exact pixel's alpha. Same ALPHA_HIT_THRESHOLD=10
+    // convention used elsewhere in this file for "is this pixel visible."
+    function isOpaqueAtLocalPoint(directionKey, localX, localY, drawW, drawH, left, top) {
+        const entry = getDirectionAlphaCanvas(directionKey);
+        if (!entry) return true; // image not loaded yet — fall back permissively rather than never-deletable
+        const u = (localX - left) / drawW, v = (localY - top) / drawH;
+        const px = Math.min(entry.w - 1, Math.max(0, Math.floor(u * entry.w)));
+        const py = Math.min(entry.h - 1, Math.max(0, Math.floor(v * entry.h)));
+        const ALPHA_HIT_THRESHOLD = 10;
+        return entry.ctx.getImageData(px, py, 1, 1).data[3] > ALPHA_HIT_THRESHOLD;
+    }
+
+    // Delete mode's own hit-test: a click within an entity's own drawn
+    // bounding box (the SAME rectangle Show Hitbox draws — transform the
+    // click point into the entity's local unrotated space, same rotate-by-
+    // negative-angle trick used to invert the render/collision transform)
+    // AND on an actually-VISIBLE (opaque) pixel of that entity's sprite —
+    // a bounding-box-only test was found to delete the WRONG entity
+    // whenever 2 entities' boxes overlapped (very common, given how much
+    // transparent padding these sprites have) and a click landed in one
+    // entity's transparent padding that happened to overlap a neighboring
+    // entity's own visible hand. Checked topmost-rendered first; a
+    // bounding-box hit on transparent padding falls through to check
+    // entities further underneath, rather than stopping there.
     function hitTestEntitySprite(x, y) {
         const vmin = Math.min(window.innerWidth, window.innerHeight);
         const size = vmin * (cfg.entityScale / 100);
@@ -2709,7 +2982,8 @@
             const localX = dx * cos - dy * sin;
             const localY = dx * sin + dy * cos;
             const left = -drawW * vb.centerX + xOffsetPx, top = -drawH * vb.bottomY;
-            if (localX >= left && localX <= left + drawW && localY >= top && localY <= top + drawH) return entity;
+            if (localX < left || localX > left + drawW || localY < top || localY > top + drawH) continue;
+            if (isOpaqueAtLocalPoint(entity.directionKey, localX, localY, drawW, drawH, left, top)) return entity;
         }
         return null;
     }
