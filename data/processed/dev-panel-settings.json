@@ -1,0 +1,246 @@
+{
+  "controls": {
+    "sliderEntityScale": 76,
+    "sliderClickAnimSpeed": 11.7,
+    "sliderPeakHoldFrames": 30,
+    "sliderRotationSmoothing": 1,
+    "sliderPositionSmoothing": 1,
+    "sliderAngleOffset": 180,
+    "colorBackground": "#1b1f2a",
+    "sliderBallGravity": 80,
+    "sliderBallRadius": 3,
+    "colorBall": "#ff5c5c",
+    "sliderBallBounciness": 0.6,
+    "sliderBallRespawnRate": 1,
+    "sliderJointThickness": 4,
+    "sliderThicknessSmoothing": 0.15,
+    "sliderCollisionIntensity": 1,
+    "checkboxShowJointCollisionLines": false,
+    "checkboxShowCenter": true,
+    "checkboxShowAngleDebug": true,
+    "checkboxHideCursor": false,
+    "checkboxShowHitbox": false,
+    "selectRotationOffsetDirection": "behind-pinky",
+    "sliderRotOffset_behind": 1,
+    "sliderRotOffset_behind-thumb": 2,
+    "sliderRotOffset_side-thumb": 0,
+    "sliderRotOffset_front-thumb": 1,
+    "sliderRotOffset_front": -1,
+    "sliderRotOffset_front-pinky": 1,
+    "sliderRotOffset_side-pinky": -1,
+    "sliderRotOffset_behind-pinky": 0,
+    "selectXOffsetDirection": "behind-pinky",
+    "sliderXOffset_behind": -0.5,
+    "sliderXOffset_behind-thumb": -1.5,
+    "sliderXOffset_side-thumb": -0.5,
+    "sliderXOffset_front-thumb": 0.5,
+    "sliderXOffset_front": 0,
+    "sliderXOffset_front-pinky": 0,
+    "sliderXOffset_side-pinky": 0,
+    "sliderXOffset_behind-pinky": -0.5
+  },
+  "layout": {
+    "left": 20,
+    "top": 20,
+    "width": 340,
+    "height": 520
+  },
+  "devPanelStyle": {
+    "titleFontSize": 22,
+    "tabFontSize": 12,
+    "groupTitleFontSize": 11,
+    "settingTitleFontSize": 12,
+    "buttonTextBorder": 0,
+    "scrollStrength": 0.2,
+    "opacity": 1,
+    "bgColor": "#000000",
+    "titleTextColor": "#ffffff",
+    "nonTitleTextColor": "#ffffff",
+    "accentColor": "#5b85c8",
+    "sliderColor": "#5b85c8",
+    "fontFamily": "Verdana, Geneva, sans-serif",
+    "capsButtonText": true,
+    "capsTabText": true,
+    "capsGroupNames": true,
+    "capsSettingsText": false,
+    "buttonTextLetterSpacing": 0,
+    "tabTextLetterSpacing": 0,
+    "groupTextLetterSpacing": 0,
+    "settingsTextLetterSpacing": 0,
+    "buttonHeight": 21
+  },
+  "mobileDevPanelStyle": {
+    "titleFontSize": 22,
+    "tabFontSize": 12,
+    "groupTitleFontSize": 11,
+    "settingTitleFontSize": 12,
+    "buttonTextBorder": 0,
+    "scrollStrength": 0.2,
+    "opacity": 1,
+    "bgColor": "#000000",
+    "titleTextColor": "#ffffff",
+    "nonTitleTextColor": "#ffffff",
+    "accentColor": "#5b85c8",
+    "sliderColor": "#5b85c8",
+    "fontFamily": "Verdana, Geneva, sans-serif",
+    "capsButtonText": true,
+    "capsTabText": true,
+    "capsGroupNames": true,
+    "capsSettingsText": false,
+    "buttonTextLetterSpacing": 0,
+    "tabTextLetterSpacing": 0,
+    "groupTextLetterSpacing": 0,
+    "settingsTextLetterSpacing": 0,
+    "buttonHeight": 21
+  },
+  "landscapeDevPanelStyle": {
+    "titleFontSize": 22,
+    "tabFontSize": 12,
+    "groupTitleFontSize": 11,
+    "settingTitleFontSize": 12,
+    "buttonTextBorder": 0,
+    "scrollStrength": 0.2,
+    "opacity": 1,
+    "bgColor": "#000000",
+    "titleTextColor": "#ffffff",
+    "nonTitleTextColor": "#ffffff",
+    "accentColor": "#5b85c8",
+    "sliderColor": "#5b85c8",
+    "fontFamily": "Verdana, Geneva, sans-serif",
+    "capsButtonText": true,
+    "capsTabText": true,
+    "capsGroupNames": true,
+    "capsSettingsText": false,
+    "buttonTextLetterSpacing": 0,
+    "tabTextLetterSpacing": 0,
+    "groupTextLetterSpacing": 0,
+    "settingsTextLetterSpacing": 0,
+    "buttonHeight": 21
+  },
+  "sectionOrder": {
+    "desktopTabContent": [
+      {
+        "key": "desktop:Dev Panel",
+        "rowKeys": [
+          "sliderDevPanelTitleFontSize",
+          "sliderDevPanelTabFontSize",
+          "sliderDevPanelGroupTitleFontSize",
+          "sliderDevPanelSettingTitleFontSize",
+          "sliderDevPanelButtonTextBorder",
+          "sliderDevPanelScrollStrength",
+          "sliderDevPanelButtonHeight",
+          "sliderDevPanelOpacity",
+          "colorDevPanelBg",
+          "colorDevPanelTitleText",
+          "colorDevPanelNonTitleText",
+          "colorDevPanelAccent",
+          "colorDevPanelSliderColor",
+          "selectDevPanelFontFamily",
+          "checkboxDevCapsButtonText",
+          "checkboxDevCapsTabText",
+          "checkboxDevCapsGroupNames",
+          "checkboxDevCapsSettingsText",
+          "checkboxDevTextEditMode"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "desktop:Entity",
+        "rowKeys": [
+          "sliderEntityScale",
+          "sliderClickAnimSpeed",
+          "sliderPeakHoldFrames",
+          "sliderRotationSmoothing",
+          "sliderPositionSmoothing",
+          "sliderAngleOffset",
+          "selectRotationOffsetDirection",
+          "selectXOffsetDirection"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "desktop:Background",
+        "rowKeys": [
+          "colorBackground"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "desktop:Ball",
+        "rowKeys": [
+          "sliderBallGravity",
+          "sliderBallRadius",
+          "colorBall",
+          "sliderBallBounciness",
+          "sliderBallRespawnRate"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "desktop:Collision",
+        "rowKeys": [
+          "sliderJointThickness",
+          "sliderThicknessSmoothing",
+          "sliderCollisionIntensity",
+          "checkboxShowJointCollisionLines"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "desktop:Debug",
+        "rowKeys": [
+          "checkboxShowCenter",
+          "checkboxShowAngleDebug",
+          "checkboxHideCursor",
+          "checkboxShowHitbox"
+        ],
+        "subgroups": []
+      }
+    ],
+    "mobileTabContent": [
+      {
+        "key": "mobile:Dev Panel",
+        "rowKeys": [
+          "sliderMobileDevPanelTitleFontSize",
+          "sliderMobileDevPanelTabFontSize",
+          "sliderMobileDevPanelGroupTitleFontSize",
+          "sliderMobileDevPanelSettingTitleFontSize",
+          "sliderMobileDevPanelButtonTextBorder",
+          "sliderMobileDevPanelScrollStrength",
+          "sliderMobileDevPanelButtonHeight"
+        ],
+        "subgroups": []
+      }
+    ],
+    "landscapeTabContent": [
+      {
+        "key": "landscape:Dev Panel",
+        "rowKeys": [
+          "sliderLandscapeDevPanelTitleFontSize",
+          "sliderLandscapeDevPanelTabFontSize",
+          "sliderLandscapeDevPanelGroupTitleFontSize",
+          "sliderLandscapeDevPanelSettingTitleFontSize",
+          "sliderLandscapeDevPanelButtonTextBorder",
+          "sliderLandscapeDevPanelScrollStrength",
+          "sliderLandscapeDevPanelButtonHeight"
+        ],
+        "subgroups": []
+      }
+    ]
+  },
+  "sectionCollapseState": {
+    "desktop:Dev Panel": true,
+    "desktop:Entity": false,
+    "desktop:Background": true,
+    "desktop:Ball": true,
+    "desktop:Collision": true,
+    "desktop:Debug": true,
+    "mobile:Dev Panel": false,
+    "landscape:Dev Panel": false
+  },
+  "devTextOverrides": {
+    "desktop:Dev Panel": null,
+    "desktop:Entity": "HAND"
+  },
+  "textEditModeEnabled": false
+}
