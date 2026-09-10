@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flick Skeleton Annotator</title>
+<!--
+====================================================================
+FLICK SKELETON ANNOTATOR — internal authoring tool, not part of the
+shipped DOTFLICKO page.
+
+WHAT THIS IS FOR
+The 8 FLICK direction animations (data/FLICK/2TONED/<DIR>/A) are flat
+PNGs — nothing in them tells a game "where the finger joints are" or
+"how fast they're moving." This tool lets you mark a simple 4-point
+skeleton (Knuckle -> Joint 1 -> Joint 2 -> Tip, i.e. 3 segments across
+the finger's 3 joints) on top of a handful of KEYFRAMES per direction,
+in the image's own normalized (0-1) space. You don't need to mark
+every one of the 20 frames — just enough keyframes to capture the
+motion's shape; the game interpolates the rest at runtime and derives
+each segment's velocity from how those points move frame to frame,
+which is what lets a ball's reaction depend on exactly when and where
+it touches the finger.
+
+HOW TO USE
+1. Pick a direction from the dropdown.
+2. Scrub to a frame (the numbered buttons show which frames already
+   have keyframe data — filled = keyframe, hollow = not yet marked).
+3. Pick which point you're placing (Knuckle/Joint 1/Joint 2/Tip) and
+   click on the image where that joint sits in THIS frame. Clicking
+   automatically marks the current frame as a keyframe.
+4. Repeat for a few frames across the motion (e.g. rest pose, mid-
+   swing, moment of contact, follow-through) — you don't need all 20.
+5. "Clear Frame" removes all 4 points from the current frame (un-marks
+   it as a keyframe). Work auto-saves to this browser's localStorage
+   as you go, and "Copy JSON" / "Download JSON" export everything for
+   handing off to the actual collision code.
+
+OUTPUT SHAPE
+{
+  "behind": {
+    "3": { "knuckle": {"x":0.41,"y":0.62}, "joint1": {...}, "joint2": {...}, "tip": {...} },
+    "11": { ... }
+  },
+  "behind-thumb": { ... },
+  ...
+}
+Point coordinates are fractions (0-1) of that frame's own image width/
+height, in the image's OWN unrotated orientation — matching how the
+main page's entity is drawn before its render-time rotation is
+applied, so the same rotation transform can be reused on this data at
+runtime.
+====================================================================
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+    background: #14161c; color: #e8e8ee; display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    padding: 10px 16px; background: #1c1f28; border-bottom: 1px solid #2c3040;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; color: #7fd4ff; white-space: nowrap; }
+  select, button {
+    background: #22263133; background: #232733; color: #e8e8ee; border: 1px solid #3a3f52;
+    border-radius: 4px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  select:hover, button:hover { border-color: #7fd4ff; }
+  button.primary { background: #2c5a8f; border-color: #3d7ab8; }
+  button.danger { background: #6b2c2c; border-color: #944; }
+  button.active-point { background: #3d7ab8; border-color: #7fd4ff; }
+  main { flex: 1; display: flex; min-height: 0; }
+  .canvas-pane { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0c0d11; position: relative; }
+  #stageWrap { position: relative; }
+  #stage { display: block; border: 1px solid #2c3040; background: #1a1c22; cursor: crosshair; }
+  .side-pane { width: 260px; border-left: 1px solid #2c3040; background: #1c1f28; padding: 12px; overflow-y: auto; }
+  .side-pane h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #8a90a8; margin: 16px 0 8px; }
+  .side-pane h2:first-child { margin-top: 0; }
+  .point-btns { display: flex; flex-direction: column; gap: 4px; }
+  .point-btns button { text-align: left; display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .frame-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .frame-grid button { padding: 6px 0; font-size: 11px; }
+  .frame-grid button.has-kf { background: #2c5a8f; border-color: #7fd4ff; font-weight: bold; }
+  .frame-grid button.is-current { outline: 2px solid #ffcf5c; outline-offset: -2px; }
+  footer { padding: 10px 16px; background: #1c1f28; border-top: 1px solid #2c3040; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .hint { font-size: 11px; color: #8a90a8; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: #b0b5c8; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  #status { font-size: 11px; color: #7fd4ff; min-width: 90px; }
+  #copyJsonArea { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FLICK SKELETON ANNOTATOR</h1>
+  <label class="hint">Direction:
+    <select id="directionSelect"></select>
+  </label>
+  <button id="prevFrameBtn">◀ Frame</button>
+  <span class="hint" id="frameLabel">Frame 1 / 20</span>
+  <button id="nextFrameBtn">Frame ▶</button>
+  <span class="legend">
+    <span><span class="swatch" style="background:#ff6b6b"></span>Knuckle</span>
+    <span><span class="swatch" style="background:#ffcf5c"></span>Joint 1</span>
+    <span><span class="swatch" style="background:#6bdc7c"></span>Joint 2</span>
+    <span><span class="swatch" style="background:#7fd4ff"></span>Tip</span>
+  </span>
+</header>
+
+<main>
+  <div class="canvas-pane">
+    <div id="stageWrap">
+      <canvas id="stage" width="700" height="700"></canvas>
+    </div>
+  </div>
+  <div class="side-pane">
+    <h2>Placing</h2>
+    <div class="point-btns" id="pointBtns">
+      <button data-point="knuckle" class="active-point"><span class="swatch" style="background:#ff6b6b"></span>Knuckle</button>
+      <button data-point="joint1"><span class="swatch" style="background:#ffcf5c"></span>Joint 1</button>
+      <button data-point="joint2"><span class="swatch" style="background:#6bdc7c"></span>Joint 2</button>
+      <button data-point="tip"><span class="swatch" style="background:#7fd4ff"></span>Tip</button>
+    </div>
+
+    <h2>Frame (keyframes filled)</h2>
+    <div class="frame-grid" id="frameGrid"></div>
+
+    <h2>This frame</h2>
+    <button id="clearFrameBtn" class="danger" style="width:100%;">Clear Frame</button>
+    <p class="hint" style="margin-top:8px;">Click on the image to place the selected point. Non-keyframe frames show a faint interpolated preview (dashed) from the nearest keyframes before/after, when both exist.</p>
+  </div>
+</main>
+
+<footer>
+  <button id="copyBtn" class="primary">Copy JSON</button>
+  <button id="downloadBtn" class="primary">Download JSON</button>
+  <label class="hint" style="cursor:pointer;">
+    Load JSON <input id="loadInput" type="file" accept="application/json" style="display:none;">
+  </label>
+  <button id="clearAllBtn" class="danger">Clear All Directions</button>
+  <span id="status"></span>
+  <textarea id="copyJsonArea"></textarea>
+</footer>
+
+<script>
+// ====================================================================
+// Direction -> folder/filename-prefix mapping. Verified against the
+// actual files on disk (each folder's own prefix is NOT uniform --
+// same lesson DickoClicko hit repeatedly with this exact asset set).
+// ====================================================================
+const DIRECTIONS = [
+  { key: 'behind',       label: 'Behind',        folder: 'BEHIND',       prefix: '2T -Flabbehind' },
+  { key: 'behind-thumb', label: 'Behind Thumb',  folder: 'BEHIND THUMB', prefix: '2T -BehindThumb' },
+  { key: 'side-thumb',   label: 'Side Thumb',    folder: 'SIDE THUMB',   prefix: '2T -DirectThumb' },
+  { key: 'front-thumb',  label: 'Front Thumb',   folder: 'FRONT THUMB',  prefix: '2T -SideThub' },
+  { key: 'front',        label: 'Front',         folder: 'FRONT',        prefix: '2T -Flabove' },
+  { key: 'front-pinky',  label: 'Front Pinky',   folder: 'FRONT PINKY',  prefix: '2T -SidePink' },
+  { key: 'side-pinky',   label: 'Side Pinky',    folder: 'SIDE PINKY',   prefix: '2T -DirectPink' },
+  { key: 'behind-pinky',  label: 'Behind Pinky',  folder: 'BEHIND PINKY', prefix: '2T -BehindPink' },
+];
+const FRAME_COUNT = 20;
+const POINT_KEYS = ['knuckle', 'joint1', 'joint2', 'tip'];
+const POINT_COLORS = { knuckle: '#ff6b6b', joint1: '#ffcf5c', joint2: '#6bdc7c', tip: '#7fd4ff' };
+
+function frameUrl(dir, n) {
+  return `../../data/FLICK/2TONED/${encodeURIComponent(dir.folder)}/A/${encodeURIComponent(dir.prefix + '_' + String(n).padStart(3, '0') + '.png')}`;
+}
+
+// ====================================================================
+// State
+// ====================================================================
+const LOCALSTORAGE_KEY = 'flickSkeletonAnnotations';
+let data = loadFromStorage() || {};
+DIRECTIONS.forEach(d => { if (!data[d.key]) data[d.key] = {}; });
+
+let currentDirKey = DIRECTIONS[0].key;
+let currentFrame = 1;
+let currentPoint = 'knuckle';
+const imageCache = {}; // `${dirKey}:${frame}` -> Image
+
+function loadFromStorage() {
+  try { const raw = localStorage.getItem(LOCALSTORAGE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch (e) { return null; }
+}
+function saveToStorage() {
+  try {
+    localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(data));
+    const status = document.getElementById('status');
+    status.textContent = 'saved';
+    setTimeout(() => { if (status.textContent === 'saved') status.textContent = ''; }, 1000);
+  } catch (e) { /* best effort only */ }
+}
+
+function currentDir() { return DIRECTIONS.find(d => d.key === currentDirKey); }
+function getImage(dirKey, frame) {
+  const cacheKey = dirKey + ':' + frame;
+  if (imageCache[cacheKey]) return imageCache[cacheKey];
+  const dir = DIRECTIONS.find(d => d.key === dirKey);
+  const img = new Image();
+  img.src = frameUrl(dir, frame);
+  img.onload = () => render();
+  imageCache[cacheKey] = img;
+  return img;
+}
+
+// ====================================================================
+// UI setup
+// ====================================================================
+const directionSelect = document.getElementById('directionSelect');
+DIRECTIONS.forEach(d => {
+  const opt = document.createElement('option');
+  opt.value = d.key; opt.textContent = d.label;
+  directionSelect.appendChild(opt);
+});
+directionSelect.value = currentDirKey;
+directionSelect.addEventListener('change', (e) => {
+  currentDirKey = e.target.value;
+  render(); renderFrameGrid();
+});
+
+document.getElementById('prevFrameBtn').addEventListener('click', () => { currentFrame = Math.max(1, currentFrame - 1); render(); renderFrameGrid(); });
+document.getElementById('nextFrameBtn').addEventListener('click', () => { currentFrame = Math.min(FRAME_COUNT, currentFrame + 1); render(); renderFrameGrid(); });
+
+document.getElementById('pointBtns').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-point]');
+  if (!btn) return;
+  currentPoint = btn.dataset.point;
+  document.querySelectorAll('#pointBtns button').forEach(b => b.classList.toggle('active-point', b === btn));
+});
+
+function renderFrameGrid() {
+  const grid = document.getElementById('frameGrid');
+  grid.innerHTML = '';
+  const dirData = data[currentDirKey];
+  for (let f = 1; f <= FRAME_COUNT; f++) {
+    const btn = document.createElement('button');
+    btn.textContent = f;
+    if (dirData[f]) btn.classList.add('has-kf');
+    if (f === currentFrame) btn.classList.add('is-current');
+    btn.addEventListener('click', () => { currentFrame = f; render(); renderFrameGrid(); });
+    grid.appendChild(btn);
+  }
+  document.getElementById('frameLabel').textContent = `Frame ${currentFrame} / ${FRAME_COUNT}`;
+}
+
+document.getElementById('clearFrameBtn').addEventListener('click', () => {
+  delete data[currentDirKey][currentFrame];
+  saveToStorage(); render(); renderFrameGrid();
+});
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (!confirm('Clear ALL keyframes across every direction? This cannot be undone.')) return;
+  DIRECTIONS.forEach(d => { data[d.key] = {}; });
+  saveToStorage(); render(); renderFrameGrid();
+});
+
+// ====================================================================
+// Canvas: draw current frame + points (+ faint interpolated preview
+// when the current frame isn't itself a keyframe).
+// ====================================================================
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+const STAGE_SIZE = 700;
+
+function nearestKeyframes(dirKey, frame) {
+  const dirData = data[dirKey];
+  const keys = Object.keys(dirData).map(Number).sort((a, b) => a - b);
+  let before = null, after = null;
+  for (const k of keys) {
+    if (k <= frame) before = k;
+    if (k >= frame && after === null) after = k;
+  }
+  return { before, after };
+}
+function interpolatedPose(dirKey, frame) {
+  const dirData = data[dirKey];
+  if (dirData[frame]) return dirData[frame];
+  const { before, after } = nearestKeyframes(dirKey, frame);
+  if (before == null || after == null || before === after) return null;
+  const t = (frame - before) / (after - before);
+  const a = dirData[before], b = dirData[after];
+  const out = {};
+  POINT_KEYS.forEach(pk => {
+    if (!a[pk] || !b[pk]) return;
+    out[pk] = { x: a[pk].x + (b[pk].x - a[pk].x) * t, y: a[pk].y + (b[pk].y - a[pk].y) * t };
+  });
+  return out;
+}
+
+function drawSkeleton(pose, imgW, imgH, offX, offY, scale, dashed) {
+  if (!pose) return;
+  ctx.save();
+  ctx.lineWidth = dashed ? 1.5 : 2.5;
+  ctx.strokeStyle = dashed ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.85)';
+  if (dashed) ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  let started = false;
+  POINT_KEYS.forEach(pk => {
+    const p = pose[pk];
+    if (!p) return;
+    const x = offX + p.x * imgW * scale, y = offY + p.y * imgH * scale;
+    if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+  });
+  ctx.stroke();
+  ctx.restore();
+
+  POINT_KEYS.forEach(pk => {
+    const p = pose[pk];
+    if (!p) return;
+    const x = offX + p.x * imgW * scale, y = offY + p.y * imgH * scale;
+    ctx.beginPath();
+    ctx.arc(x, y, dashed ? 5 : 7, 0, Math.PI * 2);
+    ctx.fillStyle = POINT_COLORS[pk];
+    ctx.globalAlpha = dashed ? 0.45 : 1;
+    ctx.fill();
+    if (!dashed) { ctx.lineWidth = 1.5; ctx.strokeStyle = '#000'; ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  });
+}
+
+let lastDrawGeom = null; // for click hit-mapping
+function render() {
+  const dir = currentDir();
+  const img = getImage(currentDirKey, currentFrame);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#1a1c22';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!img.complete || img.naturalWidth === 0) {
+    ctx.fillStyle = '#8a90a8';
+    ctx.font = '13px system-ui';
+    ctx.fillText('Loading…', 20, 30);
+    lastDrawGeom = null;
+    return;
+  }
+
+  const scale = Math.min(STAGE_SIZE / img.naturalWidth, STAGE_SIZE / img.naturalHeight);
+  const drawW = img.naturalWidth * scale, drawH = img.naturalHeight * scale;
+  const offX = (STAGE_SIZE - drawW) / 2, offY = (STAGE_SIZE - drawH) / 2;
+  ctx.drawImage(img, offX, offY, drawW, drawH);
+  lastDrawGeom = { offX, offY, drawW, drawH, imgW: img.naturalWidth, imgH: img.naturalHeight, scale };
+
+  const dirData = data[currentDirKey];
+  const isKeyframe = !!dirData[currentFrame];
+  if (!isKeyframe) {
+    const preview = interpolatedPose(currentDirKey, currentFrame);
+    drawSkeleton(preview, img.naturalWidth, img.naturalHeight, offX, offY, scale, true);
+  }
+  drawSkeleton(dirData[currentFrame], img.naturalWidth, img.naturalHeight, offX, offY, scale, false);
+
+  ctx.fillStyle = isKeyframe ? '#7fd4ff' : '#8a90a8';
+  ctx.font = 'bold 12px system-ui';
+  ctx.fillText(dir.label + ' — frame ' + currentFrame + (isKeyframe ? ' (keyframe)' : ' (no data)'), offX, offY - 8 < 12 ? 14 : offY - 8);
+}
+
+canvas.addEventListener('click', (e) => {
+  if (!lastDrawGeom) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const { offX, offY, drawW, drawH } = lastDrawGeom;
+  if (cx < offX || cx > offX + drawW || cy < offY || cy > offY + drawH) return; // outside image
+  const nx = (cx - offX) / drawW, ny = (cy - offY) / drawH;
+
+  if (!data[currentDirKey][currentFrame]) data[currentDirKey][currentFrame] = {};
+  data[currentDirKey][currentFrame][currentPoint] = { x: Math.round(nx * 1000) / 1000, y: Math.round(ny * 1000) / 1000 };
+  saveToStorage();
+  render(); renderFrameGrid();
+});
+
+// ====================================================================
+// Export / import
+// ====================================================================
+function exportJson() {
+  // Only export directions/frames that actually have data — an empty
+  // direction shouldn't clutter the output.
+  const out = {};
+  DIRECTIONS.forEach(d => {
+    const frames = data[d.key];
+    if (frames && Object.keys(frames).length > 0) out[d.key] = frames;
+  });
+  return JSON.stringify(out, null, 2);
+}
+document.getElementById('copyBtn').addEventListener('click', () => {
+  const text = exportJson();
+  const status = document.getElementById('status');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      status.textContent = 'copied!'; setTimeout(() => { status.textContent = ''; }, 1500);
+    }).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+});
+function fallbackCopy(text) {
+  const area = document.getElementById('copyJsonArea');
+  area.style.display = 'block';
+  area.value = text;
+  area.select();
+  document.execCommand('copy');
+  area.style.display = 'none';
+}
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const blob = new Blob([exportJson()], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'flick-skeleton.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('loadInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const loaded = JSON.parse(reader.result);
+      DIRECTIONS.forEach(d => { data[d.key] = loaded[d.key] || data[d.key] || {}; });
+      saveToStorage(); render(); renderFrameGrid();
+      document.getElementById('status').textContent = 'loaded';
+    } catch (err) {
+      alert('Could not parse that file as JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ====================================================================
+// Init
+// ====================================================================
+render();
+renderFrameGrid();
+</script>
+</body>
+</html>

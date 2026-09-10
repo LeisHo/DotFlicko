@@ -1,0 +1,33 @@
+DOTFLICKO -- CHANGELOG
+================================================================================
+
+PROJECT START: <YYYY-MM-DD>  -  <HH:MM AM/PM [timezone]>
+
+--------------------------------------------------------------------------------
+<YYYY-MM-DD>  -  <HH:MM AM/PM start - HH:MM AM/PM end, or a single timestamp>
+
+<Prose description of what this session/change did and why -- not just a
+bare bullet list of file names. State real numbers where relevant (per
+CLAUDE.md §0c: no rounding, no invented figures). Sub-headers like "Added:",
+"Fixed:", "Verified:" are useful when a session touched several distinct
+things; skip them for a small single-purpose entry.>
+
+Added:
+- <what was added, and why.>
+
+Fixed:
+- <what was broken, the real root cause if known, and what the fix actually
+  changed.>
+
+Verified:
+- <what was actually tested/checked, and how -- per CLAUDE.md §8, never
+  claim something was verified if it wasn't.>
+
+--------------------------------------------------------------------------------
+<next entry follows the same divider + dated-header pattern>
+
+================================================================================
+APPEND-ONLY. Never rewrite, reorder, or delete a prior entry, even to fix
+formatting (CLAUDE.md §4a / Never-Skip rule #3). If an entry needs a
+correction, add a new entry noting the correction rather than editing the
+old one in place.

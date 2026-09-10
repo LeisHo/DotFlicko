@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dotflicko — Directional Mouse-Follow Demo</title>
+<style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; }
+    #scene { position: fixed; top: 0; left: 0; display: block; }
+    #scene.cursor-hidden { cursor: none; }
+
+    /* ================================================================
+       DEV PANEL — copied verbatim from J:\CLAUDE\PROJECTS\.claude\TEMPLATE_DEV_PANEL.html
+       (workspace CLAUDE.md §12). No project-specific rules in this block.
+       ================================================================ */
+    .dev-panel {
+        position: fixed;
+        left: calc(var(--dev-panel-left-px, 20) * 1px);
+        top: calc(var(--dev-panel-top-px, 20) * 1px);
+        background: var(--dev-panel-bg-color, #000);
+        opacity: var(--dev-panel-opacity, 1);
+        color: #fff;
+        padding: 15px;
+        width: calc(var(--dev-panel-width-px, 340) * 1px);
+        height: calc(var(--dev-panel-height-px, 520) * 1px);
+        min-width: 160px;
+        min-height: 120px;
+        max-width: 92vw;
+        max-height: 92vh;
+        font-size: calc(var(--dev-setting-title-font-size-px, 12) * 1px);
+        z-index: 99999;
+        font-family: var(--dev-panel-font-family, monospace);
+        border-left: 2px solid var(--dev-accent-color, #0ff);
+        display: flex;
+        flex-direction: column;
+        resize: none;
+    }
+    @media (max-width: 767px) {
+        .dev-panel { max-width: 85vw; max-height: 80vh; }
+    }
+    .dev-panel-scroll-content {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        scrollbar-color: var(--dev-accent-color, #0ff) #000;
+        scrollbar-width: thin;
+    }
+    .dev-panel-scroll-content::-webkit-scrollbar { width: 10px; }
+    .dev-panel-scroll-content::-webkit-scrollbar-track { background: #000; }
+    .dev-panel-scroll-content::-webkit-scrollbar-thumb { background: var(--dev-accent-color, #0ff); border-radius: 5px; }
+
+    .dev-panel.panel-collapsed {
+        height: auto !important;
+        min-height: 0;
+    }
+    .dev-panel.panel-collapsed .dev-header {
+        padding-bottom: 0;
+        margin-bottom: 0;
+        align-items: center;
+        position: static;
+    }
+    .dev-panel.panel-collapsed .dev-panel-scroll-content {
+        flex: 0 1 auto;
+        overflow: visible;
+    }
+    .dev-panel.panel-collapsed .dev-panel-scroll-content > *:not(.dev-header),
+    .dev-panel.panel-collapsed .dev-panel-resize-edge,
+    .dev-panel.panel-collapsed .dev-panel-resize-corner {
+        display: none !important;
+    }
+
+    .dev-panel-resize-edge {
+        position: absolute;
+        z-index: 2;
+        touch-action: none;
+        -webkit-touch-callout: none;
+    }
+    .dev-panel-resize-edge.edge-top, .dev-panel-resize-edge.edge-bottom {
+        left: 16px; right: 16px; height: 20px; cursor: ns-resize;
+    }
+    .dev-panel-resize-edge.edge-top { top: -6px; }
+    .dev-panel-resize-edge.edge-bottom { bottom: -6px; }
+    .dev-panel-resize-edge.edge-left, .dev-panel-resize-edge.edge-right {
+        top: 16px; bottom: 16px; width: 20px; cursor: ew-resize;
+    }
+    .dev-panel-resize-edge.edge-left { left: -6px; }
+    .dev-panel-resize-edge.edge-right { right: -6px; }
+
+    .dev-panel-resize-corner {
+        position: absolute;
+        z-index: 3;
+        width: 20px;
+        height: 20px;
+        touch-action: none;
+        -webkit-touch-callout: none;
+    }
+    .dev-panel-resize-corner.corner-tl { top: -6px; left: -6px; cursor: nwse-resize; }
+    .dev-panel-resize-corner.corner-tr { top: -6px; right: -6px; cursor: nesw-resize; }
+    .dev-panel-resize-corner.corner-bl { bottom: -6px; left: -6px; cursor: nesw-resize; }
+    .dev-panel-resize-corner.corner-br { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
+    .dev-panel-resize-corner::after {
+        content: ''; position: absolute; width: 7px; height: 7px; opacity: 0.7;
+    }
+    .dev-panel-resize-corner.corner-tl::after { top: 8px; left: 8px; }
+    .dev-panel-resize-corner.corner-tr::after { top: 8px; right: 8px; }
+    .dev-panel-resize-corner.corner-bl::after { bottom: 8px; left: 8px; }
+    .dev-panel-resize-corner.corner-br::after { bottom: 8px; right: 8px; }
+    .dev-panel-resize-corner.corner-tl::after, .dev-panel-resize-corner.corner-br::after {
+        background-image: repeating-linear-gradient(135deg, var(--dev-accent-color, #0ff) 0 2px, transparent 2px 6px);
+    }
+    .dev-panel-resize-corner.corner-tr::after, .dev-panel-resize-corner.corner-bl::after {
+        background-image: repeating-linear-gradient(45deg, var(--dev-accent-color, #0ff) 0 2px, transparent 2px 6px);
+    }
+    .dev-panel-resize-edge::after {
+        content: ''; position: absolute; background: var(--dev-accent-color, #0ff); opacity: 0.7; border-radius: 1px;
+    }
+    .dev-panel-resize-edge.edge-top::after, .dev-panel-resize-edge.edge-bottom::after {
+        left: 50%; top: 50%; width: 14px; height: 3px; transform: translate(-50%, -50%);
+    }
+    .dev-panel-resize-edge.edge-left::after, .dev-panel-resize-edge.edge-right::after {
+        left: 50%; top: 50%; width: 3px; height: 14px; transform: translate(-50%, -50%);
+    }
+
+    .dev-panel.hidden { display: none !important; }
+
+    #desktopTabContent.hidden, #mobileTabContent.hidden, #landscapeTabContent.hidden {
+        display: none !important;
+    }
+
+    .dev-header {
+        cursor: grab;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        touch-action: none;
+        margin-bottom: 10px;
+        color: #0ff;
+        font-weight: bold;
+        position: sticky;
+        top: 0;
+        background: rgba(0,0,0,0.95);
+        padding-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+    .dev-header.dragging { cursor: grabbing; }
+    .dev-panel-title {
+        font-size: calc(var(--dev-panel-title-font-size-px, 16) * 1px);
+        color: var(--dev-panel-title-text-color, #fff);
+    }
+    .dev-header-buttons { display: flex; gap: 4px; }
+    .dev-hide-btn, .dev-collapse-btn {
+        background: var(--dev-accent-color, #0ff);
+        color: #000;
+        border: none;
+        border-radius: 3px;
+        width: 22px;
+        min-height: calc(var(--dev-button-height-px, 22) * 1px);
+        padding-top: calc(var(--dev-button-text-border-px, 0) * 1px);
+        padding-bottom: calc(var(--dev-button-text-border-px, 0) * 1px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: bold;
+        line-height: 1;
+        letter-spacing: calc(var(--dev-button-text-letter-spacing-px, 0) * 1px);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .dev-hide-btn:hover, .dev-collapse-btn:hover { filter: brightness(1.3); }
+
+    .dev-tabs { display: flex; gap: 4px; margin: 8px 0; }
+    .dev-tab-btn {
+        flex: 1;
+        background: #222;
+        color: var(--dev-accent-color, #0ff);
+        border: 1px solid var(--dev-accent-color, #0ff);
+        border-radius: 3px;
+        min-height: calc(var(--dev-button-height-px, 22) * 1px);
+        padding-top: calc(var(--dev-button-text-border-px, 0) * 1px);
+        padding-bottom: calc(var(--dev-button-text-border-px, 0) * 1px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--dev-panel-font-family, monospace);
+        font-size: calc(var(--dev-tab-font-size-px, 12) * 1px);
+        font-weight: bold;
+        letter-spacing: calc(var(--dev-tab-text-letter-spacing-px, 0) * 1px);
+        cursor: pointer;
+    }
+    .dev-tab-btn.active { background: var(--dev-accent-color, #0ff); color: #000; }
+
+    .dev-toggle-btn {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        z-index: 100000;
+        background: var(--dev-accent-color, #0ff);
+        color: #000;
+        border: none;
+        border-radius: 4px;
+        padding: 6px 10px;
+        font-family: monospace;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        opacity: 0.85;
+    }
+    .dev-toggle-btn:hover { opacity: 1; }
+
+    .dev-buttons { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
+    .dev-save-sync-status { font-size: calc(var(--dev-setting-title-font-size-px, 12) * 1px); white-space: nowrap; flex-shrink: 0; }
+    .dev-buttons button {
+        flex: 1;
+        min-height: calc(var(--dev-button-height-px, 22) * 1px);
+        padding-top: calc(var(--dev-button-text-border-px, 0) * 1px);
+        padding-bottom: calc(var(--dev-button-text-border-px, 0) * 1px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        background: var(--dev-accent-color, #0ff);
+        color: #000;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-weight: bold;
+        letter-spacing: calc(var(--dev-button-text-letter-spacing-px, 0) * 1px);
+    }
+    .dev-buttons button:hover { filter: brightness(1.3); }
+
+    .dev-section { margin-bottom: 15px; }
+    .dev-section-title {
+        color: var(--dev-accent-color, #0ff);
+        font-weight: bold;
+        font-size: calc(var(--dev-group-title-font-size-px, 13) * 1px);
+        letter-spacing: calc(var(--dev-group-text-letter-spacing-px, 0) * 1px);
+        margin-bottom: 8px;
+        cursor: pointer;
+        user-select: none;
+        padding: 5px;
+        background: rgba(0, 255, 255, 0.1);
+        border-radius: 3px;
+    }
+    .dev-section-title:hover { background: rgba(0, 255, 255, 0.2); }
+    .dev-section-content { display: block; margin-left: 5px; }
+    .dev-section-content > .dev-section {
+        padding-left: 10px;
+        border-left: 2px solid rgba(0, 255, 255, 0.25);
+    }
+    .dev-section-content > .dev-section > .dev-section-title {
+        font-size: calc(var(--dev-group-title-font-size-px, 13) * 0.85px);
+    }
+    .dev-section-content:empty {
+        min-height: 24px;
+        border: 1px dashed var(--dev-accent-color, #0ff);
+        opacity: 0.5;
+    }
+    .dev-section-content.collapsed { display: none; }
+
+    .dev-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .dev-label {
+        min-width: 140px;
+        color: var(--dev-panel-non-title-text-color, #aaa);
+        font-size: calc(var(--dev-setting-title-font-size-px, 12) * 1px);
+        letter-spacing: calc(var(--dev-settings-text-letter-spacing-px, 0) * 1px);
+    }
+    .dev-section-content .dev-label { cursor: grab; user-select: none; }
+    .dev-reorder-dragging { opacity: 0.5; }
+
+    .dev-slider {
+        flex: 1;
+        min-width: 130px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: var(--dev-slider-color, #3b82f6);
+    }
+    .dev-value { min-width: 45px; color: var(--dev-accent-color, #0ff); text-align: right; font-size: 10px; }
+    .dev-value-editable { cursor: text; }
+    .dev-value-editable:hover { outline: 1px solid var(--dev-accent-color, #0ff); }
+    .dev-value-edit-input {
+        width: 52px; background: #000; color: var(--dev-accent-color, #0ff);
+        border: 1px solid var(--dev-accent-color, #0ff);
+        font-family: var(--dev-panel-font-family, monospace);
+        font-size: 10px; text-align: right; padding: 0;
+    }
+    .dev-text-input {
+        width: 52px; background: #000; color: var(--dev-accent-color, #0ff);
+        border: 1px solid var(--dev-accent-color, #0ff);
+        font-family: var(--dev-panel-font-family, monospace);
+        font-size: 11px; text-align: right; padding: 2px 4px;
+    }
+    .dev-text-input-wide { width: 160px; text-align: left; }
+    .dev-color-picker {
+        width: calc(var(--dev-setting-title-font-size-px, 12) * 5px);
+        height: calc(var(--dev-setting-title-font-size-px, 12) * 3px);
+        border: 1px solid var(--dev-accent-color, #0ff);
+        border-radius: 3px;
+        cursor: pointer;
+    }
+    .dev-select {
+        background: #222; color: var(--dev-accent-color, #0ff);
+        border: 1px solid var(--dev-accent-color, #0ff);
+        padding: 4px; border-radius: 3px; cursor: pointer;
+        font-family: var(--dev-panel-font-family, monospace); font-size: 10px;
+    }
+
+    .dev-panel.dev-caps-button-text .dev-buttons button,
+    .dev-panel.dev-caps-button-text .dev-hide-btn,
+    .dev-panel.dev-caps-button-text .dev-collapse-btn {
+        text-transform: uppercase;
+    }
+    .dev-panel.dev-caps-tab-text .dev-tab-btn { text-transform: uppercase; }
+    .dev-panel.dev-caps-group-names .dev-section-title { text-transform: uppercase; }
+    .dev-panel.dev-caps-settings-text .dev-label { text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<button class="dev-toggle-btn" id="devToggleBtn" onclick="devPanel.classList.toggle('hidden')">DEV</button>
+
+<div class="dev-panel" id="devPanel">
+    <div class="dev-panel-scroll-content">
+        <div class="dev-header" id="devPanelHeader">
+            <span class="dev-panel-title">DEV</span>
+            <div class="dev-header-buttons">
+                <button class="dev-collapse-btn" id="devCollapseBtn" onclick="toggleDevPanelCollapsed()">▁</button>
+                <button class="dev-hide-btn" onclick="devPanel.classList.add('hidden')">X</button>
+            </div>
+        </div>
+
+        <div class="dev-buttons">
+            <button onclick="copyDevPanelSettings()">COPY</button>
+            <button onclick="resetDevPanelSettings()">RESET</button>
+            <button onclick="saveDevPanelSettings()">SAVE</button>
+            <span class="dev-save-sync-status" id="devSaveSyncStatus"></span>
+        </div>
+
+        <div class="dev-tabs">
+            <button class="dev-tab-btn active" id="devTabDesktopBtn" onclick="switchDevPanelTab('desktop')">DESKTOP</button>
+            <button class="dev-tab-btn" id="devTabMobileBtn" onclick="switchDevPanelTab('mobile')">MOBILE</button>
+            <button class="dev-tab-btn" id="devTabLandscapeBtn" onclick="switchDevPanelTab('landscape')">LANDSCAPE</button>
+        </div>
+
+        <div id="desktopTabContent">
+            <button onclick="addDevGroup('desktop')" style="margin-bottom:10px;">+ Add Group</button>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Dev Panel">▼ Dev Panel</div>
+                <div class="dev-section-content"></div>
+            </div>
+            <!-- PROJECT groups: rendered into by name via findGroupContent('desktop', <group>, ...) -->
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Entity">▼ Entity</div>
+                <div class="dev-section-content"></div>
+            </div>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Mouse / Rotation">▼ Mouse / Rotation</div>
+                <div class="dev-section-content"></div>
+            </div>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Background">▼ Background</div>
+                <div class="dev-section-content"></div>
+            </div>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Debug">▼ Debug</div>
+                <div class="dev-section-content"></div>
+            </div>
+        </div>
+
+        <div id="mobileTabContent" class="hidden">
+            <button onclick="addDevGroup('mobile')" style="margin-bottom:10px;">+ Add Group</button>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Dev Panel">▼ Dev Panel</div>
+                <div class="dev-section-content"></div>
+            </div>
+        </div>
+
+        <div id="landscapeTabContent" class="hidden">
+            <button onclick="addDevGroup('landscape')" style="margin-bottom:10px;">+ Add Group</button>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Dev Panel">▼ Dev Panel</div>
+                <div class="dev-section-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dev-panel-resize-edge edge-top" id="devPanelResizeTop"></div>
+    <div class="dev-panel-resize-edge edge-bottom" id="devPanelResizeBottom"></div>
+    <div class="dev-panel-resize-edge edge-left" id="devPanelResizeLeft"></div>
+    <div class="dev-panel-resize-edge edge-right" id="devPanelResizeRight"></div>
+    <div class="dev-panel-resize-corner corner-tl" id="devPanelResizeTL"></div>
+    <div class="dev-panel-resize-corner corner-tr" id="devPanelResizeTR"></div>
+    <div class="dev-panel-resize-corner corner-bl" id="devPanelResizeBL"></div>
+    <div class="dev-panel-resize-corner corner-br" id="devPanelResizeBR"></div>
+</div>
+
+<script>
+    // ================================================================
+    // DEV PANEL ENGINE — copied verbatim from TEMPLATE_DEV_PANEL.html.
+    // Generic, no project-specific names. Project code starts at the
+    // "FLICK DEMO" banner below.
+    // ================================================================
+
+    const devPanel = document.getElementById('devPanel');
+    const DEV_PANEL_TABS = ['desktop', 'mobile', 'landscape'];
+    function isNarrowViewport() { return window.innerWidth < 768; }
+
+    function toggleSection(titleEl) {
+        if (sectionJustDragged) { sectionJustDragged = false; return; }
+        if (textEditModeEnabled) { openDevTextEditFor(titleEl, getSectionKey(titleEl), true); return; }
+        const content = titleEl.nextElementSibling;
+        content.classList.toggle('collapsed');
+        titleEl.textContent = content.classList.contains('collapsed') ? '▶ ' + titleEl.textContent.slice(2) : '▼ ' + titleEl.textContent.slice(2);
+    }
+
+    function createDevGroupElement(name) {
+        const section = document.createElement('div');
+        section.className = 'dev-section';
+        const title = document.createElement('div');
+        title.className = 'dev-section-title';
+        title.setAttribute('onclick', 'toggleSection(this)');
+        title.dataset.sid = name;
+        title.textContent = '▼ ' + name;
+        const content = document.createElement('div');
+        content.className = 'dev-section-content';
+        section.appendChild(title);
+        section.appendChild(content);
+        return section;
+    }
+
+    function addDevGroup(tab) {
+        const tabEl = document.getElementById(tab + 'TabContent');
+        const existingNames = new Set(
+            Array.from(tabEl.querySelectorAll('.dev-section > .dev-section-title')).map(t => t.dataset.sid)
+        );
+        let name = 'New Group';
+        let n = 2;
+        while (existingNames.has(name)) { name = 'New Group (' + n + ')'; n++; }
+        const section = createDevGroupElement(name);
+        tabEl.appendChild(section);
+        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    let sectionJustDragged = false;
+    function setupDragReorder(handleSelector, itemSelector, onDrop, crossContainerSelector) {
+        let dragging = null;
+        let startY = 0;
+        let moved = false;
+        const THRESHOLD = 8;
+        const TOUCH_HOLD_MS = 1000;
+        const TOUCH_HOLD_MOVE_TOLERANCE = 10;
+        let pendingTouch = null;
+
+        function cancelPendingTouch() {
+            if (pendingTouch) { clearTimeout(pendingTouch.timerId); pendingTouch = null; }
+        }
+
+        document.addEventListener('pointerdown', (e) => {
+            const handle = e.target.closest(handleSelector);
+            if (!handle) return;
+            const item = handle.closest(itemSelector);
+            if (!item) return;
+
+            if (e.pointerType === 'touch') {
+                const startX0 = e.clientX, startY0 = e.clientY, pointerId = e.pointerId;
+                cancelPendingTouch();
+                pendingTouch = {
+                    item, startX: startX0, startY: startY0, pointerId,
+                    timerId: setTimeout(() => {
+                        if (!pendingTouch || pendingTouch.pointerId !== pointerId) return;
+                        pendingTouch = null;
+                        dragging = item;
+                        startY = startY0;
+                        moved = true;
+                        dragging.classList.add('dev-reorder-dragging');
+                    }, TOUCH_HOLD_MS),
+                };
+                return;
+            }
+
+            dragging = item;
+            startY = e.clientY;
+            moved = false;
+        });
+
+        document.addEventListener('pointermove', (e) => {
+            if (pendingTouch && e.pointerId === pendingTouch.pointerId) {
+                const dist = Math.hypot(e.clientX - pendingTouch.startX, e.clientY - pendingTouch.startY);
+                if (dist > TOUCH_HOLD_MOVE_TOLERANCE) cancelPendingTouch();
+                return;
+            }
+            if (!dragging) return;
+            if (!moved && Math.abs(e.clientY - startY) > THRESHOLD) {
+                moved = true;
+                dragging.classList.add('dev-reorder-dragging');
+            }
+            if (!moved) return;
+            e.preventDefault();
+            if (crossContainerSelector) {
+                const tabRoot = dragging.closest(DEV_PANEL_TABS.map(t => '#' + t + 'TabContent').join(', '));
+                const containers = typeof crossContainerSelector === 'function'
+                    ? crossContainerSelector(tabRoot, dragging)
+                    : Array.from(tabRoot.querySelectorAll(crossContainerSelector));
+                let targetContainer = containers.find(c => {
+                    const r = c.getBoundingClientRect();
+                    return e.clientY >= r.top && e.clientY <= r.bottom;
+                });
+                if (!targetContainer) {
+                    let minDist = Infinity;
+                    containers.forEach(c => {
+                        const r = c.getBoundingClientRect();
+                        const dist = Math.abs(e.clientY - (r.top + r.height / 2));
+                        if (dist < minDist) { minDist = dist; targetContainer = c; }
+                    });
+                }
+                if (!targetContainer) return;
+                const targetSiblings = Array.from(targetContainer.querySelectorAll(':scope > ' + itemSelector)).filter(el => el !== dragging);
+                const before = targetSiblings.find(sib => e.clientY < sib.getBoundingClientRect().top + sib.getBoundingClientRect().height / 2);
+                if (before) targetContainer.insertBefore(dragging, before);
+                else targetContainer.appendChild(dragging);
+                return;
+            }
+            const siblings = Array.from(dragging.parentElement.querySelectorAll(':scope > ' + itemSelector)).filter(el => el !== dragging);
+            for (const sib of siblings) {
+                const rect = sib.getBoundingClientRect();
+                const mid = rect.top + rect.height / 2;
+                const draggingIsBefore = !!(dragging.compareDocumentPosition(sib) & Node.DOCUMENT_POSITION_FOLLOWING);
+                if (e.clientY < mid && !draggingIsBefore) { sib.parentElement.insertBefore(dragging, sib); break; }
+                else if (e.clientY >= mid && draggingIsBefore) { sib.parentElement.insertBefore(dragging, sib.nextSibling); break; }
+            }
+        }, { passive: false });
+
+        document.addEventListener('pointerup', (e) => {
+            if (pendingTouch && e.pointerId === pendingTouch.pointerId) cancelPendingTouch();
+            if (!dragging) return;
+            dragging.classList.remove('dev-reorder-dragging');
+            if (moved) { sectionJustDragged = true; if (onDrop) onDrop(); }
+            dragging = null;
+            moved = false;
+        });
+        document.addEventListener('pointercancel', (e) => {
+            if (pendingTouch && e.pointerId === pendingTouch.pointerId) cancelPendingTouch();
+            if (!dragging) return;
+            dragging.classList.remove('dev-reorder-dragging');
+            dragging = null;
+            moved = false;
+        });
+    }
+
+    function getSectionKey(titleEl) {
+        const tab = DEV_PANEL_TABS.find(t => titleEl.closest('#' + t + 'TabContent')) || DEV_PANEL_TABS[0];
+        return tab + ':' + (titleEl.dataset.sid || titleEl.textContent.replace(/^[▼▶]\s*/, ''));
+    }
+    function captureSectionCollapseState() {
+        const state = {};
+        document.querySelectorAll('.dev-section-title').forEach(titleEl => {
+            state[getSectionKey(titleEl)] = titleEl.nextElementSibling.classList.contains('collapsed');
+        });
+        return state;
+    }
+    function applySectionCollapseState(state) {
+        if (!state) return;
+        document.querySelectorAll('.dev-section-title').forEach(titleEl => {
+            const key = getSectionKey(titleEl);
+            if (!(key in state)) return;
+            const shouldCollapse = !!state[key];
+            const content = titleEl.nextElementSibling;
+            if (content.classList.contains('collapsed') !== shouldCollapse) {
+                content.classList.toggle('collapsed');
+                titleEl.textContent = content.classList.contains('collapsed') ? '▶ ' + titleEl.textContent.slice(2) : '▼ ' + titleEl.textContent.slice(2);
+            }
+        });
+    }
+    function getRowKey(row, fallbackIndex) {
+        const idEl = row.querySelector('[id]');
+        return idEl ? idEl.id : ('__row' + fallbackIndex);
+    }
+    function captureSection(sec) {
+        const titleEl = sec.querySelector(':scope > .dev-section-title');
+        const content = sec.querySelector(':scope > .dev-section-content');
+        const rows = Array.from(content.querySelectorAll(':scope > .dev-row'));
+        const subSections = Array.from(content.querySelectorAll(':scope > .dev-section'));
+        return {
+            key: getSectionKey(titleEl),
+            rowKeys: rows.map((row, i) => getRowKey(row, i)),
+            subgroups: subSections.map(sub => captureSection(sub)),
+        };
+    }
+    function captureSectionOrder() {
+        const result = {};
+        DEV_PANEL_TABS.forEach(tab => {
+            const tabId = tab + 'TabContent';
+            const tabEl = document.getElementById(tabId);
+            if (!tabEl) return;
+            const sections = Array.from(tabEl.querySelectorAll(':scope > .dev-section'));
+            result[tabId] = sections.map(sec => captureSection(sec));
+        });
+        return result;
+    }
+    function applySectionOrder(order) {
+        if (!order) return;
+        DEV_PANEL_TABS.forEach(tab => {
+            const tabId = tab + 'TabContent';
+            const tabEl = document.getElementById(tabId);
+            const savedSections = order[tabId];
+            if (!tabEl || !savedSections) return;
+            const sectionsByKey = {};
+            tabEl.querySelectorAll('.dev-section').forEach(sec => {
+                sectionsByKey[getSectionKey(sec.querySelector(':scope > .dev-section-title'))] = sec;
+            });
+            const rowsByKey = {};
+            tabEl.querySelectorAll('.dev-section-content > .dev-row').forEach((row, i) => {
+                rowsByKey[getRowKey(row, i)] = row;
+            });
+            function placeSection(savedSec, parentContainer) {
+                let sec = sectionsByKey[savedSec.key];
+                if (!sec) {
+                    const name = savedSec.key.split('>').pop().replace(new RegExp('^(' + DEV_PANEL_TABS.join('|') + '):'), '');
+                    sec = createDevGroupElement(name);
+                    sectionsByKey[savedSec.key] = sec;
+                }
+                parentContainer.appendChild(sec);
+                const content = sec.querySelector(':scope > .dev-section-content');
+                (savedSec.rowKeys || []).forEach(rowKey => {
+                    const row = rowsByKey[rowKey];
+                    if (row) content.appendChild(row);
+                });
+                (savedSec.subgroups || []).forEach(sub => placeSection(sub, content));
+            }
+            savedSections.forEach(savedSec => placeSection(savedSec, tabEl));
+        });
+    }
+
+    function syncTabOrderToDesktop(targetTab) {
+        if (targetTab === 'desktop') return;
+        const desktopOrder = captureSectionOrder().desktopTabContent;
+        const targetTabId = targetTab + 'TabContent';
+        const targetTabEl = document.getElementById(targetTabId);
+        if (!desktopOrder || !targetTabEl) return;
+
+        const targetRowByDesktopId = {};
+        targetTabEl.querySelectorAll('.dev-row [id]').forEach(idEl => {
+            targetRowByDesktopId[resolveDevControlId(idEl.id).desktopId] = idEl.id;
+        });
+        const placedRowIds = new Set();
+
+        function translateGroup(savedGroup) {
+            const sid = savedGroup.key.slice(savedGroup.key.indexOf(':') + 1);
+            const rowKeys = [];
+            savedGroup.rowKeys.forEach(desktopRowKey => {
+                const targetId = targetRowByDesktopId[desktopRowKey];
+                if (!targetId) return;
+                rowKeys.push(targetId);
+                placedRowIds.add(targetId);
+            });
+            return { key: targetTab + ':' + sid, rowKeys, subgroups: (savedGroup.subgroups || []).map(translateGroup) };
+        }
+        const translated = desktopOrder.map(translateGroup);
+
+        function findByKey(groups, key) {
+            for (const g of groups) {
+                if (g.key === key) return g;
+                const found = findByKey(g.subgroups || [], key);
+                if (found) return found;
+            }
+            return null;
+        }
+        targetTabEl.querySelectorAll('.dev-row [id]').forEach(idEl => {
+            if (placedRowIds.has(idEl.id)) return;
+            const sec = idEl.closest('.dev-section');
+            if (!sec) return;
+            const key = getSectionKey(sec.querySelector(':scope > .dev-section-title'));
+            const group = findByKey(translated, key);
+            if (group) group.rowKeys.push(idEl.id);
+        });
+
+        function collectKeys(groups, out) {
+            groups.forEach(g => { out.add(g.key); collectKeys(g.subgroups || [], out); });
+            return out;
+        }
+        const translatedKeys = collectKeys(translated, new Set());
+        targetTabEl.querySelectorAll(':scope > .dev-section').forEach(sec => {
+            const key = getSectionKey(sec.querySelector(':scope > .dev-section-title'));
+            if (!translatedKeys.has(key)) translated.push(captureSection(sec));
+        });
+
+        applySectionOrder({ [targetTabId]: translated });
+    }
+
+    function resolveDevControlId(id) {
+        const m = id.match(/^(slider|color|select|checkbox)(Mobile|Landscape)(.+)$/);
+        if (m) return { device: m[2] === 'Landscape' ? 'landscape' : 'mobile', desktopId: m[1] + m[3] };
+        return { device: 'desktop', desktopId: id };
+    }
+
+    function findGroupContent(tabId, groupSid, callerName, ctrlId) {
+        const matches = document.querySelectorAll('#' + tabId + 'TabContent > .dev-section > .dev-section-title[data-sid="' + groupSid.replace(/"/g, '\\"') + '"]');
+        if (matches.length === 0) {
+            console.warn(callerName + ': group not found', groupSid, ctrlId);
+            return null;
+        }
+        if (matches.length > 1) {
+            console.warn(callerName + ': ' + matches.length + ' groups share this data-sid (using the first) - a rename/duplication collision', groupSid, ctrlId);
+        }
+        return matches[0].nextElementSibling;
+    }
+
+    function buildSliderRow(ctrl) {
+        const row = document.createElement('div');
+        row.className = 'dev-row';
+        const label = document.createElement('span');
+        label.className = 'dev-label';
+        label.textContent = ctrl.label;
+        row.appendChild(label);
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.className = 'dev-slider';
+        input.id = ctrl.id;
+        input.min = ctrl.min;
+        input.max = ctrl.max;
+        input.step = ctrl.step;
+        input.value = ctrl.value;
+        row.appendChild(input);
+        const value = document.createElement('span');
+        value.className = 'dev-value';
+        value.id = ctrl.id.replace(/^slider/, 'value');
+        value.textContent = ctrl.value;
+        row.appendChild(value);
+        return row;
+    }
+    function buildColorRow(ctrl) {
+        const row = document.createElement('div');
+        row.className = 'dev-row';
+        const label = document.createElement('span');
+        label.className = 'dev-label';
+        label.textContent = ctrl.label;
+        row.appendChild(label);
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.className = 'dev-color-picker';
+        input.id = ctrl.id;
+        input.value = ctrl.value;
+        row.appendChild(input);
+        if (ctrl.note) {
+            const note = document.createElement('span');
+            note.className = 'dev-value';
+            note.style.fontSize = '9px';
+            note.style.color = '#888';
+            note.textContent = ctrl.note;
+            row.appendChild(note);
+        }
+        return row;
+    }
+    function buildSelectRow(ctrl) {
+        const row = document.createElement('div');
+        row.className = 'dev-row';
+        const label = document.createElement('span');
+        label.className = 'dev-label';
+        label.textContent = ctrl.label;
+        row.appendChild(label);
+        const select = document.createElement('select');
+        select.className = 'dev-select';
+        select.id = ctrl.id;
+        ctrl.options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.text;
+            select.appendChild(option);
+        });
+        row.appendChild(select);
+        return row;
+    }
+    function buildCheckboxRow(ctrl) {
+        const row = document.createElement('div');
+        row.className = 'dev-row';
+        const wrapLabel = document.createElement('label');
+        wrapLabel.style.cssText = 'display:flex; align-items:center; gap:6px; cursor:pointer;';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = ctrl.id;
+        wrapLabel.appendChild(input);
+        const span = document.createElement('span');
+        span.className = 'dev-label';
+        span.style.minWidth = 'auto';
+        span.textContent = ctrl.label;
+        wrapLabel.appendChild(span);
+        row.appendChild(wrapLabel);
+        return row;
+    }
+    function buildTextInputRow(ctrl) {
+        const row = document.createElement('div');
+        row.className = 'dev-row';
+        const label = document.createElement('span');
+        label.className = 'dev-label';
+        label.textContent = ctrl.label;
+        row.appendChild(label);
+        const input = document.createElement('input');
+        input.type = ctrl.inputType;
+        input.className = 'dev-text-input' + (ctrl.wide ? ' dev-text-input-wide' : '');
+        input.id = ctrl.id;
+        if (ctrl.inputType === 'number' && ctrl.step !== undefined) input.step = ctrl.step;
+        input.value = ctrl.value;
+        row.appendChild(input);
+        return row;
+    }
+    const UNIFORM_ROW_BUILDERS = { slider: buildSliderRow, color: buildColorRow, select: buildSelectRow, checkbox: buildCheckboxRow };
+    function buildUniformControlRow(ctrl) {
+        const builder = UNIFORM_ROW_BUILDERS[ctrl.type];
+        if (!builder) {
+            console.error('buildUniformControlRow: unknown control type', ctrl.type, ctrl.id);
+            const row = document.createElement('div');
+            row.className = 'dev-row';
+            return row;
+        }
+        return builder(ctrl);
+    }
+
+    const DEV_PANEL_REGISTERED_ARRAYS = [];
+    function registerDevControlArray(name, array) {
+        DEV_PANEL_REGISTERED_ARRAYS.push({ name, array });
+    }
+
+    let devControlIdValidator = null;
+    function registerDevControlIdValidator(fn) { devControlIdValidator = fn; }
+    function validateDevControlMappings() {
+        if (!devControlIdValidator) return 0;
+        let badCount = 0;
+        DEV_PANEL_REGISTERED_ARRAYS.forEach(({ name, array }) => {
+            array.forEach(ctrl => {
+                const result = devControlIdValidator(ctrl);
+                if (result !== true) {
+                    console.error('validateDevControlMappings: ' + (typeof result === 'string' ? result : 'unmapped id'), name, ctrl.id);
+                    badCount++;
+                }
+            });
+        });
+        if (badCount > 0) console.error('validateDevControlMappings: ' + badCount + ' control(s) failed validation - see errors above.');
+        return badCount;
+    }
+
+    function assertDevControlsRendered() {
+        let missing = 0;
+        DEV_PANEL_REGISTERED_ARRAYS.forEach(({ array }) => {
+            array.forEach(ctrl => { if (!document.getElementById(ctrl.id)) missing++; });
+        });
+        if (missing > 0) {
+            console.error('assertDevControlsRendered: ' + missing + ' generated control(s) missing from the DOM at setup time - a render call may be missing, misordered, or its group lookup failed (see findGroupContent warnings above).');
+        }
+        return missing;
+    }
+
+    let devSliderValueResolver = null;
+    let devColorValueResolver = null;
+    function registerDevValueResolvers({ slider, color }) {
+        if (slider) devSliderValueResolver = slider;
+        if (color) devColorValueResolver = color;
+    }
+    function syncSlidersFromState() {
+        if (!devSliderValueResolver) return;
+        document.querySelectorAll('.dev-slider').forEach(el => {
+            const value = devSliderValueResolver(el.id);
+            if (value === undefined) return;
+            if (typeof value === 'number') {
+                const min = parseFloat(el.min), max = parseFloat(el.max);
+                if (!isNaN(max) && value > max) el.max = String(value + Math.abs(value) * 0.2);
+                if (!isNaN(min) && value < min) el.min = String(value - Math.abs(value) * 0.2);
+            }
+            el.value = value;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    }
+    function syncColorPickersFromState() {
+        if (!devColorValueResolver) return;
+        document.querySelectorAll('.dev-color-picker').forEach(el => {
+            const value = devColorValueResolver(el.id);
+            if (value !== undefined) { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); }
+        });
+    }
+
+    function makeDevValuesEditable() {
+        document.querySelectorAll('.dev-value[id]').forEach(valueEl => {
+            const sliderId = valueEl.id.replace(/^value/, 'slider');
+            const slider = document.getElementById(sliderId);
+            if (!slider || slider.type !== 'range') return;
+            valueEl.classList.add('dev-value-editable');
+        });
+
+        document.addEventListener('click', (e) => {
+            const valueEl = e.target.closest('.dev-value-editable');
+            if (!valueEl || valueEl.querySelector('input')) return;
+            const slider = document.getElementById(valueEl.id.replace(/^value/, 'slider'));
+            if (!slider) return;
+
+            const originalText = valueEl.textContent;
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'dev-value-edit-input';
+            input.value = slider.value;
+            valueEl.textContent = '';
+            valueEl.appendChild(input);
+            input.focus();
+            input.select();
+
+            let settled = false;
+            function commit() {
+                if (settled) return;
+                settled = true;
+                let val = parseFloat(input.value);
+                if (isNaN(val)) val = parseFloat(slider.value);
+                const min = parseFloat(slider.min), max = parseFloat(slider.max);
+                if (val > max) slider.max = String(val + Math.abs(val) * 0.2);
+                if (val < min) slider.min = String(val - Math.abs(val) * 0.2);
+                slider.value = val;
+                input.remove();
+                slider.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            function cancel() {
+                if (settled) return;
+                settled = true;
+                valueEl.textContent = originalText;
+            }
+            input.addEventListener('blur', commit);
+            input.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') input.blur();
+                else if (ev.key === 'Escape') cancel();
+            });
+            input.addEventListener('click', (ev) => ev.stopPropagation());
+        });
+    }
+
+    let textEditModeEnabled = false;
+    let devTextOverrides = {};
+    const devTextOriginals = {};
+    function getDevLabelKey(labelEl) {
+        const row = labelEl.closest('.dev-row');
+        const control = row ? row.querySelector('[id]') : null;
+        return control ? control.id : null;
+    }
+    function devTextOriginalFor(key, currentText) {
+        if (!(key in devTextOriginals)) devTextOriginals[key] = currentText;
+        return devTextOriginals[key];
+    }
+    function applyDevTextOverrides() {
+        document.querySelectorAll('.dev-section-title').forEach(titleEl => {
+            const key = getSectionKey(titleEl);
+            const arrow = titleEl.textContent.slice(0, 2);
+            const original = devTextOriginalFor(key, titleEl.textContent.slice(2));
+            titleEl.textContent = arrow + (devTextOverrides[key] != null ? devTextOverrides[key] : original);
+        });
+        document.querySelectorAll('.dev-label').forEach(labelEl => {
+            const key = getDevLabelKey(labelEl);
+            if (!key) return;
+            const original = devTextOriginalFor(key, labelEl.textContent);
+            labelEl.textContent = devTextOverrides[key] != null ? devTextOverrides[key] : original;
+        });
+    }
+    function openDevTextEditFor(el, key, isTitle) {
+        if (!key || el.querySelector('textarea')) return;
+        const arrow = isTitle ? el.textContent.slice(0, 2) : '';
+        const original = devTextOriginalFor(key, isTitle ? el.textContent.slice(2) : el.textContent);
+        const currentValue = devTextOverrides[key] != null ? devTextOverrides[key] : original;
+        const originalHTML = el.innerHTML;
+        const input = document.createElement('textarea');
+        input.rows = 1;
+        input.value = currentValue;
+        el.textContent = '';
+        if (isTitle) el.appendChild(document.createTextNode(arrow));
+        el.appendChild(input);
+        input.focus();
+        input.select();
+        input.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+        input.addEventListener('click', (ev) => ev.stopPropagation());
+        let settled = false;
+        function commit() {
+            if (settled) return;
+            settled = true;
+            const typed = input.value;
+            devTextOverrides[key] = (typed === '' || typed === original) ? null : typed;
+            el.textContent = arrow + (devTextOverrides[key] != null ? devTextOverrides[key] : original);
+        }
+        function cancel() {
+            if (settled) return;
+            settled = true;
+            el.innerHTML = originalHTML;
+        }
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); input.blur(); }
+            else if (ev.key === 'Escape') cancel();
+        });
+    }
+    function setupDevPanelTextEdit() {
+        devPanel.addEventListener('click', (e) => {
+            if (!textEditModeEnabled) return;
+            const label = e.target.closest('.dev-label');
+            if (!label) return;
+            if (label.querySelector('textarea')) return;
+            if (sectionJustDragged) { sectionJustDragged = false; return; }
+            e.preventDefault();
+            e.stopPropagation();
+            openDevTextEditFor(label, getDevLabelKey(label), false);
+        }, true);
+    }
+
+    const DEV_PANEL_LAYOUT = { left: 20, top: 20, width: 340, height: 520 };
+    const DEV_PANEL_HANDLE_OVERHANG_PX = 6;
+    const DEV_PANEL_MOBILE_EDGE_GESTURE_MARGIN_PX = 20;
+    function devPanelEdgeMarginX() {
+        return DEV_PANEL_HANDLE_OVERHANG_PX + (isNarrowViewport() ? DEV_PANEL_MOBILE_EDGE_GESTURE_MARGIN_PX : 0);
+    }
+    function setDevPanelLayoutVar(key, cssVarName, value) {
+        DEV_PANEL_LAYOUT[key] = value;
+        document.documentElement.style.setProperty(cssVarName, value);
+    }
+    function applyDevPanelLayout() {
+        document.documentElement.style.setProperty('--dev-panel-left-px', DEV_PANEL_LAYOUT.left);
+        document.documentElement.style.setProperty('--dev-panel-top-px', DEV_PANEL_LAYOUT.top);
+        document.documentElement.style.setProperty('--dev-panel-width-px', DEV_PANEL_LAYOUT.width);
+        document.documentElement.style.setProperty('--dev-panel-height-px', DEV_PANEL_LAYOUT.height);
+    }
+    function clampDevPanelPosition() {
+        const rect = devPanel.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return;
+        const o = DEV_PANEL_HANDLE_OVERHANG_PX;
+        const ox = devPanelEdgeMarginX();
+        const maxLeft = Math.max(ox, window.innerWidth - rect.width - ox);
+        const maxTop = Math.max(o, window.innerHeight - rect.height - o);
+        const clampedLeft = Math.min(Math.max(ox, DEV_PANEL_LAYOUT.left), maxLeft);
+        const clampedTop = Math.min(Math.max(o, DEV_PANEL_LAYOUT.top), maxTop);
+        if (clampedLeft !== DEV_PANEL_LAYOUT.left) setDevPanelLayoutVar('left', '--dev-panel-left-px', clampedLeft);
+        if (clampedTop !== DEV_PANEL_LAYOUT.top) setDevPanelLayoutVar('top', '--dev-panel-top-px', clampedTop);
+    }
+
+    const devPanelHeader = document.getElementById('devPanelHeader');
+    let isDraggingDevPanel = false;
+    let devPanelDragStart = { pointerX: 0, pointerY: 0, panelLeft: 0, panelTop: 0 };
+    devPanelHeader.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        e.preventDefault();
+        const rect = devPanel.getBoundingClientRect();
+        devPanelDragStart = { pointerX: e.clientX, pointerY: e.clientY, panelLeft: rect.left, panelTop: rect.top };
+        isDraggingDevPanel = true;
+        devPanelHeader.classList.add('dragging');
+        try { devPanelHeader.setPointerCapture(e.pointerId); } catch (err) { /* best-effort only */ }
+    });
+    document.addEventListener('pointermove', (e) => {
+        if (!isDraggingDevPanel) return;
+        if (e.buttons === 0) { endDevPanelDrag(e); return; }
+        const dx = e.clientX - devPanelDragStart.pointerX;
+        const dy = e.clientY - devPanelDragStart.pointerY;
+        const panelRect = devPanel.getBoundingClientRect();
+        const o = DEV_PANEL_HANDLE_OVERHANG_PX;
+        const ox = devPanelEdgeMarginX();
+        const newLeft = Math.max(ox, Math.min(window.innerWidth - panelRect.width - ox, devPanelDragStart.panelLeft + dx));
+        const newTop = Math.max(o, Math.min(window.innerHeight - panelRect.height - o, devPanelDragStart.panelTop + dy));
+        setDevPanelLayoutVar('left', '--dev-panel-left-px', Math.round(newLeft));
+        setDevPanelLayoutVar('top', '--dev-panel-top-px', Math.round(newTop));
+    });
+    function endDevPanelDrag(e) {
+        if (!isDraggingDevPanel) return;
+        isDraggingDevPanel = false;
+        devPanelHeader.classList.remove('dragging');
+        if (e && e.pointerId !== undefined && devPanelHeader.hasPointerCapture(e.pointerId)) {
+            devPanelHeader.releasePointerCapture(e.pointerId);
+        }
+    }
+    document.addEventListener('pointerup', endDevPanelDrag);
+    document.addEventListener('pointercancel', endDevPanelDrag);
+    devPanelHeader.addEventListener('lostpointercapture', endDevPanelDrag);
+
+    function toggleDevPanelCollapsed() {
+        const collapsed = devPanel.classList.toggle('panel-collapsed');
+        document.getElementById('devCollapseBtn').textContent = collapsed ? '▢' : '▁';
+        if (collapsed) {
+            const headerHeight = devPanelHeader.getBoundingClientRect().height;
+            const panelPadding = parseFloat(getComputedStyle(devPanel).paddingTop) + parseFloat(getComputedStyle(devPanel).paddingBottom);
+            devPanel.style.setProperty('height', (headerHeight + panelPadding) + 'px', 'important');
+        } else {
+            devPanel.style.removeProperty('height');
+        }
+    }
+
+    function setupPanelResizeHandle(panel, handle, xEdge, yEdge) {
+        let dragging = false;
+        let start = { pointerX: 0, pointerY: 0, left: 0, top: 0, width: 0, height: 0 };
+
+        handle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            const rect = panel.getBoundingClientRect();
+            start = { pointerX: e.clientX, pointerY: e.clientY, left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+            dragging = true;
+            try { handle.setPointerCapture(e.pointerId); } catch (err) { /* best-effort only */ }
+        });
+
+        document.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            if (e.buttons === 0) { end(e); return; }
+            const cs = getComputedStyle(panel);
+            const minW = parseFloat(cs.minWidth) || 0, maxW = parseFloat(cs.maxWidth) || Infinity;
+            const minH = parseFloat(cs.minHeight) || 0, maxH = parseFloat(cs.maxHeight) || Infinity;
+            const dx = e.clientX - start.pointerX;
+            const dy = e.clientY - start.pointerY;
+
+            let newWidth = start.width, newLeft = start.left;
+            if (xEdge === 'right') {
+                newWidth = Math.max(minW, Math.min(maxW, start.width + dx));
+                const maxWidthFromEdge = window.innerWidth - start.left - devPanelEdgeMarginX();
+                newWidth = Math.min(newWidth, Math.max(minW, maxWidthFromEdge));
+            } else if (xEdge === 'left') {
+                newWidth = Math.max(minW, Math.min(maxW, start.width - dx));
+                newLeft = start.left + (start.width - newWidth);
+                const clampedLeft = Math.max(devPanelEdgeMarginX(), newLeft);
+                if (clampedLeft !== newLeft) { newWidth = newWidth - (clampedLeft - newLeft); newLeft = clampedLeft; }
+            }
+            let newHeight = start.height, newTop = start.top;
+            if (yEdge === 'bottom') {
+                newHeight = Math.max(minH, Math.min(maxH, start.height + dy));
+            } else if (yEdge === 'top') {
+                newHeight = Math.max(minH, Math.min(maxH, start.height - dy));
+                newTop = start.top + (start.height - newHeight);
+                const clampedTop = Math.max(DEV_PANEL_HANDLE_OVERHANG_PX, newTop);
+                if (clampedTop !== newTop) { newHeight = newHeight - (clampedTop - newTop); newTop = clampedTop; }
+            }
+
+            panel.style.width = newWidth + 'px';
+            panel.style.height = newHeight + 'px';
+            if (xEdge === 'left') setDevPanelLayoutVar('left', '--dev-panel-left-px', Math.round(newLeft));
+            if (yEdge === 'top') setDevPanelLayoutVar('top', '--dev-panel-top-px', Math.round(newTop));
+        });
+
+        function end(e) {
+            if (!dragging) return;
+            dragging = false;
+            if (e && e.pointerId !== undefined && handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId);
+        }
+        document.addEventListener('pointerup', end);
+        document.addEventListener('pointercancel', end);
+        handle.addEventListener('lostpointercapture', end);
+    }
+
+    function switchDevPanelTab(tab) {
+        syncTabOrderToDesktop(tab);
+        DEV_PANEL_TABS.forEach(t => {
+            document.getElementById(t + 'TabContent').classList.toggle('hidden', t !== tab);
+            const btn = document.getElementById('devTab' + t[0].toUpperCase() + t.slice(1) + 'Btn');
+            if (btn) btn.classList.toggle('active', t === tab);
+        });
+        applyDevPanelOwnStyling(tab);
+    }
+
+    const devPanelStyle = {
+        titleFontSize: 22, tabFontSize: 12, groupTitleFontSize: 11, settingTitleFontSize: 12,
+        buttonTextBorder: 0, scrollStrength: 0.2, opacity: 1,
+        bgColor: '#000000', titleTextColor: '#ffffff', nonTitleTextColor: '#ffffff',
+        accentColor: '#5b85c8', sliderColor: '#5b85c8', fontFamily: 'Verdana, Geneva, sans-serif',
+        capsButtonText: true, capsTabText: true, capsGroupNames: true, capsSettingsText: false,
+        buttonTextLetterSpacing: 0, tabTextLetterSpacing: 0, groupTextLetterSpacing: 0, settingsTextLetterSpacing: 0,
+        buttonHeight: 21,
+    };
+    const mobileDevPanelStyle = { ...devPanelStyle };
+    const landscapeDevPanelStyle = { ...devPanelStyle };
+    const DEV_PANEL_STYLE_VAR_MAP = {
+        titleFontSize: '--dev-panel-title-font-size-px', tabFontSize: '--dev-tab-font-size-px',
+        groupTitleFontSize: '--dev-group-title-font-size-px', settingTitleFontSize: '--dev-setting-title-font-size-px',
+        buttonTextBorder: '--dev-button-text-border-px', scrollStrength: '--dev-scroll-strength',
+        opacity: '--dev-panel-opacity', bgColor: '--dev-panel-bg-color', titleTextColor: '--dev-panel-title-text-color',
+        nonTitleTextColor: '--dev-panel-non-title-text-color', accentColor: '--dev-accent-color', sliderColor: '--dev-slider-color',
+        fontFamily: '--dev-panel-font-family', buttonHeight: '--dev-button-height-px',
+        buttonTextLetterSpacing: '--dev-button-text-letter-spacing-px', tabTextLetterSpacing: '--dev-tab-text-letter-spacing-px',
+        groupTextLetterSpacing: '--dev-group-text-letter-spacing-px', settingsTextLetterSpacing: '--dev-settings-text-letter-spacing-px',
+    };
+    const DEV_PANEL_STYLE_SHARED_KEYS = ['opacity', 'bgColor', 'titleTextColor', 'nonTitleTextColor', 'accentColor', 'sliderColor', 'fontFamily', 'capsButtonText', 'capsTabText', 'capsGroupNames', 'capsSettingsText', 'buttonTextLetterSpacing', 'tabTextLetterSpacing', 'groupTextLetterSpacing', 'settingsTextLetterSpacing'];
+    const DEV_PANEL_CAPS_CLASS_MAP = {
+        capsButtonText: 'dev-caps-button-text', capsTabText: 'dev-caps-tab-text',
+        capsGroupNames: 'dev-caps-group-names', capsSettingsText: 'dev-caps-settings-text',
+    };
+    function applyDevPanelOwnStyling(tab) {
+        const style = tab === 'desktop' ? devPanelStyle : tab === 'mobile' ? mobileDevPanelStyle : landscapeDevPanelStyle;
+        for (const [key, varName] of Object.entries(DEV_PANEL_STYLE_VAR_MAP)) {
+            const value = DEV_PANEL_STYLE_SHARED_KEYS.includes(key) ? devPanelStyle[key] : style[key];
+            document.documentElement.style.setProperty(varName, value);
+        }
+        for (const [key, className] of Object.entries(DEV_PANEL_CAPS_CLASS_MAP)) {
+            devPanel.classList.toggle(className, !!devPanelStyle[key]);
+        }
+    }
+
+    const DEVPANEL_STYLE_CONTROLS = (() => {
+        const perTab = (tab, idPrefix, sharedOnly) => {
+            const rows = [
+                { tab, group: 'Dev Panel', id: idPrefix + 'TitleFontSize', type: 'slider', label: 'Title Font Size (px):', min: 6, max: 30, step: 1, value: 22 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'TabFontSize', type: 'slider', label: 'Tab Font Size (px):', min: 6, max: 30, step: 1, value: 12 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'GroupTitleFontSize', type: 'slider', label: 'Group Title Font Size (px):', min: 6, max: 30, step: 1, value: 11 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'SettingTitleFontSize', type: 'slider', label: 'Setting Title Font Size (px):', min: 6, max: 30, step: 1, value: 12 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'ButtonTextBorder', type: 'slider', label: 'Button Text Border (px):', min: 0, max: 20, step: 1, value: 0 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'ScrollStrength', type: 'slider', label: 'Scroll Strength (x):', min: 0.2, max: 5, step: 0.1, value: 0.2 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'ButtonHeight', type: 'slider', label: 'Button Height (px):', min: 12, max: 60, step: 1, value: 21 },
+            ];
+            if (sharedOnly) return rows;
+            return [
+                ...rows,
+                { tab, group: 'Dev Panel', id: idPrefix + 'Opacity', type: 'slider', label: 'Opacity:', min: 0.1, max: 1, step: 0.01, value: 1 },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelBg', type: 'color', label: 'Background Color:', value: '#000000' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelTitleText', type: 'color', label: 'Title Text Color:', value: '#ffffff' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelNonTitleText', type: 'color', label: 'Settings Title Text Color:', value: '#ffffff' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelAccent', type: 'color', label: 'Accent Color (Buttons/UI):', value: '#5b85c8' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelSliderColor', type: 'color', label: 'Slider Color:', value: '#5b85c8' },
+                { tab, group: 'Dev Panel', id: 'selectDevPanelFontFamily', type: 'select', label: 'Font (All Text):', options: [
+                    { value: 'monospace', text: 'Monospace' }, { value: 'Arial, Helvetica, sans-serif', text: 'Arial' },
+                    { value: "'Segoe UI', Arial, sans-serif", text: 'Segoe UI' }, { value: 'Verdana, Geneva, sans-serif', text: 'Verdana' },
+                    { value: "'Trebuchet MS', Arial, sans-serif", text: 'Trebuchet MS' }, { value: 'Calibri, Arial, sans-serif', text: 'Calibri' },
+                ] },
+                { tab, group: 'Dev Panel', id: 'checkboxDevCapsButtonText', type: 'checkbox', label: 'Capitalize Button Text' },
+                { tab, group: 'Dev Panel', id: 'checkboxDevCapsTabText', type: 'checkbox', label: 'Capitalize Tab Text' },
+                { tab, group: 'Dev Panel', id: 'checkboxDevCapsGroupNames', type: 'checkbox', label: 'Capitalize Group Names' },
+                { tab, group: 'Dev Panel', id: 'checkboxDevCapsSettingsText', type: 'checkbox', label: 'Capitalize Settings Text' },
+                { tab, group: 'Dev Panel', id: 'checkboxDevTextEditMode', type: 'checkbox', label: 'Enable Label Rename Mode' },
+            ];
+        };
+        return [
+            ...perTab('desktop', 'sliderDevPanel', false),
+            ...perTab('mobile', 'sliderMobileDevPanel', true),
+            ...perTab('landscape', 'sliderLandscapeDevPanel', true),
+        ];
+    })();
+    const DEV_PANEL_CAPS_CHECKBOX_KEYS = {
+        checkboxDevCapsButtonText: 'capsButtonText', checkboxDevCapsTabText: 'capsTabText',
+        checkboxDevCapsGroupNames: 'capsGroupNames', checkboxDevCapsSettingsText: 'capsSettingsText',
+    };
+    function renderDevPanelStyleControls() {
+        DEVPANEL_STYLE_CONTROLS.forEach(ctrl => {
+            const content = findGroupContent(ctrl.tab, ctrl.group, 'renderDevPanelStyleControls', ctrl.id);
+            if (!content) return;
+            const row = buildUniformControlRow(ctrl);
+            content.appendChild(row);
+            if (ctrl.id === 'selectDevPanelFontFamily') row.querySelector('select').value = devPanelStyle.fontFamily;
+            else if (ctrl.id in DEV_PANEL_CAPS_CHECKBOX_KEYS) row.querySelector('input').checked = !!devPanelStyle[DEV_PANEL_CAPS_CHECKBOX_KEYS[ctrl.id]];
+            else if (ctrl.id === 'checkboxDevTextEditMode') row.querySelector('input').checked = textEditModeEnabled;
+        });
+    }
+    function setupDevPanelStyleControls() {
+        const sliderKeys = [
+            ['titleFontSize', 'sliderDevPanelTitleFontSize', 'sliderMobileDevPanelTitleFontSize', 'sliderLandscapeDevPanelTitleFontSize'],
+            ['tabFontSize', 'sliderDevPanelTabFontSize', 'sliderMobileDevPanelTabFontSize', 'sliderLandscapeDevPanelTabFontSize'],
+            ['groupTitleFontSize', 'sliderDevPanelGroupTitleFontSize', 'sliderMobileDevPanelGroupTitleFontSize', 'sliderLandscapeDevPanelGroupTitleFontSize'],
+            ['settingTitleFontSize', 'sliderDevPanelSettingTitleFontSize', 'sliderMobileDevPanelSettingTitleFontSize', 'sliderLandscapeDevPanelSettingTitleFontSize'],
+            ['buttonTextBorder', 'sliderDevPanelButtonTextBorder', 'sliderMobileDevPanelButtonTextBorder', 'sliderLandscapeDevPanelButtonTextBorder'],
+            ['scrollStrength', 'sliderDevPanelScrollStrength', 'sliderMobileDevPanelScrollStrength', 'sliderLandscapeDevPanelScrollStrength'],
+            ['buttonHeight', 'sliderDevPanelButtonHeight', 'sliderMobileDevPanelButtonHeight', 'sliderLandscapeDevPanelButtonHeight'],
+        ];
+        sliderKeys.forEach(([key, deskId, mobId, landId]) => {
+            [[deskId, devPanelStyle, 'desktop'], [mobId, mobileDevPanelStyle, 'mobile'], [landId, landscapeDevPanelStyle, 'landscape']].forEach(([id, store, tab]) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', (e) => {
+                    store[key] = parseFloat(e.target.value);
+                    applyDevPanelOwnStyling(tab);
+                    const valEl = document.getElementById(id.replace('slider', 'value'));
+                    if (valEl) valEl.textContent = e.target.value;
+                });
+            });
+        });
+        const opacityEl = document.getElementById('sliderDevPanelOpacity');
+        if (opacityEl) opacityEl.addEventListener('input', (e) => {
+            devPanelStyle.opacity = parseFloat(e.target.value);
+            applyDevPanelOwnStyling('desktop');
+            const valEl = document.getElementById('valueDevPanelOpacity');
+            if (valEl) valEl.textContent = e.target.value;
+        });
+        [['bgColor', 'colorDevPanelBg'], ['titleTextColor', 'colorDevPanelTitleText'], ['nonTitleTextColor', 'colorDevPanelNonTitleText'],
+         ['accentColor', 'colorDevPanelAccent'], ['sliderColor', 'colorDevPanelSliderColor']].forEach(([key, id]) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', (e) => { devPanelStyle[key] = e.target.value; applyDevPanelOwnStyling('desktop'); });
+        });
+        const fontEl = document.getElementById('selectDevPanelFontFamily');
+        if (fontEl) fontEl.addEventListener('change', (e) => { devPanelStyle.fontFamily = e.target.value; applyDevPanelOwnStyling('desktop'); });
+        [['capsButtonText', 'checkboxDevCapsButtonText'], ['capsTabText', 'checkboxDevCapsTabText'],
+         ['capsGroupNames', 'checkboxDevCapsGroupNames'], ['capsSettingsText', 'checkboxDevCapsSettingsText']].forEach(([key, id]) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', (e) => { devPanelStyle[key] = e.target.checked; applyDevPanelOwnStyling('desktop'); });
+        });
+        const textEditEl = document.getElementById('checkboxDevTextEditMode');
+        if (textEditEl) textEditEl.addEventListener('change', (e) => { textEditModeEnabled = e.target.checked; });
+
+        const scrollContent = document.querySelector('.dev-panel-scroll-content');
+        if (scrollContent) scrollContent.addEventListener('wheel', (e) => {
+            const activeTab = DEV_PANEL_TABS.find(t => !document.getElementById(t + 'TabContent').classList.contains('hidden')) || 'desktop';
+            const strength = (activeTab === 'desktop' ? devPanelStyle : activeTab === 'mobile' ? mobileDevPanelStyle : landscapeDevPanelStyle).scrollStrength;
+            if (strength === 1) return;
+            e.preventDefault();
+            scrollContent.scrollTop += e.deltaY * strength;
+        }, { passive: false });
+    }
+
+    const DEV_PANEL_LOCALSTORAGE_KEY = 'devPanelSettings';
+
+    function captureAllRegisteredControlValues() {
+        const out = {};
+        DEV_PANEL_REGISTERED_ARRAYS.forEach(({ array }) => {
+            array.forEach(ctrl => {
+                const el = document.getElementById(ctrl.id);
+                if (!el) return;
+                out[ctrl.id] = el.type === 'checkbox' ? el.checked : (el.type === 'range' || el.type === 'number') ? parseFloat(el.value) : el.value;
+            });
+        });
+        return out;
+    }
+    function applyControlValues(values) {
+        if (!values) return;
+        Object.entries(values).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (el.type === 'checkbox') el.checked = !!value; else el.value = value;
+            el.dispatchEvent(new Event(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', { bubbles: true }));
+        });
+    }
+    function captureFullDevPanelState() {
+        return {
+            controls: captureAllRegisteredControlValues(),
+            layout: { ...DEV_PANEL_LAYOUT },
+            devPanelStyle: { ...devPanelStyle },
+            mobileDevPanelStyle: { ...mobileDevPanelStyle },
+            landscapeDevPanelStyle: { ...landscapeDevPanelStyle },
+            sectionOrder: captureSectionOrder(),
+            sectionCollapseState: captureSectionCollapseState(),
+            devTextOverrides: { ...devTextOverrides },
+            textEditModeEnabled,
+        };
+    }
+    function applyFullDevPanelState(state) {
+        if (!state) return;
+        applyControlValues(state.controls);
+        if (state.layout) { Object.assign(DEV_PANEL_LAYOUT, state.layout); applyDevPanelLayout(); }
+        if (state.devPanelStyle) Object.assign(devPanelStyle, state.devPanelStyle);
+        if (state.mobileDevPanelStyle) Object.assign(mobileDevPanelStyle, state.mobileDevPanelStyle);
+        if (state.landscapeDevPanelStyle) Object.assign(landscapeDevPanelStyle, state.landscapeDevPanelStyle);
+        applyDevPanelOwnStyling(DEV_PANEL_TABS.find(t => !document.getElementById(t + 'TabContent').classList.contains('hidden')) || 'desktop');
+        if (state.devTextOverrides) devTextOverrides = { ...state.devTextOverrides };
+        applyDevTextOverrides();
+        if (typeof state.textEditModeEnabled === 'boolean') {
+            textEditModeEnabled = state.textEditModeEnabled;
+            const cb = document.getElementById('checkboxDevTextEditMode');
+            if (cb) cb.checked = textEditModeEnabled;
+        }
+        applySectionOrder(state.sectionOrder);
+        applySectionCollapseState(state.sectionCollapseState);
+    }
+    function copyDevPanelSettings() {
+        const text = JSON.stringify(captureFullDevPanelState(), null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).catch(() => window.prompt('Copy:', text));
+        } else {
+            window.prompt('Copy:', text);
+        }
+    }
+    function saveDevPanelSettings() {
+        const status = document.getElementById('devSaveSyncStatus');
+        try {
+            localStorage.setItem(DEV_PANEL_LOCALSTORAGE_KEY, JSON.stringify(captureFullDevPanelState()));
+            if (status) { status.textContent = 'saved'; setTimeout(() => { status.textContent = ''; }, 1500); }
+        } catch (e) {
+            if (status) status.textContent = 'save failed';
+        }
+    }
+    function loadDevPanelSettings() {
+        try {
+            const raw = localStorage.getItem(DEV_PANEL_LOCALSTORAGE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+    function resetDevPanelSettings() {
+        applyFullDevPanelState(loadDevPanelSettings());
+    }
+
+    function initDevPanelEngine() {
+        applyDevPanelLayout();
+        applyDevPanelOwnStyling('desktop');
+        renderDevPanelStyleControls();
+
+        renderProjectControls();
+        wireProjectControls();
+
+        setupDevPanelStyleControls();
+        makeDevValuesEditable();
+        setupDevPanelTextEdit();
+        assertDevControlsRendered();
+        validateDevControlMappings();
+
+        function devGroupNestingDepth(contentEl, tabRoot) {
+            let depth = 0;
+            let cur = contentEl.parentElement;
+            while (cur && cur !== tabRoot) {
+                if (cur.classList.contains('dev-section')) depth++;
+                cur = cur.parentElement;
+            }
+            return depth;
+        }
+        setupDragReorder('.dev-section-title', '.dev-section', () => {}, (tabRoot, dragging) => {
+            const groupContents = Array.from(tabRoot.querySelectorAll('.dev-section > .dev-section-content'))
+                .filter(content => !dragging.contains(content));
+            groupContents.sort((a, b) => devGroupNestingDepth(b, tabRoot) - devGroupNestingDepth(a, tabRoot));
+            return [...groupContents, tabRoot];
+        });
+        setupDragReorder('.dev-label', '.dev-row', () => {}, (tabRoot, dragging) => {
+            const groupContents = Array.from(tabRoot.querySelectorAll('.dev-section-content'));
+            groupContents.sort((a, b) => devGroupNestingDepth(b, tabRoot) - devGroupNestingDepth(a, tabRoot));
+            return groupContents;
+        });
+
+        setupPanelResizeHandle(devPanel, document.getElementById('devPanelResizeTop'), null, 'top');
+        setupPanelResizeHandle(devPanel, document.getElementById('devPanelResizeBottom'), null, 'bottom');
+        setupPanelResizeHandle(devPanel, document.getElementById('devPanelResizeLeft'), 'left', null);
+        setupPanelResizeHandle(devPanel, document.getElementById('devPanelResizeRight'), 'right', null);
+        setupPanelResizeHandle(devPanel, document.getElementById('devPanelResizeTL'), 'left', 'top');
+        setupPanelResizeHandle(devPanel, document.getElementById('devPanelResizeTR'), 'right', 'top');
+        setupPanelResizeHandle(devPanel, document.getElementById('devPanelResizeBL'), 'left', 'bottom');
+        setupPanelResizeHandle(devPanel, document.getElementById('devPanelResizeBR'), 'right', 'bottom');
+        new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const w = Math.round(entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width);
+                const h = Math.round(entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height);
+                if (w > 0 && h > 0) { DEV_PANEL_LAYOUT.width = w; DEV_PANEL_LAYOUT.height = h; }
+            }
+        }).observe(devPanel);
+
+        window.addEventListener('resize', clampDevPanelPosition);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'd' || e.key === 'D') {
+                const activeTag = document.activeElement && document.activeElement.tagName;
+                if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
+                devPanel.classList.toggle('hidden');
+            }
+        });
+
+        syncSlidersFromState();
+        syncColorPickersFromState();
+
+        applyFullDevPanelState(loadDevPanelSettings());
+    }
+
+    // ================================================================
+    // FLICK DEMO — project-specific code. All settings are shared
+    // (not device-split) and rendered only into the Desktop tab, per
+    // this project's own convention (mouse-driven interaction has no
+    // meaningful Mobile/Landscape equivalent yet) — Mobile/Landscape
+    // tabs show only the built-in "Dev Panel" style group.
+    // ================================================================
+
+    const cfg = {
+        entityScale: 30, entityRotationOffset: 0, clickAnimSpeed: 3,
+        rotationSmoothing: 1, positionSmoothing: 1, angleOffset: 0,
+        backgroundColor: '#1b1f2a',
+        showCenter: true, showAngleDebug: true, hideCursor: true, showHitbox: false,
+    };
+
+    const ENTITY_CONTROLS = [
+        { group: 'Entity', id: 'sliderEntityScale', type: 'slider', label: 'Entity Scale (%vmin):', min: 5, max: 60, step: 0.5, value: cfg.entityScale },
+        { group: 'Entity', id: 'sliderEntityRotationOffset', type: 'slider', label: 'Entity Rotation Offset (Deg):', min: -180, max: 180, step: 1, value: cfg.entityRotationOffset },
+        { group: 'Entity', id: 'sliderClickAnimSpeed', type: 'slider', label: 'Click Anim Speed (x):', min: 0.1, max: 10, step: 0.1, value: cfg.clickAnimSpeed },
+    ];
+    const MOUSE_CONTROLS = [
+        { group: 'Mouse / Rotation', id: 'sliderRotationSmoothing', type: 'slider', label: 'Rotation Smoothing (0-1):', min: 0.02, max: 1, step: 0.01, value: cfg.rotationSmoothing },
+        { group: 'Mouse / Rotation', id: 'sliderPositionSmoothing', type: 'slider', label: 'Position Smoothing (0-1):', min: 0.02, max: 1, step: 0.01, value: cfg.positionSmoothing },
+        { group: 'Mouse / Rotation', id: 'sliderAngleOffset', type: 'slider', label: 'Angle Offset (Deg):', min: -180, max: 180, step: 1, value: cfg.angleOffset },
+    ];
+    const BACKGROUND_CONTROLS = [
+        { group: 'Background', id: 'colorBackground', type: 'color', label: 'Background Color:', value: cfg.backgroundColor },
+    ];
+    const DEBUG_CONTROLS = [
+        { group: 'Debug', id: 'checkboxShowCenter', type: 'checkbox', label: 'Show Center Point' },
+        { group: 'Debug', id: 'checkboxShowAngleDebug', type: 'checkbox', label: 'Show Angle/Direction Debug Text' },
+        { group: 'Debug', id: 'checkboxHideCursor', type: 'checkbox', label: 'Hide OS Cursor' },
+        { group: 'Debug', id: 'checkboxShowHitbox', type: 'checkbox', label: 'Show Entity Bounding Box' },
+    ];
+
+    function renderProjectControls() {
+        [ENTITY_CONTROLS, MOUSE_CONTROLS, BACKGROUND_CONTROLS, DEBUG_CONTROLS].forEach(arr => {
+            arr.forEach(ctrl => {
+                const content = findGroupContent('desktop', ctrl.group, 'renderProjectControls', ctrl.id);
+                if (content) content.appendChild(buildUniformControlRow(ctrl));
+            });
+            registerDevControlArray(arr === ENTITY_CONTROLS ? 'ENTITY_CONTROLS' : arr === MOUSE_CONTROLS ? 'MOUSE_CONTROLS' : arr === BACKGROUND_CONTROLS ? 'BACKGROUND_CONTROLS' : 'DEBUG_CONTROLS', arr);
+        });
+        // Default-checked checkboxes: the row builder never sets .checked,
+        // so a true default needs applying explicitly right after render.
+        document.getElementById('checkboxShowCenter').checked = cfg.showCenter;
+        document.getElementById('checkboxShowAngleDebug').checked = cfg.showAngleDebug;
+        document.getElementById('checkboxHideCursor').checked = cfg.hideCursor;
+        document.getElementById('checkboxShowHitbox').checked = cfg.showHitbox;
+    }
+
+    function wireProjectControls() {
+        const bindSlider = (id, key) => {
+            const el = document.getElementById(id);
+            el.addEventListener('input', (e) => {
+                cfg[key] = parseFloat(e.target.value);
+                const valEl = document.getElementById(id.replace(/^slider/, 'value'));
+                if (valEl) valEl.textContent = e.target.value;
+            });
+        };
+        bindSlider('sliderEntityScale', 'entityScale');
+        bindSlider('sliderEntityRotationOffset', 'entityRotationOffset');
+        bindSlider('sliderClickAnimSpeed', 'clickAnimSpeed');
+        bindSlider('sliderRotationSmoothing', 'rotationSmoothing');
+        bindSlider('sliderPositionSmoothing', 'positionSmoothing');
+        bindSlider('sliderAngleOffset', 'angleOffset');
+
+        document.getElementById('colorBackground').addEventListener('input', (e) => { cfg.backgroundColor = e.target.value; });
+
+        const bindCheckbox = (id, key) => {
+            document.getElementById(id).addEventListener('change', (e) => {
+                cfg[key] = e.target.checked;
+                if (key === 'hideCursor') applyCursorVisibility();
+            });
+        };
+        bindCheckbox('checkboxShowCenter', 'showCenter');
+        bindCheckbox('checkboxShowAngleDebug', 'showAngleDebug');
+        bindCheckbox('checkboxHideCursor', 'hideCursor');
+        bindCheckbox('checkboxShowHitbox', 'showHitbox');
+    }
+
+    // ----------------------------------------------------------------
+    // Direction data: 8 named sets, matching data/FLICK/2TONED/<folder>/A.
+    // Filenames use a distinct prefix per folder (confirmed via `ls` —
+    // no shared formula, same lesson DickoClicko's own TWOTONED_SETS
+    // already documented for this exact asset family), each 20 frames
+    // (001-020), .png (not converted to webp — files are already small,
+    // ~65KB each, no bandwidth problem like DickoClicko's original
+    // oversized PNGs hit).
+    // ----------------------------------------------------------------
+    const DIRECTIONS = [
+        { key: 'behind',       folder: 'BEHIND',        prefix: '2T -Flabbehind' },
+        { key: 'behind-thumb', folder: 'BEHIND THUMB',  prefix: '2T -BehindThumb' },
+        { key: 'side-thumb',   folder: 'SIDE THUMB',    prefix: '2T -DirectThumb' },
+        { key: 'front-thumb',  folder: 'FRONT THUMB',   prefix: '2T -SideThub' },
+        { key: 'front',        folder: 'FRONT',         prefix: '2T -Flabove' },
+        { key: 'front-pinky',  folder: 'FRONT PINKY',   prefix: '2T -SidePink' },
+        { key: 'side-pinky',   folder: 'SIDE PINKY',    prefix: '2T -DirectPink' },
+        { key: 'behind-pinky', folder: 'BEHIND PINKY',  prefix: '2T -BehindPink' },
+    ];
+    const DIRECTION_FRAME_COUNT = 20;
+    function directionFrameUrl(dir, n) {
+        return `data/FLICK/2TONED/${encodeURIComponent(dir.folder)}/A/${encodeURIComponent(dir.prefix + '_' + String(n).padStart(3, '0') + '.png')}`;
+    }
+
+    // Lazy-loaded per direction (only the directions the mouse actually
+    // visits get fetched) rather than eagerly preloading all 8*20 = 160
+    // frames on page load.
+    // A frame image gets up to 3 automatic reload attempts on a failed
+    // load (onerror, or settling at complete+naturalWidth===0 with no
+    // error event at all - both observed against this exact asset set)
+    // before being left alone - a transient hiccup shouldn't permanently
+    // blank the entity out for the rest of the session.
+    const IMG_LOAD_MAX_RETRIES = 3;
+    const IMG_LOAD_RETRY_DELAY_MS = 400;
+    function loadImageWithRetry(src) {
+        const img = new Image();
+        let retriesLeft = IMG_LOAD_MAX_RETRIES;
+        function attempt() {
+            img.src = src + (retriesLeft < IMG_LOAD_MAX_RETRIES ? ('?retry=' + (IMG_LOAD_MAX_RETRIES - retriesLeft)) : '');
+        }
+        img.addEventListener('error', () => {
+            if (retriesLeft > 0) { retriesLeft--; setTimeout(attempt, IMG_LOAD_RETRY_DELAY_MS); }
+        });
+        img.addEventListener('load', () => {
+            if (img.naturalWidth === 0 && retriesLeft > 0) { retriesLeft--; setTimeout(attempt, IMG_LOAD_RETRY_DELAY_MS); }
+        });
+        attempt();
+        return img;
+    }
+
+    const directionCache = {};
+    function ensureDirectionLoaded(key) {
+        if (directionCache[key]) return directionCache[key];
+        const dir = DIRECTIONS.find(d => d.key === key);
+        const frames = [];
+        for (let n = 1; n <= DIRECTION_FRAME_COUNT; n++) {
+            frames.push(loadImageWithRetry(directionFrameUrl(dir, n)));
+        }
+        // Forward then reverse, excluding the duplicated peak frame at
+        // the seam (same technique DickoClicko's own SCISSOR sets used).
+        const playSequence = frames.concat(frames.slice(0, -1).reverse());
+        const entry = { frames, playSequence };
+        directionCache[key] = entry;
+        return entry;
+    }
+    // The very first direction is needed immediately (idle pose before
+    // any mouse movement) — warm it eagerly so there's no blank frame.
+    ensureDirectionLoaded(DIRECTIONS[0].key);
+
+    // ----------------------------------------------------------------
+    // Canvas + mouse tracking
+    // ----------------------------------------------------------------
+    const canvas = document.getElementById('scene');
+    const ctx = canvas.getContext('2d');
+    function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function applyCursorVisibility() {
+        canvas.classList.toggle('cursor-hidden', cfg.hideCursor);
+    }
+    applyCursorVisibility();
+
+    // Not window.innerWidth/innerHeight read here directly - a real,
+    // documented quirk (DickoClicko hit the same thing) is that the
+    // viewport can briefly report 0 at script-parse time, before layout
+    // settles; a one-time snapshot taken then would permanently strand
+    // the entity at the top-left corner. hasMouse gates a live re-center
+    // in update()'s first real frame instead (requestAnimationFrame is
+    // guaranteed to run after layout).
+    let mouseX = 0, mouseY = 0;
+    let hasMouse = false;
+    window.addEventListener('pointermove', (e) => {
+        mouseX = e.clientX; mouseY = e.clientY;
+        hasMouse = true;
+    });
+
+    // ----------------------------------------------------------------
+    // Angle math. "Up" (0°) = directly above the browser's centerpoint;
+    // angle increases CLOCKWISE. Verified against 2 concrete cases before
+    // trusting it: mouse directly above center -> 0° (bucket "Behind");
+    // mouse directly right of center -> 90° (bucket "Side Thumb"), and
+    // the entity's own rotation (mouseAngle + 180°) correctly points it
+    // back toward center in both cases (rotated "up" vector = (sinθ,
+    // -cosθ) in canvas x/y-down space).
+    // ----------------------------------------------------------------
+    function mouseAngleFromCenter(mx, my, cx, cy) {
+        const dx = mx - cx, dy = my - cy;
+        let deg = Math.atan2(dx, -dy) * 180 / Math.PI;
+        return (deg + 360) % 360;
+    }
+    // 8 sectors of 45°, centered on 0/45/90/.../315 — matches the exact
+    // boundaries given (-22.5..22.5 = index 0, etc). cfg.angleOffset
+    // rotates the whole wheel as one calibration knob rather than 8
+    // independent (and easily inconsistent) per-boundary sliders, since
+    // the sectors are rigidly uniform by spec.
+    function directionIndexForAngle(angleDeg) {
+        const shifted = (angleDeg + cfg.angleOffset + 22.5 + 3600) % 360;
+        return Math.floor(shifted / 45) % 8;
+    }
+
+    // ----------------------------------------------------------------
+    // State: entity position/rotation (smoothed toward the mouse/target
+    // angle), current direction bucket, and the click-triggered
+    // forward+reverse play sequence.
+    // ----------------------------------------------------------------
+    let entityX = 0, entityY = 0;
+    let entityAngleDeg = 0;
+    let currentDirectionKey = DIRECTIONS[0].key;
+    let playing = false;
+    let playFrameIndex = 0;
+    let playFrameAccum = 0;
+    let playSequenceFrozen = null;
+    const FLICK_BASE_FPS = 12;
+
+    function angleLerp(current, target, factor) {
+        let delta = ((target - current + 540) % 360) - 180;
+        return current + delta * factor;
+    }
+    function expSmoothFactor(smoothing, dt) {
+        // smoothing=1 -> factor=1 (instant, matches "wherever mouse goes,
+        // entity goes" literally by default); lower values ease in.
+        if (smoothing >= 1) return 1;
+        return 1 - Math.pow(1 - smoothing, dt * 60);
+    }
+
+    canvas.addEventListener('pointerdown', () => {
+        if (playing) return;
+        playing = true;
+        playFrameIndex = 0;
+        playFrameAccum = 0;
+        playSequenceFrozen = ensureDirectionLoaded(currentDirectionKey).playSequence;
+    });
+
+    let lastTime = performance.now();
+    function update(now) {
+        const rawDt = Math.min(0.25, (now - lastTime) / 1000);
+        lastTime = now;
+
+        const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+        if (!hasMouse) { mouseX = cx; mouseY = cy; entityX = cx; entityY = cy; }
+
+        const posFactor = expSmoothFactor(cfg.positionSmoothing, rawDt);
+        entityX += (mouseX - entityX) * posFactor;
+        entityY += (mouseY - entityY) * posFactor;
+
+        const targetAngle = mouseAngleFromCenter(mouseX, mouseY, cx, cy);
+        const rotFactor = expSmoothFactor(cfg.rotationSmoothing, rawDt);
+        entityAngleDeg = angleLerp(entityAngleDeg, targetAngle, rotFactor);
+
+        const dirIndex = directionIndexForAngle(targetAngle);
+        currentDirectionKey = DIRECTIONS[dirIndex].key;
+        if (!playing) ensureDirectionLoaded(currentDirectionKey);
+
+        if (playing && playSequenceFrozen) {
+            playFrameAccum += rawDt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
+            playFrameIndex = Math.floor(playFrameAccum);
+            if (playFrameIndex >= playSequenceFrozen.length) {
+                playing = false;
+                playSequenceFrozen = null;
+                playFrameIndex = 0;
+                playFrameAccum = 0;
+            }
+        }
+
+        render(targetAngle, dirIndex);
+        requestAnimationFrame(update);
+    }
+
+    function render(targetAngle, dirIndex) {
+        const w = window.innerWidth, h = window.innerHeight;
+        ctx.fillStyle = cfg.backgroundColor;
+        ctx.fillRect(0, 0, w, h);
+
+        const cx = w / 2, cy = h / 2;
+        if (cfg.showCenter) {
+            ctx.save();
+            ctx.strokeStyle = '#ffffff';
+            ctx.globalAlpha = 0.6;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - 10, cy); ctx.lineTo(cx + 10, cy);
+            ctx.moveTo(cx, cy - 10); ctx.lineTo(cx, cy + 10);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        let img;
+        if (playing && playSequenceFrozen) {
+            img = playSequenceFrozen[Math.min(playFrameIndex, playSequenceFrozen.length - 1)];
+        } else {
+            img = ensureDirectionLoaded(currentDirectionKey).frames[0];
+        }
+
+        const vmin = Math.min(w, h);
+        const size = vmin * (cfg.entityScale / 100);
+        let drawW = size, drawH = size;
+        if (img && img.complete && img.naturalWidth > 0) {
+            drawH = size * (img.naturalHeight / img.naturalWidth);
+        }
+
+        const rotationRad = (entityAngleDeg + 180 + cfg.entityRotationOffset) * Math.PI / 180;
+        ctx.save();
+        ctx.translate(entityX, entityY);
+        ctx.rotate(rotationRad);
+        if (img && img.complete && img.naturalWidth > 0) {
+            ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+        }
+        if (cfg.showHitbox) {
+            ctx.strokeStyle = '#ff3366';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-drawW / 2, -drawH / 2, drawW, drawH);
+        }
+        ctx.restore();
+
+        if (cfg.showAngleDebug) {
+            ctx.save();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '14px monospace';
+            ctx.textBaseline = 'top';
+            ctx.fillText(`angle: ${targetAngle.toFixed(1)}°  direction[${dirIndex}]: ${currentDirectionKey}${playing ? '  (playing)' : ''}`, 12, 12);
+            ctx.restore();
+        }
+    }
+
+    requestAnimationFrame((t) => { lastTime = t; requestAnimationFrame(update); });
+
+    initDevPanelEngine();
+</script>
+</body>
+</html>
