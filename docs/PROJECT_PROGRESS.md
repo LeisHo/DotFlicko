@@ -18,28 +18,52 @@ work seamlessly from there.
 
 ## Currently working on
 
-<What's actively in progress right now. If nothing is actively in progress,
-say "Nothing in progress — see What's next" rather than leaving this blank
-or stale.>
+Nothing in progress from this session — the latest round of changes (per-
+direction Hand Rotation Offset, top-edge ball collision, the ball-proximity
+flick auto-trigger, and the fixed-timestep physics conversion) is committed
+and pushed (`3517a52`).
+
+**Note for a new session:** a *different*, concurrent Claude session has
+also been actively developing this same `index.html` (the ball/collision
+physics system and the skeleton-annotation tool) throughout this project's
+history so far — check `git log`/`git status` before assuming this doc, or
+any in-progress understanding of the file, is still current.
 
 ## Recently completed
 
-<A short list of what was *just* finished — enough to explain how the
-project got to its current state, not a full history. A handful of bullets
-at most. Once something here stops being relevant context for what's
-current or next, drop it — it's already permanently recorded in
-CHANGELOG.txt, so nothing is lost by removing it from here.>
+- Mouse-follow entity with center-pointing rotation and 8-direction angle
+  bucketing (verified via geometric test cases); click-to-play forward+
+  reverse flick animation with a configurable peak-frame hold.
+- Dev panel built from the workspace's `TEMPLATE_DEV_PANEL.html`, settings
+  decomposed per CLAUDE.md §12n into Entity/Background/Debug groups (Ball
+  and Collision groups are the other concurrent session's own).
+- Hand Rotation Offset made per-direction: a dropdown + slider compound row
+  (8 real, independently-persisted values) consolidated into one "Entity"
+  group (an earlier brief "Hand Animation" group name, and a separate
+  "Mouse / Rotation" group, were both folded back into Entity per explicit
+  request — a migration also handles anyone whose browser had already
+  saved settings referencing the old names).
+- Top-edge ball collision, except during the ball's initial fall into frame
+  from its off-screen spawn point.
+- Ball-proximity auto-trigger for the flick sequence: checked against the
+  swept collision geometry across the full animation sequence (all 20
+  frames per direction), not just the current or peak pose; rising-edge
+  triggered so a ball sitting in the zone doesn't spam-retrigger.
+- Physics loop converted from raw per-real-frame delta to a fixed 1/60s
+  timestep accumulator — verified deterministic (2 differently-jittered
+  real-frame-timing sequences produce bit-for-bit identical ball state when
+  compared at matching fixed-step count), fixing a reported "same mouse
+  position, different trajectory every time" symptom.
+- A self-healing canvas-resize check (fixes a real, reproduced-in-session
+  "canvas stuck at 0×0" class of bug, also the likely cause of a "Hide OS
+  Cursor doesn't work" report).
 
 ## What's next
 
-<The concrete next step(s), ordered by what actually comes first. Keep this
-in sync with PROJECT_SUMMARY.txt's "Next Action" rather than letting the two
-drift apart — this section can go into more operational detail; that one
-stays a one-line pointer.>
+No specific next action is currently queued by the user. Candidates not yet
+requested: wiring the SCISS/SNAP animation variant sets into direction
+selection; touch/mobile input support.
 
 ## Open questions / blockers
 
-<Anything genuinely unresolved that the next session needs to know about
-before proceeding — a decision waiting on the user, an external dependency,
-a known bug without a fix yet. Remove an item once it's resolved; don't
-leave it here as stale history either.>
+None currently open.

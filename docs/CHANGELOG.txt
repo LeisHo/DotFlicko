@@ -1,27 +1,89 @@
 DOTFLICKO -- CHANGELOG
 ================================================================================
 
-PROJECT START: <YYYY-MM-DD>  -  <HH:MM AM/PM [timezone]>
+PROJECT START: 2026-09-10  -  fresh git history (see this entry's own note)
 
 --------------------------------------------------------------------------------
-<YYYY-MM-DD>  -  <HH:MM AM/PM start - HH:MM AM/PM end, or a single timestamp>
+2026-09-10
 
-<Prose description of what this session/change did and why -- not just a
-bare bullet list of file names. State real numbers where relevant (per
-CLAUDE.md §0c: no rounding, no invented figures). Sub-headers like "Added:",
-"Fixed:", "Verified:" are useful when a session touched several distinct
-things; skip them for a small single-purpose entry.>
+Initial build and first several rounds of iteration, across multiple
+sessions in the same working day. This repo began as a repurposed
+DickoClicko checkout; per explicit user decision (asked via AskUserQuestion
+rather than assumed) the public GitHub history was started fresh -- a
+single initial commit reflecting the actual DOTFLICKO-specific state, not
+DickoClicko's own unrelated rope-physics history. Pushed to
+github.com/LeisHo/DotFlicko as commit 3517a52 (387 files, 1118 insertions
+in that commit alone -- the cumulative diff since the fresh initial commit
+d1d3c96).
+
+A concurrent Claude session built the ball-physics/hand-collision system
+(gravity, wall bounce, 3-capsule finger collision against a per-frame-
+annotated skeleton) and the skeleton-annotation tool
+(scripts/active/flick-skeleton-annotator.html) in parallel with the work
+described below -- their own session isn't represented in this entry's
+own Added/Fixed/Verified detail, only reviewed and built on top of.
 
 Added:
-- <what was added, and why.>
+- Mouse-follow hand entity that continuously rotates to point its pre-drawn
+  "up" orientation at the viewport's centerpoint, switching between 8
+  directional animation sets (Behind, Behind Thumb, Side Thumb, Front
+  Thumb, Front, Front Pinky, Side Pinky, Behind Pinky) based on the mouse's
+  angle from center, in exact 45-degree sectors per the user's own spec.
+- Click-to-play forward+reverse flick animation per direction, with a
+  dev-tunable "Peak Frame Hold" (0-10 extra frames at the fully-extended
+  pose before reversing).
+- A §12-compliant dev panel, built from the workspace's own
+  TEMPLATE_DEV_PANEL.html, with Entity/Background/Debug groups (settings
+  decomposed per CLAUDE.md §12n).
+- Per-direction Hand Rotation Offset: a dropdown + slider compound row (8
+  independently-persisted values, not forgotten when switching the
+  dropdown without saving) replacing an earlier single global offset.
+- Top-edge ball collision, except during the ball's initial fall into frame
+  from its off-screen-above spawn point (a deliberate exception so it isn't
+  immediately bounced back out before ever being seen).
+- A ball-proximity auto-trigger for the flick sequence: the sequence starts
+  automatically (no click needed) when the ball enters the union of the
+  hand's own collision capsules across every frame of the animation
+  sequence, not just one pose -- per explicit correction from an initial,
+  narrower "peak frame only" spec.
+- Converted the physics loop from a raw per-real-frame delta to a fixed
+  1/60s timestep accumulator, for reproducible ball motion given identical
+  inputs (a static mouse position included).
 
 Fixed:
-- <what was broken, the real root cause if known, and what the fix actually
-  changed.>
+- mouseX/mouseY/entityX/entityY could read/derive from
+  window.innerWidth/innerHeight at 0 (a real early-page-life quirk,
+  reproduced in this session's own testing, same class already documented
+  elsewhere in this workspace for mobile Safari/Chrome) -- permanently
+  stranding the entity off-screen. Fixed by deferring the real center-based
+  initialization into the physics loop's own first live tick.
+- The canvas element itself could get stuck at 0x0 CSS size from the same
+  root cause, with no later correction -- besides breaking rendering/hit-
+  testing, this is the likely cause of a real "Hide OS Cursor doesn't work"
+  report, since a 0x0 element has no real screen area for `cursor:none` to
+  apply to. Fixed with a per-frame self-healing size check.
+- 2 stale dev-panel groups ("Hand Animation", "Mouse / Rotation" -- both
+  renamed/consolidated away from mid-session) kept reappearing as empty
+  ghost groups for anyone whose browser had already saved dev-panel
+  settings referencing those names, since the generic panel engine
+  correctly (by design) recreates any saved group it doesn't recognize as
+  a real user-created one. Fixed with a small, one-time-per-load migration
+  that moves their rows into Entity and removes the empty shell.
 
 Verified:
-- <what was actually tested/checked, and how -- per CLAUDE.md §8, never
-  claim something was verified if it wasn't.>
+- Entity rotation math against 2 independent geometric cases (mouse
+  directly above / directly right of center) before trusting it.
+- The per-direction rotation-offset persistence (switch away, switch back,
+  Save, Reset, and a full page reload) via real event dispatches against
+  the live DOM, not just code review.
+- The ball-proximity auto-trigger via 4 separate live tests driving the
+  real production functions with controlled inputs, including a case that
+  only the corrected "any point in the sequence" (not "peak frame only")
+  design could pass.
+- The fixed-timestep determinism claim rigorously: 2 differently-jittered
+  synthetic real-frame-timing sequences, compared at matching TOTAL FIXED-
+  STEP COUNT (not wall-clock callback index), produced bit-for-bit
+  identical ball position across all 192 directly-comparable steps.
 
 --------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
