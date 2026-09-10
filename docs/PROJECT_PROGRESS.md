@@ -24,7 +24,23 @@ pushed to `origin/main` (commit `3be0ac4`). Save Settings' git-tracked
 settings log (ported from Clicko/DickoClicko) is **confirmed working
 end-to-end in production** — the user's own live Save clicks on the
 deployed Vercel site committed `data/processed/dev-panel-settings.json`
-straight to GitHub twice, pulled into this repo via a merge.
+straight to GitHub multiple times, pulled into this repo via several
+merges.
+
+**Open item:** a real mobile-lag report ("placing, rotating, moving...
+very very laggy") was addressed with 2 well-established canvas
+performance fixes (DPR capped at 2; idle-frame sprites now drawn from a
+pre-scaled cache instead of rescaling the full-resolution source every
+frame) — but this session could only verify the fixes are correct
+(cache hits/invalidates properly, rendering/rotation/dragging all still
+work), NOT that they actually resolve the reported lag on real mobile
+hardware, since this environment has no way to profile real mobile
+CPU/GPU performance. **The user should re-test on their actual phone and
+report back** — if still laggy, the next real lead is the source PNGs
+themselves (up to 2400x1181px per frame, likely oversized for this
+project's own on-screen scale — DickoClicko's own history flagged this
+same "oversized PNGs" issue before) or lowering `DIRECTION_FRAME_COUNT`'s
+own asset footprint, neither of which this session attempted.
 
 **Note for a new session:** a *different*, concurrent Claude session has
 also been actively developing this same `index.html` (the ball/collision

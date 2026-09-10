@@ -2150,6 +2150,38 @@
         directionCache[key] = entry;
         return entry;
     }
+
+    // Pre-scaled idle-frame (frame 1) cache — a real, reported mobile
+    // performance issue: `ctx.drawImage(img, ...)` scaling a large source
+    // (source frames run up to 2400x1181px) down to on-screen size is a
+    // real per-call cost on weaker mobile GPUs, and frame 1 is what EVERY
+    // idle (non-playing) entity draws, every single frame, plus the live
+    // spawn/drag preview — exactly the draw calls active during placing,
+    // rotating, and moving entities (all Stop-mode activities, where
+    // nothing is ever mid-flick). Caches one already-correctly-sized
+    // canvas per direction, keyed on the current `size` (drawW before
+    // aspect) — that's the one value shared by every direction (a single
+    // global cfg.entityScale × vmin), so a size change (the slider, or a
+    // window resize changing vmin) invalidates just that direction's own
+    // cached canvas on its next read, not a separate per-direction size
+    // tracked independently. NOT used for a mid-flick playing entity's
+    // frame (those change every tick and are individually short-lived, so
+    // caching every one of them isn't worth the memory) — only frame 1.
+    const idleFrameScaledCache = {};
+    function getScaledIdleFrame(directionKey, size) {
+        const cached = idleFrameScaledCache[directionKey];
+        if (cached && cached.size === size) return cached;
+        const img = ensureDirectionLoaded(directionKey).frames[0];
+        if (!img || !img.complete || img.naturalWidth === 0) return null;
+        const aspect = img.naturalHeight / img.naturalWidth;
+        const w = Math.max(1, Math.round(size)), h = Math.max(1, Math.round(size * aspect));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const entry = { canvas, size, drawW: w, drawH: h };
+        idleFrameScaledCache[directionKey] = entry;
+        return entry;
+    }
     // The very first direction is needed immediately (idle pose before
     // any mouse movement) — warm it eagerly so there's no blank frame.
     ensureDirectionLoaded(DIRECTIONS[0].key);
@@ -2747,8 +2779,27 @@
     // ----------------------------------------------------------------
     const canvas = document.getElementById('scene');
     const ctx = canvas.getContext('2d');
+    // Capped at 2, not the raw window.devicePixelRatio — a real, reported
+    // mobile performance issue ("placing, rotating, moving... very very
+    // laggy"): many phones report a DPR of 3 (some higher), which makes
+    // the canvas's own BACKING STORE 9x more pixels than DPR 1 for the
+    // exact same on-screen CSS size (3x width * 3x height) — every single
+    // fillRect/drawImage this file does fills into that 9x larger buffer.
+    // Capping to 2 (4x, not 9x) is a well-established mobile canvas
+    // performance practice; visually near-indistinguishable from
+    // uncapped on a real device (2x is already a sharp "retina" density),
+    // especially for soft-edged sprite art like this project's own. Used
+    // both here and in update()'s own self-healing size-mismatch check
+    // below — those 2 MUST agree, or the self-heal check would see a
+    // permanent "wrong size" mismatch against an uncapped comparison and
+    // call resizeCanvas() (which reallocates the whole backing store)
+    // every single frame, a far worse perf problem than the one this
+    // exists to fix.
+    function effectiveDpr() {
+        return Math.min(window.devicePixelRatio || 1, 2);
+    }
     function resizeCanvas() {
-        const dpr = window.devicePixelRatio || 1;
+        const dpr = effectiveDpr();
         canvas.width = window.innerWidth * dpr;
         canvas.height = window.innerHeight * dpr;
         canvas.style.width = window.innerWidth + 'px';
@@ -3179,7 +3230,7 @@
         // self-heals from a real live window resize, not just the boot-
         // time case. Display sizing, not simulation — deliberately stays
         // outside the fixed-step loop below.
-        const dpr = window.devicePixelRatio || 1;
+        const dpr = effectiveDpr();
         if (canvas.width !== Math.round(window.innerWidth * dpr) || canvas.height !== Math.round(window.innerHeight * dpr)) {
             resizeCanvas();
         }
@@ -3257,35 +3308,52 @@
                 const previewAngle = mouseAngleFromCenter(mouseX, mouseY, pendingSpawnStart.x, pendingSpawnStart.y);
                 const previewDirectionKey = DIRECTIONS[directionIndexForAngle(previewAngle)].key;
                 const previewRotationRad = (previewAngle + (cfg.entityRotationOffsetByDirection[previewDirectionKey] || 0)) * Math.PI / 180;
-                const previewImg = ensureDirectionLoaded(previewDirectionKey).frames[0];
-                if (previewImg && previewImg.complete && previewImg.naturalWidth > 0) {
-                    const previewDrawW = size, previewDrawH = size * (previewImg.naturalHeight / previewImg.naturalWidth);
+                // Live preview is always the idle frame (frame 1) — uses
+                // the same pre-scaled cache the main idle-entity draw uses
+                // (getScaledIdleFrame's own comment), since this draw runs
+                // every single frame while aiming/dragging, exactly the
+                // activity reported as laggy on mobile.
+                const previewScaled = getScaledIdleFrame(previewDirectionKey, size);
+                if (previewScaled) {
+                    const previewDrawW = previewScaled.drawW, previewDrawH = previewScaled.drawH;
                     const previewVb = visibleBoundsForDirection(previewDirectionKey);
                     const previewXOffsetPx = vmin * ((cfg.entityXOffsetByDirection[previewDirectionKey] || 0) / 100);
                     ctx.save();
                     ctx.globalAlpha = 0.5;
                     ctx.translate(pendingSpawnStart.x, pendingSpawnStart.y);
                     ctx.rotate(previewRotationRad);
-                    ctx.drawImage(previewImg, -previewDrawW * previewVb.centerX + previewXOffsetPx, -previewDrawH * previewVb.bottomY, previewDrawW, previewDrawH);
+                    ctx.drawImage(previewScaled.canvas, -previewDrawW * previewVb.centerX + previewXOffsetPx, -previewDrawH * previewVb.bottomY, previewDrawW, previewDrawH);
                     ctx.restore();
                 }
             }
         }
 
         entities.forEach(entity => {
-            let img;
+            // A PLAYING entity draws straight from its own frozen flick-
+            // sequence frame (changes every tick, individually short-lived
+            // — not worth caching). An IDLE entity — the common case while
+            // placing/rotating/moving, since nothing plays during Stop
+            // mode — draws from the pre-scaled cache instead of rescaling
+            // the full-resolution source every frame (see
+            // getScaledIdleFrame()'s own comment: a real, reported mobile
+            // performance issue).
+            let drawSource = null, drawW = size, drawH = size;
             if (entity.playing && entity.playSequenceFrozen) {
                 const hold = Math.round(cfg.peakHoldFrames);
                 const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, hold);
                 const virtualIndex = Math.min(entity.playFrameIndex, totalLen - 1);
-                img = entity.playSequenceFrozen[resolvePlaySequenceIndex(virtualIndex, DIRECTION_FRAME_COUNT, hold)];
+                const img = entity.playSequenceFrozen[resolvePlaySequenceIndex(virtualIndex, DIRECTION_FRAME_COUNT, hold)];
+                if (img && img.complete && img.naturalWidth > 0) {
+                    drawH = size * (img.naturalHeight / img.naturalWidth);
+                    drawSource = img;
+                }
             } else {
-                img = ensureDirectionLoaded(entity.directionKey).frames[0];
-            }
-
-            let drawW = size, drawH = size;
-            if (img && img.complete && img.naturalWidth > 0) {
-                drawH = size * (img.naturalHeight / img.naturalWidth);
+                const scaled = getScaledIdleFrame(entity.directionKey, size);
+                if (scaled) {
+                    drawW = scaled.drawW;
+                    drawH = scaled.drawH;
+                    drawSource = scaled.canvas;
+                }
             }
 
             const vb = visibleBoundsForDirection(entity.directionKey);
@@ -3306,8 +3374,8 @@
             // (dx,dy) is its TOP-LEFT corner, so -drawW*centerX/-drawH*bottomY
             // puts that exact visible-content point at the entity's own
             // origin.
-            if (img && img.complete && img.naturalWidth > 0) {
-                ctx.drawImage(img, -drawW * vb.centerX + xOffsetPx, -drawH * vb.bottomY, drawW, drawH);
+            if (drawSource) {
+                ctx.drawImage(drawSource, -drawW * vb.centerX + xOffsetPx, -drawH * vb.bottomY, drawW, drawH);
             }
             if (cfg.showHitbox) {
                 ctx.strokeStyle = '#ff3366';

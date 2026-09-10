@@ -64,7 +64,10 @@ Inside `index.html`'s single `<script>`, in roughly this order:
    Image preloading (only directions actually spawned/aimed-at get
    fetched), each frame wrapped in `loadImageWithRetry()` (up to 3 retries
    -- a real, reproduced `net::ERR_CONNECTION_RESET` class of failure
-   against this asset set under concurrent load).
+   against this asset set under concurrent load). `getScaledIdleFrame()`
+   (mobile perf, see its own GOTCHAS entry) caches a pre-scaled canvas of
+   each direction's frame 1, separate from `ensureDirectionLoaded()`'s own
+   raw-Image cache.
 5. **Angle/rotation math** (`mouseAngleFromCenter()`,
    `directionIndexForAngle()`, `angleLerp()`) -- 0=up, clockwise, verified
    against concrete geometric cases before trusting it.
@@ -396,3 +399,34 @@ GOTCHAS
   dragging, deleting) are mutually exclusive by construction, not just by
   convention. Adding a 4th stopped-mode interaction should reset the other
   3 the same way, or 2 modes' state can end up active at once.
+- **`effectiveDpr()` (capped at 2) MUST be used everywhere this file reads
+  the canvas's own pixel ratio -- never `window.devicePixelRatio` directly
+  a 2nd time.** A real, reported mobile performance complaint ("placing,
+  rotating, moving... very very laggy") traced to the canvas backing store
+  being sized off the RAW devicePixelRatio (up to 3 or higher on many
+  phones), which is 9x more pixels than DPR 1 for the same on-screen CSS
+  size (3x width * 3x height) -- every fillRect/drawImage this file does
+  fills into that whole buffer. `resizeCanvas()` and `update()`'s own
+  self-healing size-mismatch check BOTH call `effectiveDpr()` -- they must
+  agree, or the mismatch check would see a permanent "wrong size" against
+  an uncapped comparison and call `resizeCanvas()` (reallocating the
+  entire backing store) every single frame, a far worse perf problem than
+  the one this fixes.
+- **`getScaledIdleFrame(directionKey, size)` caches a pre-scaled canvas of
+  a direction's frame 1, keyed on `size`** (the one value shared by every
+  direction, since `cfg.entityScale` is global -- NOT drawH, which varies
+  per direction via that direction's own image aspect ratio). Used by
+  BOTH the main render loop's idle-entity draw and the live spawn/drag
+  preview draw -- exactly the 2 draw calls active while placing, rotating,
+  or moving an entity (Stop mode, where nothing is ever mid-flick), and
+  the other real half of the same reported mobile lag: `ctx.drawImage()`
+  scaling a full-resolution source (up to 2400x1181px) down to on-screen
+  size, every single frame, for every idle entity, is a real per-call
+  cost on weaker mobile GPUs. Deliberately NOT used for a mid-flick
+  PLAYING entity's own current frame -- those change every tick and are
+  individually short-lived, so caching all of them isn't worth the
+  memory; only frame 1 (the idle pose) is cached. If a future change adds
+  a 3rd place that draws a direction's idle frame at `size`, route it
+  through this same cache rather than a fresh `ctx.drawImage(img, ...)`
+  call, or that 3rd site reintroduces the exact cost this exists to
+  avoid.

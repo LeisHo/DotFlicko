@@ -494,6 +494,53 @@ Verified:
   in the new data, since it has no prior keyframe to fall back to.
 
 --------------------------------------------------------------------------------
+2026-09-10 (continued yet again) -- mobile performance: DPR cap + pre-scaled
+idle-sprite cache
+
+"i tested the app out on mobile and the placing, rotating, moving of the
+entities are very very laggy." No mobile hardware available to profile
+directly -- addressed with 2 well-established canvas performance
+practices rather than a single confirmed root cause.
+
+Fixed:
+- The canvas's own backing store was sized off the RAW
+  `window.devicePixelRatio` -- many phones report 3 or higher, making the
+  actual pixel buffer up to 9x larger than DPR 1 for the identical
+  on-screen CSS size (3x width * 3x height), with every fillRect/drawImage
+  this file does filling into that full buffer. Added `effectiveDpr()`
+  (caps at 2) and routed BOTH `resizeCanvas()` and `update()`'s own
+  self-healing size-mismatch check through it (they must agree, or the
+  mismatch check would call `resizeCanvas()` -- a full backing-store
+  reallocation -- every single frame).
+- Every idle (non-playing) entity, AND the live spawn/drag preview, drew
+  from the full-resolution source image (up to 2400x1181px per frame)
+  every single frame, letting the browser rescale it down to on-screen
+  size on every call -- exactly the 2 draw paths active while placing,
+  rotating, or moving an entity, since nothing plays mid-flick in Stop
+  mode. Added `getScaledIdleFrame(directionKey, size)`, caching one
+  already-correctly-sized offscreen canvas per direction (keyed on
+  `size`, the one value shared by every direction since `cfg.entityScale`
+  is global) and drawing from that instead -- a near-1:1 blit rather than
+  a scale-down on every frame. Deliberately NOT applied to a mid-flick
+  PLAYING entity's own current frame (individually short-lived, not worth
+  caching every one).
+
+Verified:
+- `effectiveDpr()` returns the correct capped value and the canvas's own
+  width/height match it exactly.
+- The idle-frame cache: 2 consecutive calls at the same `size` return the
+  identical cached object; changing `cfg.entityScale` correctly
+  invalidates and produces a new cached canvas.
+- Live: an entity rendered from the cache is visually correct (dots,
+  hitbox anchor unaffected), and dragging its end-point dot to rotate it
+  still works correctly against the cached sprite.
+- **NOT verified:** whether either fix actually resolves the reported lag
+  on real mobile hardware -- this environment has no way to profile real
+  mobile CPU/GPU performance, only to confirm the fixes are logically
+  correct. Flagged as an open item in PROJECT_PROGRESS.md for the user to
+  re-test on their own phone.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
