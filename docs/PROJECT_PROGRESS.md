@@ -89,6 +89,13 @@ new session should be aware they're there before touching `data/FLICK/`.
   DickoClicko's own established 3-tier implementation (Vercel/GitHub API
   → File System Access API → local download/session fallback) rather than
   localStorage only — see README.md for the Vercel env var setup.
+- Ball Max Speed (%vmin/s) dev-panel slider — a hard cap on the ball's own
+  speed, applied once per tick after every velocity change that tick
+  (gravity, wall bounce, the segment-reflection fix, the collision kick).
+- Small dev-panel polish: the "+ Add Group" button now matches Copy/
+  Reset/Save's own styling (it was an unstyled bare `<button>` before);
+  the `showAngleDebug` status text moved from y=12 to y=50 so it no
+  longer renders behind the Start/Stop/Delete buttons.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

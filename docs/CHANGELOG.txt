@@ -424,6 +424,39 @@ Verified:
   leaving the other one intact.
 
 --------------------------------------------------------------------------------
+2026-09-10 (continued yet again) -- Ball Max Speed slider, dev-panel polish
+
+3 small requests: "provide me a ball max speed slider"; "make the Add
+Group button look the same style as the Copy Reset Save buttons"; "remove
+the texxt behind the start stop delete buttons. not sure what that is."
+
+Added:
+- Ball Max Speed (%vmin/s) dev-panel slider (Ball group, default 300) --
+  a hard cap on the ball's own speed, applied ONCE per tick, AFTER every
+  velocity change that tick (gravity, wall bounce, the segment-reflection
+  fix, the collision kick), so it consistently caps the result regardless
+  of which source pushed the ball over, not just one of them.
+
+Fixed:
+- The "+ Add Group" button (all 3 device tabs) was a bare, unstyled
+  `<button>` -- wrapped each in the same `.dev-buttons` container Copy/
+  Reset/Save already use, so it now matches their exact look (accent
+  color, height, font, and respects the Capitalize Button Text setting)
+  instead of the browser's own default button style.
+- The `showAngleDebug` status text ("entities: N ... [running/stopped]")
+  rendered at a fixed (12,12) on the canvas -- directly behind the Start/
+  Stop/Delete buttons (`.sim-controls`, top:10px/left:10px), a real,
+  reported visual bug. Moved to (12,50), clear of the button row.
+
+Verified:
+- Ball Max Speed live: gave a test ball an extreme velocity (5000,5000)
+  well past any reasonable cap, ran one real step(), confirmed the
+  resulting speed exactly matched the configured cap (vmin-scaled).
+- Both dev-panel fixes via screenshot: "+ ADD GROUP" now renders identical
+  to COPY/RESET/SAVE; the debug status text renders cleanly below the
+  button row with no overlap at any of the states checked.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

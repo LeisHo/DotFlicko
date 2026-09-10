@@ -119,7 +119,11 @@ Inside `index.html`'s single `<script>`, in roughly this order:
    across every frame (1..DIRECTION_FRAME_COUNT) of the entity's own
    direction, not just its live pose, to drive the proximity auto-trigger
    -- looped over every entity independently, so a ball near entity A can
-   trigger A without touching B.
+   trigger A without touching B. `cfg.ballMaxSpeed` (%vmin/s) hard-caps the
+   ball's own speed once per tick, AFTER every velocity change that tick
+   (gravity, wall bounce, the segment-reflection fix, the collision kick)
+   -- checked last so it consistently caps the result regardless of which
+   source pushed it over, not just one of them.
 8. **Start/Stop** (`running`, `setRunning()`) -- gates ball spawning only
    (`updateBallAndCollision`'s respawn cycle runs `if (running)`; Stop's
    own handler also clears any ball on screen immediately). Boots stopped.

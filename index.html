@@ -386,7 +386,7 @@
         </div>
 
         <div id="desktopTabContent">
-            <button onclick="addDevGroup('desktop')" style="margin-bottom:10px;">+ Add Group</button>
+            <div class="dev-buttons"><button onclick="addDevGroup('desktop')">+ Add Group</button></div>
             <div class="dev-section">
                 <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Dev Panel">▼ Dev Panel</div>
                 <div class="dev-section-content"></div>
@@ -415,7 +415,7 @@
         </div>
 
         <div id="mobileTabContent" class="hidden">
-            <button onclick="addDevGroup('mobile')" style="margin-bottom:10px;">+ Add Group</button>
+            <div class="dev-buttons"><button onclick="addDevGroup('mobile')">+ Add Group</button></div>
             <div class="dev-section">
                 <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Dev Panel">▼ Dev Panel</div>
                 <div class="dev-section-content"></div>
@@ -423,7 +423,7 @@
         </div>
 
         <div id="landscapeTabContent" class="hidden">
-            <button onclick="addDevGroup('landscape')" style="margin-bottom:10px;">+ Add Group</button>
+            <div class="dev-buttons"><button onclick="addDevGroup('landscape')">+ Add Group</button></div>
             <div class="dev-section">
                 <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Dev Panel">▼ Dev Panel</div>
                 <div class="dev-section-content"></div>
@@ -1760,7 +1760,7 @@
         },
         rotationSmoothing: 1, positionSmoothing: 1, angleOffset: 180,
         backgroundColor: '#1b1f2a',
-        ballGravity: 80, ballRadius: 3, ballColor: '#ff5c5c', ballBounciness: 0.6, ballRespawnRate: 1,
+        ballGravity: 80, ballRadius: 3, ballColor: '#ff5c5c', ballBounciness: 0.6, ballRespawnRate: 1, ballMaxSpeed: 300,
         jointThickness: 4, thicknessSmoothing: 0.15, collisionIntensity: 1,
         showCenter: true, showAngleDebug: true, hideCursor: true, showHitbox: false, showJointCollisionLines: false,
     };
@@ -1799,6 +1799,7 @@
         { group: 'Ball', id: 'colorBall', type: 'color', label: 'Ball Color:', value: cfg.ballColor },
         { group: 'Ball', id: 'sliderBallBounciness', type: 'slider', label: 'Ball Bounciness (x):', min: 0, max: 1.5, step: 0.05, value: cfg.ballBounciness },
         { group: 'Ball', id: 'sliderBallRespawnRate', type: 'slider', label: 'Respawn Rate (s):', min: 0, max: 5, step: 0.1, value: cfg.ballRespawnRate },
+        { group: 'Ball', id: 'sliderBallMaxSpeed', type: 'slider', label: 'Max Speed (%vmin/s):', min: 20, max: 800, step: 10, value: cfg.ballMaxSpeed },
     ];
     // Joint collision is capsule-shaped (a thick LINE per segment —
     // knuckle→joint1, joint1→joint2, joint2→tip — not just 4 points),
@@ -1883,6 +1884,7 @@
         bindSlider('sliderBallRadius', 'ballRadius');
         bindSlider('sliderBallBounciness', 'ballBounciness');
         bindSlider('sliderBallRespawnRate', 'ballRespawnRate');
+        bindSlider('sliderBallMaxSpeed', 'ballMaxSpeed');
         bindSlider('sliderJointThickness', 'jointThickness');
         bindSlider('sliderThicknessSmoothing', 'thicknessSmoothing');
         bindSlider('sliderCollisionIntensity', 'collisionIntensity');
@@ -2659,6 +2661,40 @@
                         // further through than the real first contact.
                         ball.x = cp.c1x + nx * overlap;
                         ball.y = cp.c1y + ny * overlap;
+
+                        // Reflect the ball's OWN incoming velocity off this
+                        // segment's normal — same physics the wall bounce
+                        // already applies (`vx = -vx * bounciness`), just
+                        // generalized to an arbitrary normal direction
+                        // instead of a fixed horizontal/vertical axis. This
+                        // was the actual missing piece behind a direct
+                        // report ("sometimes... the ball gets stuck to the
+                        // hand" at high speed/certain angles): without it,
+                        // only the segment's OWN motion could ever push the
+                        // ball away (the kick below) — a fast ball hitting a
+                        // momentarily slow-moving segment had its position
+                        // corrected every tick but its own velocity left
+                        // completely untouched, so gravity/momentum drove it
+                        // right back into the same spot next tick,
+                        // indefinitely. Standard velocity-reflection formula
+                        // (v' = v - (1+e)(v·n)n), only applied while the
+                        // ball is actually moving INTO the surface
+                        // (incomingDotNormal < 0) — a ball already moving
+                        // away (e.g. just kicked out by a previous segment
+                        // this same tick) isn't reflected a second time.
+                        // Reuses Ball Bounciness rather than a new slider —
+                        // the same "how much of the ball's own energy
+                        // survives a bounce" concept the wall collision
+                        // already uses. The segment-motion kick (still
+                        // added on top afterward, unchanged) is a separate,
+                        // additional impulse from the flick itself, not a
+                        // substitute for this reflection.
+                        const incomingDotNormal = ball.vx * nx + ball.vy * ny;
+                        if (incomingDotNormal < 0) {
+                            const reflectScale = (1 + cfg.ballBounciness) * incomingDotNormal;
+                            ball.vx -= reflectScale * nx;
+                            ball.vy -= reflectScale * ny;
+                        }
                         ball.vx += nx * speed * cfg.collisionIntensity;
                         ball.vy += ny * speed * cfg.collisionIntensity;
                     });
@@ -2679,6 +2715,22 @@
                 if (inTriggerZone && !entity.wasInFlickTriggerZone && !entity.playing) triggerFlick(entity);
                 entity.wasInFlickTriggerZone = inTriggerZone;
             });
+
+            // Ball Max Speed — a hard cap on the ball's own speed, applied
+            // ONCE per tick after every velocity change above (gravity,
+            // wall bounce, the segment-reflection fix, AND the collision
+            // kick) so it consistently caps the result regardless of which
+            // of those pushed it over, rather than only capping one source.
+            // Scales with vmin like every other ball quantity in this file
+            // (ballGravity/ballRadius) so it stays proportionally correct
+            // across viewport sizes.
+            const maxSpeedPx = vmin * (cfg.ballMaxSpeed / 100);
+            const speedSq = ball.vx * ball.vx + ball.vy * ball.vy;
+            if (speedSq > maxSpeedPx * maxSpeedPx) {
+                const scale = maxSpeedPx / Math.sqrt(speedSq);
+                ball.vx *= scale;
+                ball.vy *= scale;
+            }
 
             // Fully below the bottom edge — gone, start the respawn timer.
             if (ball.y - radiusPx > h) {
@@ -3341,7 +3393,12 @@
             ctx.font = '14px monospace';
             ctx.textBaseline = 'top';
             const playingCount = entities.filter(en => en.playing).length;
-            ctx.fillText(`entities: ${entities.length}${playingCount ? `  (${playingCount} playing)` : ''}${pendingSpawnStart ? '  (placing...)' : ''}${draggingEntity ? '  (adjusting...)' : ''}${deleteMode ? '  (delete mode)' : ''}  [${running ? 'running' : 'stopped'}]`, 12, 12);
+            // y=50, not 12 — the Start/Stop/Delete buttons (.sim-controls)
+            // sit at top:10px/left:10px and are tall enough to overlap a
+            // y=12 baseline; a real user report ("remove the text behind
+            // the start stop delete buttons") confirmed this was actually
+            // happening, not just a theoretical overlap.
+            ctx.fillText(`entities: ${entities.length}${playingCount ? `  (${playingCount} playing)` : ''}${pendingSpawnStart ? '  (placing...)' : ''}${draggingEntity ? '  (adjusting...)' : ''}${deleteMode ? '  (delete mode)' : ''}  [${running ? 'running' : 'stopped'}]`, 12, 50);
             ctx.restore();
         }
     }
