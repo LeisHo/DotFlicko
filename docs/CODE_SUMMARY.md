@@ -11,8 +11,8 @@ of how it got here.
 --------------------------------------------------------------------------------
 FILE MAP
 
-- `index.html` -- the entire app (~2900 lines as of 2026-09-10). One
-  `<canvas id="scene">` for the animation, always-visible Start/Stop
+- `index.html` -- the entire app (~3100 lines as of 2026-09-10). One
+  `<canvas id="scene">` for the animation, always-visible Start/Stop/Delete
   buttons (`.sim-controls`, top-left, independent of the dev panel), one
   `<div id="devPanel">` (built from the workspace's TEMPLATE_DEV_PANEL.html
   engine, §12) for the dev panel, one inline `<script>` for everything
@@ -69,18 +69,28 @@ Inside `index.html`'s single `<script>`, in roughly this order:
    drag target as the point being aimed at), not just the original mouse-
    to-viewport-center case it was built for.
 6. **Entities** (`entities` array, `spawnEntityFromLine()`,
-   `hitTestEntityDot()`) -- the animation is invisible until placed. A
-   2-click gesture (canvas `pointerdown`) spawns a new entity: 1st click
-   sets its fixed anchor (`x`,`y`); 2nd click sets its aim point
-   (`endX`,`endY`, kept around permanently, not just baked into
-   `rotationRad`, specifically so Stop mode has a real point to render/
-   drag a handle at -- see #9) and derives `directionKey`/`rotationRad`
-   from the line's angle via #5's math. Each entity then tracks its own
-   play/collision/trigger state completely independently (`playing`,
+   `hitTestEntityDot()`, `hitTestEntitySprite()`, `entityRotationRad()`) --
+   the animation is invisible until placed. A 2-click gesture (canvas
+   `pointerdown`) spawns a new entity: 1st click sets its fixed anchor
+   (`x`,`y`); 2nd click sets its aim point (`endX`,`endY`, kept around
+   permanently -- Stop mode's adjustment dots render/drag a real handle at
+   it, AND it's the live source `entityRotationRad(entity)` recomputes
+   rotation from every time it's needed, NOT a value frozen at spawn time)
+   and derives `directionKey` from the line's angle via #5's math.
+   `entityRotationRad(entity)` = `mouseAngleFromCenter(endX,endY,x,y) +
+   cfg.entityRotationOffsetByDirection[directionKey]`, recomputed on every
+   render/collision call rather than stored -- this is what makes moving
+   the Hand Rotation Offset dev-panel slider immediately rotate every
+   already-placed entity of that direction, per explicit request; no
+   entity ever stores its own `rotationRad`. Each entity then tracks its
+   own play/collision/trigger state completely independently (`playing`,
    `playFrameIndex`, `wasInFlickTriggerZone`, `jointWorld`, etc.) -- no
    entity's state is ever shared with another's. Manual click-to-flick is
    retired entirely; the ball-proximity auto-trigger (#7) is the only way
-   any entity's flick sequence starts.
+   any entity's flick sequence starts. `hitTestEntitySprite()` (Delete
+   mode, #9) is a separate, broader hit-test against an entity's own drawn
+   bounding box (the same rectangle Show Hitbox draws), distinct from
+   `hitTestEntityDot()`'s tiny anchor-point radius used for dragging.
 7. **Ball + collision** (`spawnBall()`, `updateBallAndCollision()`,
    `ballInFlickTriggerZone()`) -- gravity-driven ball, SWEPT capsule
    collision (`closestPointsBetweenSegments()`, a standard
@@ -108,33 +118,44 @@ Inside `index.html`'s single `<script>`, in roughly this order:
    2-click spawn gesture, only when no spawn is already pending) starts a
    drag; the shared `pointermove` listener does the actual dragging:
    dragging the base dot translates `x,y` AND `endX,endY` by the same
-   delta (rotation/direction untouched -- "move"); dragging the end dot
-   holds `x,y` fixed and recomputes `rotationRad`/`directionKey` from the
-   new `endX,endY` via the exact same formula `spawnEntityFromLine()` uses
-   ("rotate"), including a direction-key switch (and preloading its
-   frames) if the drag crosses a 45-degree sector boundary. Gated to Stop
-   mode the same way spawn-placement is (`pointerdown` returns immediately
-   `if (running)`).
-10. **Fixed-timestep loop** (`step(dt)`, `update(now)`) -- `step()` always
+   delta (rotation/direction untouched, since `entityRotationRad()` only
+   depends on the RELATIVE endX/endY-to-x/y geometry -- "move"); dragging
+   the end dot holds `x,y` fixed and only updates `directionKey` if the
+   drag crosses a 45-degree sector boundary (and preloads that direction's
+   frames) -- rotation itself needs no explicit update at all, since
+   `entityRotationRad()` recomputes it live from the now-updated
+   `endX,endY` on the very next read ("rotate"). Gated to Stop mode the
+   same way spawn-placement is (`pointerdown` returns immediately `if
+   (running)`).
+10. **Delete mode** (`deleteMode`, `setDeleteMode()`, `hitTestEntitySprite()`)
+    -- a 3rd always-visible sim-control button, mutually exclusive with
+    placement/dragging (turning it on clears any in-progress
+    `pendingSpawnStart`/`draggingEntity`), gated to Stop mode the same way.
+    `pointerdown` checks `deleteMode` FIRST, before the spawn/drag logic:
+    a hit removes that entity from `entities` via `.filter()`; a miss does
+    nothing (stays in delete mode, doesn't fall through to start a spawn).
+11. **Fixed-timestep loop** (`step(dt)`, `update(now)`) -- `step()` always
     advances by exactly `FIXED_DT` (1/60s); `update()` runs once per real
     animation frame, accumulates real elapsed time, and runs `step()` 0-N
     times to catch up. `render()` runs once per real frame using whichever
     step's output was most recently produced.
-11. **Migration** (`pruneStaleDevPanelGroups()`) -- runs once after
+12. **Migration** (`pruneStaleDevPanelGroups()`) -- runs once after
     `initDevPanelEngine()`, cleans up dev-panel groups from earlier code
     revisions that a browser's saved localStorage might still reference.
 
 Data flow: a 2-click gesture (or, in Stop mode, a dot drag) creates/adjusts
-an entity's own x/y/endX/endY/rotationRad/directionKey -> `step()` advances
-each entity's own play-sequence clock and calls `updateBallAndCollision()`
--> ball physics reads every entity's current rotation + a skeleton pose,
-independently -> `render()` draws everything (entities, live spawn/drag
-preview, Stop-mode dots, ball) from the latest step's output. The dev panel
-writes directly into `cfg`/the rotation-offset map via its own 'input'/
-'change' listeners, read by `step()`/`render()` every tick -- no separate
-"apply settings" step. Start/Stop and entity placement/dragging are plain
-DOM event handlers updating `running`/`entities` directly, same "no apply
-step" pattern.
+an entity's own x/y/endX/endY/directionKey -> `step()` advances each
+entity's own play-sequence clock and calls `updateBallAndCollision()` ->
+ball physics reads every entity's current LIVE rotation (`entityRotationRad()`,
+recomputed from endX/endY + the CURRENT cfg offset, never a stored/frozen
+value) + a skeleton pose, independently -> `render()` draws everything
+(entities, live spawn/drag preview, Stop-mode dots, ball) from the latest
+step's output. The dev panel writes directly into `cfg`/the rotation-offset
+map via its own 'input'/'change' listeners, read by `step()`/`render()`
+every tick -- no separate "apply settings" step, and (per `entityRotationRad()`)
+no separate "re-apply to existing entities" step either. Start/Stop, Delete
+mode, and entity placement/dragging are plain DOM event handlers updating
+`running`/`deleteMode`/`entities` directly, same "no apply step" pattern.
 
 --------------------------------------------------------------------------------
 UNTOUCHABLE SYSTEMS
@@ -192,52 +213,67 @@ GOTCHAS
   Mobile/Landscape rows without first building real touch support.
 - An entity's anchor is the bottom-center of its frame's actual VISIBLE
   (non-transparent) content, NOT the raw PNG's own bottom-center --
-  `computeVisibleContentBounds()` (a one-time-per-direction alpha-channel
-  scan, alpha>10 counts as visible, cached in `visibleBoundsCache`) finds
-  the real box; `localOffsetFromNormalized()` takes that box's
-  `centerX`/`bottomY` (defaulting to 0.5/1 if not yet cached) and must stay
-  threaded through all 4 of its call sites in lockstep (`render()`'s main
-  draw, `render()`'s live spawn/drag preview draw, `ballInFlickTriggerZone`,
-  `updateBallAndCollision`'s per-entity joint transform) -- editing the
-  anchor formula in only some of them desyncs the drawn sprite from its own
-  collision geometry.
-- **`computeVisibleContentBounds()` MUST scan a downscaled copy of the
-  image, never the full-resolution source.** A full-res scan (up to
-  2400x1181px) measured at 36-83ms per direction is fine as a one-time,
-  rare cost -- but the live spawn/drag preview (render(), every frame)
-  calls `visibleBoundsForDirection()` for whichever direction the mouse
-  currently points toward, and sweeping across several direction sectors
-  while aiming chains multiple fresh per-direction scans together into a
-  real, reported page freeze. Fixed by scanning into an offscreen canvas
-  downscaled first -- don't remove this downscale step; the previous
-  full-res version is a proven, reproduced freeze.
-- **`MAX_SCAN_DIM` is 400, not the original 200 -- don't lower it without
-  re-measuring.** 200 fixed the freeze but was later found (a real user
-  report: "still isn't in the base of the visible portion") to trade away
-  more accuracy than assumed: downscaling blends the anti-aliased edge
-  into a wider apparent footprint, measured at up to 0.0065 of image
-  height (~2-4px at typical entityScale) off from a full-resolution scan's
-  own bottomY on the worst-observed direction. At 400 that same error
-  drops to 0.0018 (sub-1px) while the scan itself still measures only
-  ~1.2ms (vs 200's ~0.6ms, full-res's own ~33ms, and 800's ~21ms -- 800
-  was measured and rejected, most of the original freeze's own budget
-  back). Any future retune of this constant should re-measure both the
-  error (compare against a temporary full-res reference scan) and the
-  timing (`performance.now()` around the scan) before picking a value --
-  don't guess.
+  `VISIBLE_BOUNDS_BY_DIRECTION` (a STATIC, precomputed-offline table, one
+  `{centerX,bottomY}` entry per direction) supplies the numbers;
+  `visibleBoundsForDirection()` is a plain synchronous lookup into it (with
+  a 0.5/1 fallback for an unlisted direction key). `localOffsetFromNormalized()`
+  takes that box's `centerX`/`bottomY` and must stay threaded through all 4
+  of its call sites in lockstep (`render()`'s main draw, `render()`'s live
+  spawn/drag preview draw, `ballInFlickTriggerZone`, `updateBallAndCollision`'s
+  per-entity joint transform) -- editing the anchor formula in only some of
+  them desyncs the drawn sprite from its own collision geometry.
+- **This anchor used to be computed with a LIVE runtime canvas scan
+  (`computeVisibleContentBounds()`/`visibleBoundsCache`/`MAX_SCAN_DIM`) --
+  removed entirely, don't reintroduce it.** That approach went through 2
+  full rounds of real, reported bugs: a full-resolution scan (2400x1181px,
+  ~37-83ms) run from the live spawn/drag preview froze the page on first
+  placement (sweeping across several newly-encountered directions in one
+  gesture chained multiple such scans past a frame's budget); downscaling
+  the scan to fix that (200px, later retuned to 400px) fixed the freeze but
+  permanently traded away real accuracy (downscaling blends the anti-
+  aliased edge into a wider apparent footprint -- measured up to 0.0065 of
+  image height off from a full-resolution scan on the worst direction); and
+  a defensive try/catch (added as hardening against a theoretical canvas-
+  taint SecurityError for a locally-opened file:// page) could silently
+  swallow ANY scan failure with only a `console.warn` and fall back to the
+  OLD raw-PNG default (0.5/1) -- meaning a real failure in that exact class
+  of environment would make the first 2 fixes completely irrelevant, since
+  the scan would never even run. A user report ("still not at the base of
+  the hand... regardless of scale") is what surfaced this 3rd, deeper
+  problem. The static table eliminates all 3 failure modes at once: no
+  runtime scan, so no freeze risk, no downscale accuracy tradeoff, and no
+  environment-dependent canvas/getImageData failure mode.
+- **To regenerate `VISIBLE_BOUNDS_BY_DIRECTION`** (e.g. after replacing a
+  direction's frame 1 art): run the Node+`sharp` one-liner in the comment
+  directly above the table in `index.html` against the new PNG, at FULL
+  resolution (no downscaling needed -- this is now an offline, one-time
+  computation, not a runtime cost) -- `sharp` is already present in this
+  project's own `node_modules` (used for this exact purpose), no install
+  needed. Don't hand-guess a replacement value.
 - Entities keep their own `endX`/`endY` (the original 2nd click) as real,
-  permanent fields, not just a value baked once into `rotationRad` and
-  discarded -- Stop mode's 2 draggable adjustment dots need an actual
-  point to render/hit-test/drag the "end" handle at. Any code that spawns
-  or clones an entity must set both `endX`/`endY` alongside `rotationRad`/
-  `directionKey`, or the end dot will render at `undefined,undefined`.
+  permanent fields -- NOT just used once to derive a rotation and then
+  discarded. They serve 2 purposes: Stop mode's 2 draggable adjustment
+  dots need an actual point to render/hit-test/drag the "end" handle at,
+  AND `entityRotationRad(entity)` recomputes rotation from them fresh on
+  every call (see the ARCHITECTURE section's #6) -- an entity has NO
+  `rotationRad` field at all any more. Any code that spawns or clones an
+  entity must set `endX`/`endY` alongside `x`/`y`/`directionKey`, or
+  `entityRotationRad()` will throw/misbehave on `undefined` coordinates.
+- `entityRotationRad(entity)` is a plain function call, not a cached/
+  stored value -- called fresh every time rotation is needed (render's
+  rotate, updateBallAndCollision's cos/sin, the trigger-zone check). This
+  is deliberate: it's what makes moving the Hand Rotation Offset dev-panel
+  slider immediately rotate every already-placed entity of that direction
+  (a real, explicit request) with zero extra bookkeeping -- don't
+  "optimize" this back into a cached field without re-solving that
+  requirement some other way.
 - Dragging an entity's END dot (Stop-mode adjustment) intentionally does
   NOT need any velocity-discontinuity handling for a direction-key switch,
   even though `updateBallAndCollision`'s joint-velocity smoothing normally
   cares about exactly that kind of jump. Confirmed by reading that
   function's own joint computation first: `jointLocal` (what velocity is
   actually differenced from) depends only on `directionKey`/`entityScale`,
-  never on `rotationRad`/`x`/`y` -- so a BASE-dot drag (pure translation)
+  never on rotation/`x`/`y` -- so a BASE-dot drag (pure translation)
   never touches `jointLocal` at all, and an END-dot drag only risks a
   single-tick velocity spike on an actual sector-crossing direction
   change, which is harmless since Stop mode (where dragging happens) never
@@ -264,19 +300,13 @@ GOTCHAS
   over between reloads via the live DOM, not localStorage. Test dev-panel-
   adjacent changes against a genuinely fresh load (`localStorage.clear()`
   + reload), not just an already-configured tab.
-- `visibleBoundsForDirection()`'s call into `computeVisibleContentBounds()`
-  is wrapped in try/catch, falling back to (and caching) the same 0.5/1
-  default used elsewhere in that function on any throw. This is
-  precautionary, not a confirmed-necessary fix for any specific bug --
-  `render()` (the only real caller, via the live preview and the main
-  entity draw) runs inside `requestAnimationFrame` with no try/catch of
-  its own above this point, so an uncaught throw here (e.g. a possible
-  canvas-taint `SecurityError` on some browsers for a `file://`-opened
-  page) would silently kill the entire render loop after the first
-  placement attempt -- visually indistinguishable from a true freeze.
-  Keep this wrapped; don't remove it as "unnecessary" without confirming
-  first that no browser/environment this project targets can ever throw
-  from that `getImageData()` call.
+- (SUPERSEDED -- kept as a pointer, not a live gotcha) `visibleBoundsForDirection()`
+  used to wrap a runtime `computeVisibleContentBounds()` scan in try/catch
+  as a defensive measure against a possible canvas-taint `SecurityError`.
+  That whole mechanism (scan, cache, try/catch) is now REMOVED -- see the
+  "used to be computed with a LIVE runtime canvas scan" gotcha above.
+  `visibleBoundsForDirection()` is now a plain table lookup that cannot
+  throw at all, so this specific concern no longer applies.
 - `cfg.entityXOffsetByDirection` (Animation X Offset, %vmin, per direction,
   default 0) is a manual correction for sprites that aren't visually
   centered on their own placement line -- it's a LOCAL-x shift added
@@ -291,3 +321,18 @@ GOTCHAS
   the real clicked anchor/aim points, so the Stop-mode adjustment dots
   never move because of this setting, only the rendered sprite/collision
   geometry does.
+- `hitTestEntitySprite()` (Delete mode) transforms a click point into an
+  entity's own LOCAL unrotated space (rotate by `-entityRotationRad(entity)`,
+  the inverse of the render/collision transform) and tests it against the
+  SAME bounding rectangle Show Hitbox draws -- deliberately NOT the same
+  hit-test as `hitTestEntityDot()` (a small fixed-radius circle around just
+  the base/end points, used for dragging). Delete mode needs "click
+  anywhere on the entity," dragging needs "click exactly on one of its 2
+  handles" -- don't merge these into one hit-test function, they answer
+  genuinely different questions.
+- Toggling Delete mode on (`setDeleteMode(true)`) clears any in-progress
+  `pendingSpawnStart`/`draggingEntity`/`draggingPoint`, and `setRunning(true)`
+  (Start) forces Delete mode off -- the 3 interaction modes (placing,
+  dragging, deleting) are mutually exclusive by construction, not just by
+  convention. Adding a 4th stopped-mode interaction should reset the other
+  3 the same way, or 2 modes' state can end up active at once.

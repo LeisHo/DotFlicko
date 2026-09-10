@@ -18,82 +18,77 @@ work seamlessly from there.
 
 ## Currently working on
 
-Nothing in progress from this session. Latest round of changes (spawn-
-placement architecture rework, anchor-point refinements, swept collision,
-live spawn preview, the visible-content-scan freeze fix, and Start/Stop +
-draggable adjustment dots) all live on the `spawn-placement-mode` branch,
-uncommitted — not merged/pushed to `master` yet.
+Nothing in progress from this session. The spawn-placement rework (started
+on a `spawn-placement-mode` branch) is complete, merged into `main`, and
+pushed to `origin/main` (commit `3be0ac4`).
 
 **Note for a new session:** a *different*, concurrent Claude session has
 also been actively developing this same `index.html` (the ball/collision
 physics system and the skeleton-annotation tool) throughout this project's
 history so far — check `git log`/`git status` before assuming this doc, or
-any in-progress understanding of the file, is still current.
+any in-progress understanding of the file, is still current. As of this
+update, that other session also has ~552 uncommitted working-tree changes
+(a rename/re-export of the SCISS/SNAP variant PNG asset sets) sitting
+alongside this session's own commits — untouched by this session's commits
+(verified: staged and committed only this session's own 4 files), but a
+new session should be aware they're there before touching `data/FLICK/`.
 
 ## Recently completed
 
-On `spawn-placement-mode` (uncommitted):
 - Reworked from a single mouse-anchored entity to a spawn-and-place model:
   the animation is invisible until placed; a 2-click gesture (1st = anchor
   point, 2nd = aim point) spawns a new, independently-tracked entity along
   that line; multiple entities can be placed at any angle; manual click-to-
   flick was retired (the ball-proximity trigger, generalized per-entity, is
-  now the only way any entity's flick fires).
-- Entity anchor point iterated twice: first to the raw PNG's own bottom-
-  center (from the old centroid), then to the bottom-center of the frame's
-  actual VISIBLE (non-transparent) content, via a one-time-per-direction
-  alpha-channel scan (`computeVisibleContentBounds`) — real, non-trivial
-  padding existed in the raw PNGs (e.g. 'front': centerX 0.4765, bottomY
-  0.9145, not 0.5/1.0).
+  now the only way any entity's flick fires). A live drag preview shows the
+  actual sprite, at the real angle/direction, while aiming.
+- Entity anchor point (bottom-center of each direction's actual VISIBLE,
+  non-transparent content, not the raw PNG's own bottom-center) is now a
+  precomputed static table (`VISIBLE_BOUNDS_BY_DIRECTION`), not a runtime
+  scan — the runtime-scan approach went through 2 rounds of real bugs (a
+  freeze, then an accuracy tradeoff from the freeze's own downscale fix,
+  then a 3rd report tracing back to a defensive try/catch silently masking
+  scan failures) before landing here; see `CHANGELOG.txt` for the full
+  history. The table is regenerated offline with Node + `sharp` (already
+  in this project's `node_modules`) directly against the source PNGs.
 - Swept (segment-vs-segment) ball collision, replacing a point-only test —
   fixes a fast ball tunneling clean through the hand between 2 physics
-  ticks. Live drag preview: the actual sprite, at the real angle/direction,
-  renders translucently while aiming, before the 2nd click commits it.
-- Fixed a freeze-on-first-click regression the visible-content scan itself
-  introduced: the scan ran at full image resolution (36-83ms/direction)
-  and the live preview called it every frame while sweeping across
-  direction sectors — fixed by scanning a downscaled copy instead. The
-  downscale dimension was later retuned from 200px to 400px after a
-  follow-up accuracy report ("still isn't in the base of the visible
-  portion") turned out to be a real, measured downscale error (~2-4px at
-  200px on the worst direction) — 400px cuts that to sub-1px while still
-  costing only ~1.2ms, nowhere near freeze territory.
-- Fixed a second, unrelated "still freezes" report: the dev panel had no
-  default-hidden state, so a genuinely fresh page load (no saved
-  localStorage) rendered it wide open over most of the viewport —
-  placement clicks landed on the panel instead of the canvas, looking
-  exactly like a hang. Now boots hidden by default. Also added a
-  defensive try/catch around the visible-content scan as precautionary
-  hardening (not the confirmed cause of this report).
-- Start/Stop buttons (always-visible, top-left, independent of the dev
-  panel): Start lets balls spawn/fall, Stop halts that and clears the ball
-  on screen immediately. Entity placement is gated to Stop mode only. In
-  Stop mode, every entity shows 2 draggable dots (base = fixed anchor, end
-  = aim point) — dragging the base dot moves the entity, dragging the end
-  dot rotates it in place, both reusing the same angle/direction math the
-  original 2-click spawn gesture uses.
+  ticks.
+- Start/Stop/Delete buttons (always-visible, top-left, independent of the
+  dev panel): Start lets balls spawn/fall, Stop halts that and clears the
+  ball on screen immediately. Entity placement, dragging, and deletion are
+  all gated to Stop mode, and mutually exclusive with each other. In Stop
+  mode, every entity shows 2 draggable dots (base = fixed anchor, end =
+  aim point) — dragging the base dot moves the entity, dragging the end
+  dot rotates it in place; Delete mode lets a click on any placed entity's
+  own sprite remove it.
+- Hand Rotation Offset is now LIVE: moving its dev-panel slider immediately
+  rotates every already-placed entity of that direction (rotation is
+  recomputed from each entity's own fixed aim point + the current offset
+  every frame, never stored/frozen).
 - Animation X Offset: a 2nd compound dropdown+slider dev-panel row (mirrors
   Hand Rotation Offset's own architecture) letting each direction's sprite/
   collision placement be manually shifted perpendicular to its own
   placement line (%vmin, defaults 0) — a manual fix for directions that
-  aren't visually centered. Hand Rotation Offset defaults were also
-  re-baked to a newly-tuned set in the same pass.
+  aren't visually centered.
+- Hand Rotation Offset and Animation X Offset defaults re-baked to tuned
+  sets from pasted Copy Settings dumps (twice, as tuning continued);
+  `angleOffset` default set to 180.
 
-Earlier, committed and pushed (`3517a52`, pre-spawn-placement-mode):
-mouse-follow entity with center-pointing rotation and 8-direction angle
-bucketing; per-direction Hand Rotation Offset; top-edge ball collision
-(except the ball's initial off-screen fall-in); the original (non-swept)
-ball-proximity flick auto-trigger; the fixed-1/60s-timestep physics
-conversion (fixes non-deterministic ball trajectories from a static mouse
-position); a self-healing canvas-resize check (also the likely fix for an
-earlier "Hide OS Cursor doesn't work" report).
+Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
+with center-pointing rotation and 8-direction angle bucketing; per-
+direction Hand Rotation Offset (the original, non-live version); top-edge
+ball collision (except the ball's initial off-screen fall-in); the
+original (non-swept) ball-proximity flick auto-trigger; the fixed-1/60s-
+timestep physics conversion; a self-healing canvas-resize check.
 
 ## What's next
 
-No specific next action is currently queued by the user. `spawn-placement-
-mode` is uncommitted and not yet merged to `master` — ask before merging/
-pushing. Candidates not yet requested: wiring the SCISS/SNAP animation
-variant sets into direction selection; touch/mobile input support.
+No specific next action is currently queued by the user. Candidates not
+yet requested: wiring the SCISS/SNAP animation variant sets into direction
+selection (note: another session appears to be actively re-exporting those
+exact assets right now, per the note above — coordinate before starting
+this); touch/mobile input support.
 
 ## Open questions / blockers
 

@@ -265,6 +265,88 @@ Verified:
   resetting test state confirmed no regression of the freeze fix.
 
 --------------------------------------------------------------------------------
+2026-09-10 (continued yet again) -- merged spawn-placement-mode into main,
+pushed to origin/main as commit 3be0ac4
+
+5 requests handled in one turn, several arriving mid-turn: a 3rd report
+against the visible-content anchor ("still not at the base of the hand...
+regardless of scale"), live Hand Rotation Offset for already-placed
+entities, 2 more rounds of dev-panel default bakes, an angleOffset change,
+and a new Delete mode. Session then merged and pushed the branch to main
+per explicit request ("Then you can push as main").
+
+Added:
+- Live Hand Rotation Offset: moving the dev-panel slider for a direction
+  now immediately rotates every already-placed entity of that direction.
+  Entities no longer store a `rotationRad` field at all -- a new
+  `entityRotationRad(entity)` recomputes it from the entity's own
+  permanent `endX`/`endY` plus the CURRENT cfg offset every time it's
+  needed (render, collision, the trigger-zone check), rather than a value
+  frozen at spawn/drag time.
+- Delete mode: a 3rd always-visible sim-control button. While active, a
+  click on any placed entity's own sprite (a proper point-in-rotated-
+  rectangle test against the same box Show Hitbox draws, not just the
+  small anchor-dot radius used for dragging) removes it. Mutually
+  exclusive with placement and dragging, gated to Stop mode the same way.
+- `cfg.angleOffset` default changed to 180.
+- 2 more rounds of Hand Rotation Offset / Animation X Offset default bakes
+  from pasted Copy Settings dumps, continuing the tuning process.
+
+Fixed:
+- The visible-content anchor's real, root cause -- not another retune of
+  the runtime scan's downscale dimension. Traced the "still not at the
+  base of the hand... regardless of scale" report back to the defensive
+  try/catch added during the earlier freeze fix: it could silently
+  swallow ANY scan failure (with only a console.warn) and fall back to
+  the OLD raw-PNG default, meaning neither the freeze fix's downscale nor
+  its later accuracy retune could ever have mattered if that exception
+  were firing in the user's real environment. Eliminated the entire
+  runtime-scan failure surface instead of chasing it further: computed
+  all 8 directions' visible-content bounds OFFLINE via a one-off Node
+  script using the `sharp` package (already present in node_modules)
+  directly against the source PNGs on disk, and baked the results as a
+  static `VISIBLE_BOUNDS_BY_DIRECTION` lookup table -- deleting
+  `computeVisibleContentBounds`/`visibleBoundsCache`/`MAX_SCAN_DIM`/the
+  try-catch entirely. `visibleBoundsForDirection()` is now a synchronous
+  table lookup with no image loading, no canvas, no getImageData, and
+  therefore no way for any version of this failure mode to recur. The
+  Node-measured values matched this session's own earlier in-browser
+  full-resolution measurements to 4 decimal places on 7 of 8 directions.
+
+Verified:
+- The new static bounds table at 2 different entityScale values (87, 150)
+  via a real rendered-canvas pixel readback, confirming the sprite's own
+  true bottom edge lands within 1px of the anchor at both (a small
+  discrepancy at an extreme small scale, 40, was separately attributed to
+  the canvas's own image-smoothing/downscale blending at that render
+  size, not the bounds data, which was independently corroborated correct
+  via the Node measurement).
+- The live rotation-offset link via direct before/after inspection of
+  `entityRotationRad()` around a simulated slider change (0deg -> 45deg)
+  on an already-existing entity, with no respawn.
+- Delete mode end-to-end: the button toggles to a visibly active state, a
+  click on a placed entity's own sprite removes it, toggling Delete back
+  off and placing a fresh entity via the normal 2-click gesture
+  immediately afterward worked with no interference between the 3
+  mutually-exclusive Stop-mode interaction modes.
+- The new dev-panel defaults via direct cfg inspection after a fresh load.
+
+Merged/Pushed:
+- Committed only this session's own 4 changed files (index.html,
+  docs/CHANGELOG.txt, docs/CODE_SUMMARY.md, docs/PROJECT_PROGRESS.md) --
+  explicitly NOT the ~552 other uncommitted working-tree changes present
+  at the time (a rename/re-export of the SCISS/SNAP variant PNG asset
+  sets, evidently another concurrent session's own in-progress work,
+  confirmed untouched before and after via `git status`/`git diff --stat`
+  on the exact file list staged). Discovered along the way: this repo's
+  local `master` branch is stale leftover DickoClicko history unrelated
+  to this project and was NOT used -- the real integration branch is
+  `main`, which tracks `origin/main` (https://github.com/LeisHo/DotFlicko.git)
+  and was at the same commit `spawn-placement-mode` had branched from, so
+  merging was a clean fast-forward. Pushed `main` to `origin/main`
+  (1cb92c5..3be0ac4).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
