@@ -10,11 +10,12 @@
     "sliderBallGravity": 80,
     "sliderBallRadius": 3,
     "colorBall": "#ff5c5c",
-    "sliderBallBounciness": 0.45,
+    "sliderBallBounciness": 0.2,
     "sliderBallRespawnRate": 0.8,
-    "sliderJointThickness": 2.6,
-    "sliderThicknessSmoothing": 0.89,
-    "sliderCollisionIntensity": 0.7,
+    "sliderBallMaxSpeed": 110,
+    "sliderJointThickness": 2,
+    "sliderThicknessSmoothing": 0.36,
+    "sliderCollisionIntensity": 0.2,
     "checkboxShowJointCollisionLines": true,
     "checkboxShowCenter": true,
     "checkboxShowAngleDebug": true,
@@ -168,6 +169,7 @@
       {
         "key": "desktop:Ball",
         "rowKeys": [
+          "sliderBallMaxSpeed",
           "sliderBallGravity",
           "sliderBallRadius",
           "colorBall",
@@ -233,7 +235,7 @@
     "desktop:Entity": true,
     "desktop:Background": true,
     "desktop:Ball": false,
-    "desktop:Collision": true,
+    "desktop:Collision": false,
     "desktop:Debug": true,
     "mobile:Dev Panel": false,
     "landscape:Dev Panel": false
