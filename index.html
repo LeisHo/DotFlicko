@@ -214,6 +214,35 @@
     }
     .dev-toggle-btn:hover { opacity: 1; }
 
+    /* Start/Stop — a regular, always-visible UI control (not part of the
+       dev panel), top-left. */
+    .sim-controls {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 100000;
+        display: flex;
+        gap: 6px;
+    }
+    .sim-controls button {
+        background: #2a3040;
+        color: #fff;
+        border: 1px solid #4a5568;
+        border-radius: 4px;
+        padding: 6px 14px;
+        font-family: monospace;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        opacity: 0.9;
+    }
+    .sim-controls button:hover:not(:disabled) { opacity: 1; }
+    .sim-controls button:disabled { opacity: 0.35; cursor: default; }
+    #startBtn { border-color: #4dd27a; }
+    #stopBtn { border-color: #ff5c5c; }
+    #deleteBtn { border-color: #ff9500; }
+    #deleteBtn.active { background: #ff9500; color: #1b1f2a; }
+
     .dev-buttons { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
     .dev-save-sync-status { font-size: calc(var(--dev-setting-title-font-size-px, 12) * 1px); white-space: nowrap; flex-shrink: 0; }
     .dev-buttons button {
@@ -325,9 +354,15 @@
 
 <canvas id="scene"></canvas>
 
+<div class="sim-controls">
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
+    <button id="deleteBtn">Delete</button>
+</div>
+
 <button class="dev-toggle-btn" id="devToggleBtn" onclick="devPanel.classList.toggle('hidden')">DEV</button>
 
-<div class="dev-panel" id="devPanel">
+<div class="dev-panel hidden" id="devPanel">
     <div class="dev-panel-scroll-content">
         <div class="dev-header" id="devPanelHeader">
             <span class="dev-panel-title">DEV</span>
@@ -1477,10 +1512,23 @@
         // Rotation Offset defaults") — previously every direction
         // defaulted to 0 (set at runtime by wireRotationOffsetRow()).
         entityRotationOffsetByDirection: {
-            'behind': -7, 'behind-thumb': 2, 'side-thumb': 11, 'front-thumb': 23,
-            'front': 15, 'front-pinky': -5, 'side-pinky': -3, 'behind-pinky': -16,
+            'behind': 0, 'behind-thumb': 2, 'side-thumb': 3, 'front-thumb': 5,
+            'front': 0, 'front-pinky': -5, 'side-pinky': -4, 'behind-pinky': 3,
         },
-        rotationSmoothing: 1, positionSmoothing: 1, angleOffset: 0,
+        // Per-direction Animation X Offset — a manual perpendicular-to-the-
+        // placement-line correction (%vmin), added to the sprite/collision
+        // geometry's LOCAL x before rotation, so it always shifts sideways
+        // relative to the entity's own facing direction, not the screen's
+        // x axis. Purely a rendering/collision-position correction — never
+        // touches entity.x/y or endX/endY (the real clicked anchor/aim
+        // points), so it doesn't affect the Stop-mode adjustment dots.
+        // Defaults baked in from a tuned "Copy Settings" dump per explicit
+        // request ("Set X Offset and Hand Rotation Offset defaults").
+        entityXOffsetByDirection: {
+            'behind': -2, 'behind-thumb': -1.5, 'side-thumb': 0.5, 'front-thumb': 0,
+            'front': 2, 'front-pinky': 0, 'side-pinky': -1, 'behind-pinky': -2.5,
+        },
+        rotationSmoothing: 1, positionSmoothing: 1, angleOffset: 180,
         backgroundColor: '#1b1f2a',
         ballGravity: 80, ballRadius: 3, ballColor: '#ff5c5c', ballBounciness: 0.6, ballRespawnRate: 1,
         jointThickness: 4, thicknessSmoothing: 0.15, collisionIntensity: 1,
@@ -1574,6 +1622,7 @@
             registerDevControlArray(name, arr);
         });
         renderRotationOffsetRow();
+        renderXOffsetRow();
         // Default-checked checkboxes: the row builder never sets .checked,
         // so a true default needs applying explicitly right after render.
         document.getElementById('checkboxShowCenter').checked = cfg.showCenter;
@@ -1599,6 +1648,7 @@
         bindSlider('sliderPositionSmoothing', 'positionSmoothing');
         bindSlider('sliderAngleOffset', 'angleOffset');
         wireRotationOffsetRow();
+        wireXOffsetRow();
         bindSlider('sliderBallGravity', 'ballGravity');
         bindSlider('sliderBallRadius', 'ballRadius');
         bindSlider('sliderBallBounciness', 'ballBounciness');
@@ -1735,6 +1785,83 @@
         });
     }
 
+    // Animation X Offset — same compound dropdown+slider row architecture
+    // as Hand Rotation Offset just above (8 real, independently-persisted
+    // slider/value DOM pairs, only the one matching the dropdown's current
+    // selection visible), per explicit request ("similar to the Hand
+    // Rotation Offset slider"). A manual per-direction correction for
+    // sprites that aren't visually centered on their own placement line —
+    // see cfg.entityXOffsetByDirection's own comment for what it actually
+    // shifts and why it leaves entity.x/y/endX/endY untouched.
+    const X_OFFSET_CONTROLS = [
+        { id: 'selectXOffsetDirection' },
+        ...DIRECTIONS.map(dir => ({ id: 'sliderXOffset_' + dir.key })),
+    ];
+    const X_OFFSET_DEFAULT_DIRECTION = 'behind-pinky';
+    function renderXOffsetRow() {
+        const content = findGroupContent('desktop', 'Entity', 'renderXOffsetRow', 'rowXOffset');
+        if (!content) return;
+        const row = document.createElement('div');
+        row.className = 'dev-row';
+
+        const label = document.createElement('span');
+        label.className = 'dev-label';
+        label.textContent = 'Animation X Offset (%vmin):';
+        row.appendChild(label);
+
+        const select = document.createElement('select');
+        select.className = 'dev-select';
+        select.id = 'selectXOffsetDirection';
+        DIRECTIONS.forEach(dir => {
+            const opt = document.createElement('option');
+            opt.value = dir.key;
+            opt.textContent = dir.label;
+            select.appendChild(opt);
+        });
+        select.value = X_OFFSET_DEFAULT_DIRECTION;
+        row.appendChild(select);
+
+        DIRECTIONS.forEach(dir => {
+            const isDefaultVisible = dir.key === X_OFFSET_DEFAULT_DIRECTION;
+            const defaultValue = cfg.entityXOffsetByDirection[dir.key] ?? 0;
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.className = 'dev-slider';
+            slider.id = 'sliderXOffset_' + dir.key;
+            slider.min = -30; slider.max = 30; slider.step = 0.5;
+            slider.value = defaultValue;
+            if (!isDefaultVisible) slider.style.display = 'none';
+            row.appendChild(slider);
+
+            const value = document.createElement('span');
+            value.className = 'dev-value';
+            value.id = 'valueXOffset_' + dir.key;
+            value.textContent = String(defaultValue);
+            if (!isDefaultVisible) value.style.display = 'none';
+            row.appendChild(value);
+        });
+
+        content.appendChild(row);
+        registerDevControlArray('X_OFFSET_CONTROLS', X_OFFSET_CONTROLS);
+    }
+    function wireXOffsetRow() {
+        DIRECTIONS.forEach(dir => {
+            const slider = document.getElementById('sliderXOffset_' + dir.key);
+            slider.addEventListener('input', (e) => {
+                cfg.entityXOffsetByDirection[dir.key] = parseFloat(e.target.value);
+                document.getElementById('valueXOffset_' + dir.key).textContent = e.target.value;
+            });
+        });
+        document.getElementById('selectXOffsetDirection').addEventListener('change', (e) => {
+            DIRECTIONS.forEach(dir => {
+                const isSelected = dir.key === e.target.value;
+                document.getElementById('sliderXOffset_' + dir.key).style.display = isSelected ? '' : 'none';
+                document.getElementById('valueXOffset_' + dir.key).style.display = isSelected ? '' : 'none';
+            });
+        });
+    }
+
     // cfg.peakHoldFrames extra frames at the sequence's midpoint (the last
     // A-forward frame, playSequence index N-1, immediately before it
     // reverses) - not baked into playSequence itself (which stays a plain
@@ -1855,16 +1982,19 @@
         });
         return out;
     }
-    // The real underlying frame number (1-20) the currently-drawn image
-    // corresponds to — mirrors resolvePlaySequenceIndex()'s own forward/
-    // hold/reverse logic exactly, but returns a FRAME NUMBER (for
-    // skeleton lookup) rather than a playSequence array index (for image
-    // lookup). Idle (not playing) is always frame 1 — frames[0].
-    function currentRealFrameNumber() {
-        if (!playing || !playSequenceFrozen) return 1;
+    // The real underlying frame number (1-20) a given spawned entity's
+    // currently-drawn image corresponds to — mirrors
+    // resolvePlaySequenceIndex()'s own forward/hold/reverse logic exactly,
+    // but returns a FRAME NUMBER (for skeleton lookup) rather than a
+    // playSequence array index (for image lookup). Idle (not playing) is
+    // always frame 1 — frames[0]. Per-entity (was a single global entity's
+    // own playing/playSequenceFrozen/playFrameIndex before the spawn-
+    // placement rework — see the "Entities" section below).
+    function entityRealFrameNumber(entity) {
+        if (!entity.playing || !entity.playSequenceFrozen) return 1;
         const n = DIRECTION_FRAME_COUNT, hold = Math.round(cfg.peakHoldFrames);
         const totalLen = playSequenceLength(n, hold);
-        const virtualIndex = Math.min(playFrameIndex, totalLen - 1);
+        const virtualIndex = Math.min(entity.playFrameIndex, totalLen - 1);
         if (virtualIndex < n) return virtualIndex + 1;
         if (virtualIndex < n + hold) return n;
         const shifted = virtualIndex - hold;
@@ -1880,18 +2010,27 @@
     // ----------------------------------------------------------------
     // Starts null (not spawned via an immediate call here) so the first
     // real spawn happens inside updateBallAndCollision()'s own respawn
-    // path, on the first real requestAnimationFrame — same reasoning as
-    // hasMouse gating entityX/Y above: window.innerWidth/innerHeight can
-    // briefly read 0 at script-parse time before layout settles.
+    // path, on the first real requestAnimationFrame — window.innerWidth/
+    // innerHeight can briefly read 0 at script-parse time before layout
+    // settles, the same early-page-life quirk documented elsewhere in
+    // this file (see the canvas self-healing size check in update()).
     let ball = null;
     let ballRespawnCountdown = 0;
-    // Rising-edge state for the auto-trigger below (ballInFlickTriggerZone) —
-    // tracked continuously (even while a flick is already playing, or no
-    // ball exists) so a ball that's been sitting inside the zone the whole
-    // time a flick was already playing doesn't immediately re-fire the
-    // instant that flick ends; only a genuine false->true transition
-    // fires. Reset to false whenever there's no ball to evaluate.
-    let wasInFlickTriggerZone = false;
+    // Start/Stop — gates ball spawning/physics only; entity placement and
+    // the base/end-point drag handles (below) are gated the OPPOSITE way
+    // (only available while stopped). Boots stopped, matching this
+    // project's existing "animation isn't visible until placed" spirit —
+    // lets a fresh page be set up (entities placed) before starting balls.
+    let running = false;
+    // Delete mode — only meaningful while stopped (same gating as
+    // placement/dragging); toggled by the Delete button. While on, a
+    // canvas click removes whichever placed entity it lands on instead of
+    // starting a spawn/drag gesture.
+    let deleteMode = false;
+    // wasInFlickTriggerZone (the auto-trigger's rising-edge state) moved
+    // onto each entity object itself — see the "Entities" section below —
+    // since every spawned entity now needs its own independent trigger
+    // history, not one shared global.
     function spawnBall() {
         const radiusPx = Math.min(window.innerWidth, window.innerHeight) * (cfg.ballRadius / 100);
         // hasEnteredFrame stays false for the initial fall from this
@@ -1912,6 +2051,55 @@
         return { x: ax + abx * t, y: ay + aby * t, t };
     }
 
+    // Closest points between 2 line segments (standard closestPtSegmentSegment
+    // algorithm) — segment1 (p1->q1, params s in [0,1]) and segment2 (p2->q2,
+    // params t in [0,1]). Used for SWEPT ball-vs-finger collision: segment1
+    // is the ball's own path this tick (its position last tick -> its
+    // position this tick), segment2 is a finger capsule. Point-vs-segment
+    // (nearestPointOnSegment above, still used for the trigger-zone check,
+    // which only ever needs "how close is this ball's CURRENT point to the
+    // hand," not swept) only tests the ball's END-of-tick position — a ball
+    // moving fast enough can jump clean over a thin capsule between 2 ticks
+    // and never register as "inside" at either sampled instant (classic
+    // tunneling), reported directly ("if the ball is moving at a high
+    // velocity, even if it triggers the animation, the animation is not
+    // fast enough to flick the ball"). Testing the ball's whole PATH against
+    // the capsule instead catches a crossing partway through the tick,
+    // regardless of how fast the ball or the animation is moving.
+    function closestPointsBetweenSegments(p1x, p1y, q1x, q1y, p2x, p2y, q2x, q2y) {
+        const d1x = q1x - p1x, d1y = q1y - p1y;
+        const d2x = q2x - p2x, d2y = q2y - p2y;
+        const rx = p1x - p2x, ry = p1y - p2y;
+        const a = d1x * d1x + d1y * d1y;
+        const e = d2x * d2x + d2y * d2y;
+        const f = d2x * rx + d2y * ry;
+        const EPS = 1e-9;
+        let s, t;
+        if (a <= EPS && e <= EPS) {
+            s = 0; t = 0;
+        } else if (a <= EPS) {
+            s = 0;
+            t = Math.max(0, Math.min(1, f / e));
+        } else {
+            const c = d1x * rx + d1y * ry;
+            if (e <= EPS) {
+                t = 0;
+                s = Math.max(0, Math.min(1, -c / a));
+            } else {
+                const b = d1x * d2x + d1y * d2y;
+                const denom = a * e - b * b;
+                s = denom !== 0 ? Math.max(0, Math.min(1, (b * f - c * e) / denom)) : 0;
+                t = (b * s + f) / e;
+                if (t < 0) { t = 0; s = Math.max(0, Math.min(1, -c / a)); }
+                else if (t > 1) { t = 1; s = Math.max(0, Math.min(1, (b - c) / a)); }
+            }
+        }
+        const c1x = p1x + d1x * s, c1y = p1y + d1y * s;
+        const c2x = p2x + d2x * t, c2y = p2y + d2y * t;
+        const dx = c1x - c2x, dy = c1y - c2y;
+        return { s, t, c1x, c1y, c2x, c2y, distSq: dx * dx + dy * dy };
+    }
+
     // Auto-trigger boundary for the flick sequence: true when the ball is
     // within the union of the joint-collision capsules across EVERY frame
     // (1..DIRECTION_FRAME_COUNT) of the current direction's flick
@@ -1926,14 +2114,103 @@
     //
     // Reuses the exact same local->world transform and thickness math
     // updateBallAndCollision() already uses for the LIVE pose (drawW/
-    // drawH from entityScale+aspect, entityX/entityY/rotationRad for the
-    // rigid transform, cfg.jointThickness for capsule half-width) — this
-    // is deliberately the SAME geometry the real collision already uses,
-    // just evaluated once per candidate frame instead of only the one
-    // currently playing, so "vicinity" means exactly "would touch the
-    // hand at some point during a real flick," not an arbitrary separate
-    // distance.
-    function ballInFlickTriggerZone(ball, directionKey, rotationRad) {
+    // drawH from entityScale+aspect, the entity's own fixed x/y/
+    // rotationRad for the rigid transform, cfg.jointThickness for capsule
+    // half-width) — this is deliberately the SAME geometry the real
+    // collision already uses, just evaluated once per candidate frame
+    // instead of only the one currently playing, so "vicinity" means
+    // exactly "would touch the hand at some point during a real flick,"
+    // not an arbitrary separate distance. ex/ey are the SPAWNED entity's
+    // own fixed position (was the single global entityX/entityY before
+    // the spawn-placement rework — every entity now has its own).
+
+    // Local (unrotated, untranslated) pixel offset of a normalized (0-1)
+    // point within the sprite's own box, anchored at the CENTER-BASE of
+    // the frame's own VISIBLE (non-transparent) content — per explicit
+    // correction ("i want the centre base of the visible portion of the
+    // frame to be placed on that point, not the base of the png"): an
+    // earlier version anchored to the full PNG's own bottom-center
+    // (px=0.5, py=1), which is wrong whenever the source art has real
+    // transparent padding around the visible hand/wrist (confirmed this
+    // padding exists — see computeVisibleBounds below). centerX/bottomY
+    // (both still normalized 0-1, in the SAME coordinate space as px/py)
+    // default to 0.5/1 — the old full-image convention — for the brief
+    // window before a direction's visible bounds have been computed yet
+    // (see getVisibleBoundsForDirection's own comment), so nothing breaks
+    // while that one-time scan is still pending. Shared by every place
+    // that needs a skeleton joint's local position (this function,
+    // updateBallAndCollision) AND by render()'s own drawImage/hitbox
+    // placement — all 3 must agree on the same anchor or the drawn
+    // sprite, its collision geometry, and its debug hitbox would silently
+    // drift apart.
+    // xOffsetPx (added — Animation X Offset, cfg.entityXOffsetByDirection)
+    // shifts the returned LOCAL x by a fixed per-direction amount, added
+    // BEFORE rotation — so in world space it always reads as perpendicular
+    // to the entity's own facing/placement-line direction, regardless of
+    // which way that entity happens to be rotated. Defaults to 0 (no-op).
+    function localOffsetFromNormalized(px, py, drawW, drawH, centerX = 0.5, bottomY = 1, xOffsetPx = 0) {
+        return { x: (px - centerX) * drawW + xOffsetPx, y: (py - bottomY) * drawH };
+    }
+
+    // Per-direction visible-content bounds — the actual (non-transparent)
+    // hand/wrist pose's own bounding box within its full PNG frame,
+    // normalized 0-1, DIFFERENT from the raw PNG's own full (0,0)-(1,1)
+    // box because the source art has real transparent margin around the
+    // visible pose (confirmed: same class of padding this project's own
+    // DickoClicko precedent already had to account for via per-pixel
+    // alpha hit-testing).
+    //
+    // PRECOMPUTED OFFLINE, not scanned at runtime. This used to be a live
+    // in-browser canvas scan of each direction's frame 1 (computeVisibleContentBounds/
+    // visibleBoundsCache, now removed) — that approach went through 2 full
+    // rounds of real, reported bugs before landing here: (1) a full-
+    // resolution scan (2400x1181px, ~37-83ms) run from the live spawn/drag
+    // preview froze the page on first placement, since sweeping across
+    // several newly-encountered directions in one placement gesture
+    // chained multiple such scans together past a frame's budget;
+    // (2) downscaling the scan to fix that (MAX_SCAN_DIM=200, later 400)
+    // fixed the freeze but permanently traded away real accuracy (a
+    // downscale blends the anti-aliased edge into a wider apparent
+    // footprint — measured up to 0.0065 of image height off from a full-
+    // resolution scan on the worst direction), and a user report that the
+    // anchor was "still not at the base of the hand... regardless of
+    // scale" pointed at a 3rd, deeper problem: a defensive try/catch
+    // (added as hardening against a theoretical canvas-taint SecurityError
+    // for a locally-opened file:// page) could silently swallow ANY scan
+    // failure and fall back to the old raw-PNG default (0.5/1) with zero
+    // visible sign of it — meaning a real failure in that exact class of
+    // environment would make every one of the above 2 rounds of fixes
+    // completely irrelevant, since the scan would never even run.
+    // Eliminating the runtime scan removes all 3 failure modes at once:
+    // no freeze risk (nothing runs during interaction), no downscale
+    // accuracy tradeoff (computed once, offline, at full resolution), and
+    // no environment-dependent canvas/getImageData failure mode (no
+    // runtime pixel readback at all). Values below were computed with
+    // Node + `sharp` directly against the real frame-1 PNGs on disk (same
+    // ALPHA_HIT_THRESHOLD=10 convention as this project's other per-pixel
+    // alpha checks), independently cross-checked against this session's
+    // own earlier in-browser measurements (matched to 4 decimal places).
+    //
+    // TO REGENERATE (e.g. after replacing a direction's frame 1 art):
+    //   node -e "const sharp=require('sharp'); (async()=>{const img=sharp('data/FLICK/2TONED/<FOLDER>/A/<prefix>_001.png'); const {data,info}=await img.raw().ensureAlpha().toBuffer({resolveWithObject:true}); const w=info.width,h=info.height,c=info.channels; let minX=w,maxX=-1,minY=h,maxY=-1; for(let y=0;y<h;y++){for(let x=0;x<w;x++){const a=data[(y*w+x)*c+(c-1)]; if(a>10){if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;}}} console.log({centerX:+(((minX+maxX)/2)/w).toFixed(4), bottomY:+(((maxY+1)/h)).toFixed(4)});})()"
+    const VISIBLE_BOUNDS_BY_DIRECTION = {
+        'behind':       { centerX: 0.5265, bottomY: 0.8916 },
+        'behind-thumb': { centerX: 0.5029, bottomY: 0.9009 },
+        'side-thumb':   { centerX: 0.4788, bottomY: 0.8815 },
+        'front-thumb':  { centerX: 0.4738, bottomY: 0.9009 },
+        'front':        { centerX: 0.4763, bottomY: 0.9145 },
+        'front-pinky':  { centerX: 0.4942, bottomY: 0.9221 },
+        'side-pinky':   { centerX: 0.5194, bottomY: 0.9272 },
+        'behind-pinky': { centerX: 0.521,  bottomY: 0.917  },
+    };
+    // Thin, synchronous lookup — the 0.5/1 fallback only matters for a
+    // direction key that isn't in the table above (e.g. a newly-added
+    // direction whose bounds haven't been regenerated yet).
+    function visibleBoundsForDirection(directionKey) {
+        return VISIBLE_BOUNDS_BY_DIRECTION[directionKey] || { centerX: 0.5, bottomY: 1 };
+    }
+
+    function ballInFlickTriggerZone(ball, directionKey, rotationRad, ex, ey) {
         if (!ball) return false;
         const vmin = Math.min(window.innerWidth, window.innerHeight);
         const radiusPx = vmin * (cfg.ballRadius / 100);
@@ -1944,6 +2221,8 @@
         const aspect = (refImg && refImg.complete && refImg.naturalWidth > 0) ? (refImg.naturalHeight / refImg.naturalWidth) : 1;
         const drawW = size, drawH = size * aspect;
         const cos = Math.cos(rotationRad), sin = Math.sin(rotationRad);
+        const vb = visibleBoundsForDirection(directionKey);
+        const xOffsetPx = vmin * ((cfg.entityXOffsetByDirection[directionKey] || 0) / 100);
         const segments = [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']];
 
         for (let frameNumber = 1; frameNumber <= DIRECTION_FRAME_COUNT; frameNumber++) {
@@ -1953,8 +2232,8 @@
             SKELETON_POINTS.forEach(pk => {
                 const p = pose[pk];
                 if (!p) return;
-                const lx = (p.x - 0.5) * drawW, ly = (p.y - 0.5) * drawH;
-                world[pk] = { x: entityX + lx * cos - ly * sin, y: entityY + lx * sin + ly * cos };
+                const { x: lx, y: ly } = localOffsetFromNormalized(p.x, p.y, drawW, drawH, vb.centerX, vb.bottomY, xOffsetPx);
+                world[pk] = { x: ex + lx * cos - ly * sin, y: ey + lx * sin + ly * cos };
             });
             for (const [aKey, bKey] of segments) {
                 const a = world[aKey], b = world[bKey];
@@ -1966,130 +2245,124 @@
         return false;
     }
 
-    // Previous frame's LOCAL (unrotated, untranslated — relative to the
-    // entity's own center, before rotationRad/entityX/entityY are
-    // applied) joint pixel positions, per point key. Deliberately LOCAL,
-    // not world-space: an earlier version derived velocity from WORLD
-    // position deltas, which also picked up the entity's own translation
-    // (mouse movement) and rotation (mouse angle changing) as "joint
-    // speed" — reported directly: "as i move the mouse, the collision
-    // circle sometimes becomes huge... should stay the same size unless
-    // i change the animation scale itself." Local-space deltas isolate
-    // the flick animation's OWN motion from how fast the whole hand is
-    // being swung around by the mouse — rotation/translation are rigid
-    // transforms and don't change a vector's magnitude, so this local
+    // Previous frame's LOCAL (unrotated, untranslated — relative to each
+    // entity's own center, before its own fixed rotationRad/x/y are
+    // applied) joint pixel positions, per point key — now stored ON each
+    // entity object (entity.prevJointLocal/entity.smoothedJointSpeed)
+    // rather than one shared global, since every spawned entity needs its
+    // own independent velocity history. Deliberately LOCAL, not
+    // world-space: an earlier version (from before the spawn-placement
+    // rework, when there was only ever 1 entity and it followed the
+    // mouse) derived velocity from WORLD position deltas, which also
+    // picked up the entity's own translation/rotation as "joint speed" —
+    // reported directly: "as i move the mouse, the collision circle
+    // sometimes becomes huge... should stay the same size unless i change
+    // the animation scale itself." Local-space deltas isolate the flick
+    // animation's OWN motion from any rigid transform, so this local
     // speed is still valid to use directly against world-space distances
-    // (thickness, collision push) with no unit conversion needed. This
-    // is what still makes "thickness/intensity scale with the animation
-    // frames, and with Click Anim Speed" emerge from real motion (a
-    // faster-playing flick has faster real frame-to-frame LOCAL joint
-    // motion) — now correctly independent of mouse movement, and
-    // (per explicit request) still scales with Entity Scale, since a
-    // bigger entity means a bigger real pixel distance between the same
-    // normalized keyframe positions.
+    // (thickness, collision push) with no unit conversion needed — this
+    // is what makes "thickness/intensity scale with the animation frames,
+    // and with Click Anim Speed" emerge from real motion.
     //
-    // prevDirectionKey/prevEntityScale, alongside prevJointLocal: still
-    // occurring after the fix above (per direct report: "less frequent,
-    // but when it does happen, the collision circle is even bigger than
-    // before") because a DIRECTION SWITCH is itself a discontinuity, not
-    // real motion — the 8 direction sets are independently-authored art,
-    // not rotations of one asset, so "knuckle" in e.g. 'behind' and
-    // 'front-thumb' sit at unrelated local coordinates. Comparing this
-    // frame's pose against the PREVIOUS frame's pose from a DIFFERENT
-    // direction (whenever the mouse crosses one of the 8 angle-sector
-    // boundaries) produced a large synthetic "velocity" out of a pose
-    // jump that was never real animated motion — rare (only on a sector
-    // crossing) but large (comparing 2 unrelated hand poses), matching
-    // the reported pattern exactly. A live Entity Scale slider drag is
-    // the same class of bug (jointLocal is derived from drawW/drawH,
-    // which depend on cfg.entityScale) — cheap to guard the same way.
-    // Whenever either changes since the prior frame, this frame's
-    // velocity is simply skipped (treated as no prior data) rather than
-    // computed across the discontinuity.
-    let prevJointLocal = null;
-    let prevDirectionKey = null;
+    // A live Entity Scale slider change is still a real, GLOBAL
+    // discontinuity (jointLocal is derived from drawW/drawH, which depend
+    // on cfg.entityScale) shared by every entity at once — tracked with 1
+    // module-level prevEntityScale (not per-entity, since cfg.entityScale
+    // itself is one shared/global setting) and applied uniformly below.
+    // A spawned entity's own direction can no longer change after it's
+    // placed (a real difference from the old mouse-follow single entity,
+    // which used to also guard against a direction-SWITCH discontinuity —
+    // now moot, since prevJointLocal starting null on a fresh entity
+    // already skips velocity for that entity's own first real frame,
+    // which is the only discontinuity a fixed-direction entity can have).
     let prevEntityScale = null;
-    // Exponentially-smoothed per-point speed (a plain scalar, px/s) —
-    // see thicknessSmoothing's own comment above COLLISION_CONTROLS for
-    // why this exists (raw frame-to-frame speed steps abruptly between
-    // sparse, unevenly-spaced skeleton keyframes). Only a scalar is ever
-    // needed downstream (thickness, and the collision kick's magnitude —
-    // its DIRECTION always comes from the ball/segment geometry, never
-    // from this), so only the magnitude is smoothed, not a full vector.
-    let smoothedJointSpeed = {};
 
-    function updateBallAndCollision(dt, rotationRad) {
+    function updateBallAndCollision(dt) {
         const w = window.innerWidth, h = window.innerHeight;
         const vmin = Math.min(w, h);
 
-        // Current local + world-space joint positions for
-        // currentDirectionKey's interpolated local pose. World-space uses
-        // the SAME rotate+translate render() uses for the sprite itself;
-        // local-space (pre-rotation/translation) is what velocity is
-        // derived from — see prevJointLocal's own comment above.
-        const localPose = interpolatedLocalPose(currentDirectionKey, currentRealFrameNumber());
-        let jointWorld = null, jointLocal = null;
-        if (localPose) {
-            const size = vmin * (cfg.entityScale / 100);
-            const refImg = ensureDirectionLoaded(currentDirectionKey).frames[0];
-            const aspect = (refImg && refImg.complete && refImg.naturalWidth > 0) ? (refImg.naturalHeight / refImg.naturalWidth) : 1;
-            const drawW = size, drawH = size * aspect;
-            const cos = Math.cos(rotationRad), sin = Math.sin(rotationRad);
-            jointWorld = {};
-            jointLocal = {};
-            SKELETON_POINTS.forEach(pk => {
-                const p = localPose[pk];
-                if (!p) return;
-                // Local point in the sprite's own unrotated pixel space,
-                // centered on the entity origin (drawImage draws centered
-                // at -drawW/2..drawW/2, same as the sprite itself).
-                const lx = (p.x - 0.5) * drawW, ly = (p.y - 0.5) * drawH;
-                jointLocal[pk] = { x: lx, y: ly };
-                jointWorld[pk] = {
-                    x: entityX + lx * cos - ly * sin,
-                    y: entityY + lx * sin + ly * cos,
-                };
-            });
-        }
-        // A direction switch or a live Entity Scale change is a
-        // discontinuity, not real motion — skip velocity for this one
-        // frame rather than comparing across it (see this function's own
-        // leading comment for why).
-        const continuous = currentDirectionKey === prevDirectionKey && cfg.entityScale === prevEntityScale;
-        const jointVel = {};
-        if (jointLocal && prevJointLocal && continuous && dt > 0) {
-            SKELETON_POINTS.forEach(pk => {
-                if (!jointLocal[pk] || !prevJointLocal[pk]) return;
-                jointVel[pk] = { x: (jointLocal[pk].x - prevJointLocal[pk].x) / dt, y: (jointLocal[pk].y - prevJointLocal[pk].y) / dt };
-            });
-        }
-        prevJointLocal = jointLocal;
-        prevDirectionKey = currentDirectionKey;
+        const scaleChanged = cfg.entityScale !== prevEntityScale;
         prevEntityScale = cfg.entityScale;
 
-        // Smooth the raw per-point speed over time — snaps instantly
-        // (factor=1, no blending) on a discontinuity (!continuous) so a
-        // direction switch's already-correct "0 speed" doesn't get
-        // smeared forward from whatever the smoothed value happened to
-        // be a moment ago.
-        const smoothFactor = continuous ? expSmoothFactor(cfg.thicknessSmoothing, dt) : 1;
-        const jointSpeed = {};
-        SKELETON_POINTS.forEach(pk => {
-            const raw = jointVel[pk] ? Math.hypot(jointVel[pk].x, jointVel[pk].y) : 0;
-            const prevSpeed = smoothedJointSpeed[pk] ?? raw;
-            const next = prevSpeed + (raw - prevSpeed) * smoothFactor;
-            smoothedJointSpeed[pk] = next;
-            jointSpeed[pk] = next;
+        // Per-entity local+world joint positions and smoothed speed —
+        // computed once per entity per tick, then stashed on the entity
+        // itself (entity.jointWorld/entity.jointSpeed) for render()'s own
+        // debug-line drawing and for the collision/trigger pass below to
+        // read back without recomputing.
+        entities.forEach(entity => {
+            const localPose = interpolatedLocalPose(entity.directionKey, entityRealFrameNumber(entity));
+            let jointWorld = null, jointLocal = null;
+            if (localPose) {
+                const size = vmin * (cfg.entityScale / 100);
+                const refImg = ensureDirectionLoaded(entity.directionKey).frames[0];
+                const aspect = (refImg && refImg.complete && refImg.naturalWidth > 0) ? (refImg.naturalHeight / refImg.naturalWidth) : 1;
+                const drawW = size, drawH = size * aspect;
+                const rotationRad = entityRotationRad(entity);
+                const cos = Math.cos(rotationRad), sin = Math.sin(rotationRad);
+                const vb = visibleBoundsForDirection(entity.directionKey);
+                const xOffsetPx = vmin * ((cfg.entityXOffsetByDirection[entity.directionKey] || 0) / 100);
+                jointWorld = {};
+                jointLocal = {};
+                SKELETON_POINTS.forEach(pk => {
+                    const p = localPose[pk];
+                    if (!p) return;
+                    // Local point in the sprite's own unrotated pixel space,
+                    // anchored at the entity's own visible-content-based
+                    // origin — see localOffsetFromNormalized()'s own comment.
+                    const { x: lx, y: ly } = localOffsetFromNormalized(p.x, p.y, drawW, drawH, vb.centerX, vb.bottomY, xOffsetPx);
+                    jointLocal[pk] = { x: lx, y: ly };
+                    jointWorld[pk] = {
+                        x: entity.x + lx * cos - ly * sin,
+                        y: entity.y + lx * sin + ly * cos,
+                    };
+                });
+            }
+            const continuous = !scaleChanged;
+            const jointVel = {};
+            if (jointLocal && entity.prevJointLocal && continuous && dt > 0) {
+                SKELETON_POINTS.forEach(pk => {
+                    if (!jointLocal[pk] || !entity.prevJointLocal[pk]) return;
+                    jointVel[pk] = { x: (jointLocal[pk].x - entity.prevJointLocal[pk].x) / dt, y: (jointLocal[pk].y - entity.prevJointLocal[pk].y) / dt };
+                });
+            }
+            entity.prevJointLocal = jointLocal;
+
+            // Smooth the raw per-point speed over time — snaps instantly
+            // (factor=1, no blending) on a discontinuity (!continuous) so
+            // an already-correct "0 speed" doesn't get smeared forward
+            // from whatever the smoothed value happened to be a moment
+            // ago.
+            const smoothFactor = continuous ? expSmoothFactor(cfg.thicknessSmoothing, dt) : 1;
+            const jointSpeed = {};
+            SKELETON_POINTS.forEach(pk => {
+                const raw = jointVel[pk] ? Math.hypot(jointVel[pk].x, jointVel[pk].y) : 0;
+                const prevSpeed = entity.smoothedJointSpeed[pk] ?? raw;
+                const next = prevSpeed + (raw - prevSpeed) * smoothFactor;
+                entity.smoothedJointSpeed[pk] = next;
+                jointSpeed[pk] = next;
+            });
+
+            entity.jointWorld = jointWorld;
+            entity.jointSpeed = jointSpeed;
         });
 
-        // Respawn cycle
-        if (!ball) {
+        // Respawn cycle — gated by `running` (Start/Stop). Stop's own
+        // handler (setRunning, below) already clears any ball that was on
+        // screen the moment it's pressed; this just stops a NEW one from
+        // spawning while stopped.
+        if (running && !ball) {
             ballRespawnCountdown -= dt;
             if (ballRespawnCountdown <= 0) ball = spawnBall();
         }
 
         if (ball) {
             const radiusPx = vmin * (cfg.ballRadius / 100);
+            // Captured BEFORE this tick's own integration below — the
+            // start point of the ball's swept path for the finger-capsule
+            // collision test further down (prevBallX/Y -> ball.x/y after
+            // integration is exactly "where the ball moved TO this tick,
+            // from where it started").
+            const prevBallX = ball.x, prevBallY = ball.y;
             ball.vy += vmin * (cfg.ballGravity / 100) * dt; // %vh/s² of the viewport's own min dimension, matching this project's other %vmin-based sizes
             ball.x += ball.vx * dt;
             ball.y += ball.vy * dt;
@@ -2112,45 +2385,70 @@
             else if (ball.x > w - radiusPx) { ball.x = w - radiusPx; ball.vx = -ball.vx * cfg.ballBounciness; }
             if (ball.hasEnteredFrame && ball.y < radiusPx) { ball.y = radiusPx; ball.vy = -ball.vy * cfg.ballBounciness; }
 
-            // Joint-segment collision — 3 capsules (knuckle→joint1,
-            // joint1→joint2, joint2→tip), resolved sequentially (adequate
-            // for a single ball against 3 segments, not a rigorous
-            // simultaneous solve).
-            if (jointWorld) {
-                const segments = [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']];
-                segments.forEach(([aKey, bKey]) => {
-                    const a = jointWorld[aKey], b = jointWorld[bKey];
-                    if (!a || !b) return;
-                    const nearest = nearestPointOnSegment(ball.x, ball.y, a.x, a.y, b.x, b.y);
-                    const speedA = jointSpeed[aKey] ?? 0, speedB = jointSpeed[bKey] ?? 0;
-                    const speed = speedA + (speedB - speedA) * nearest.t; // still drives the collision KICK below, no longer the circle's size
-                    const thicknessPx = vmin * (cfg.jointThickness / 100); // fixed — never varies by frame/speed, per explicit instruction
+            // Joint-segment collision (3 capsules per entity) + the
+            // proximity auto-trigger, once per spawned entity — a ball
+            // sitting near several entities at once reacts to/can trigger
+            // all of them independently, same rules as a single entity did.
+            //
+            // SWEPT: tests the ball's whole PATH this tick (prevBallX,Y ->
+            // ball.x,y) against each finger capsule, via closestPointsBetweenSegments,
+            // not just its single end-of-tick point — a fast ball can
+            // otherwise jump clean over a thin capsule between 2 ticks and
+            // never register as "inside" at either sampled instant
+            // (tunneling), reported directly ("if the ball is moving at a
+            // high velocity, even if it triggers the animation, the
+            // animation is not fast enough to flick the ball"). Each
+            // resolved hit updates ball.x/y in place, so a later segment's
+            // own sweep this same tick starts from prevBallX/Y (unchanged)
+            // through the ball's now-updated position — same "resolved
+            // sequentially, not a rigorous simultaneous solve" scope this
+            // collision system already had before this change.
+            entities.forEach(entity => {
+                if (entity.jointWorld) {
+                    const segments = [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']];
+                    segments.forEach(([aKey, bKey]) => {
+                        const a = entity.jointWorld[aKey], b = entity.jointWorld[bKey];
+                        if (!a || !b) return;
+                        const thicknessPx = vmin * (cfg.jointThickness / 100); // fixed — never varies by frame/speed, per explicit instruction
+                        const minDist = thicknessPx / 2 + radiusPx;
+                        const cp = closestPointsBetweenSegments(prevBallX, prevBallY, ball.x, ball.y, a.x, a.y, b.x, b.y);
+                        if (cp.distSq >= minDist * minDist) return;
 
-                    const dx = ball.x - nearest.x, dy = ball.y - nearest.y;
-                    const dist = Math.hypot(dx, dy);
-                    const minDist = thicknessPx / 2 + radiusPx;
-                    if (dist < minDist) {
+                        const speedA = entity.jointSpeed[aKey] ?? 0, speedB = entity.jointSpeed[bKey] ?? 0;
+                        const speed = speedA + (speedB - speedA) * cp.t; // still drives the collision KICK below, no longer the circle's size
+                        const dist = Math.sqrt(cp.distSq);
+                        const dx = cp.c1x - cp.c2x, dy = cp.c1y - cp.c2y;
                         const nx = dist > 0.0001 ? dx / dist : 0, ny = dist > 0.0001 ? dy / dist : -1;
                         const overlap = minDist - dist;
-                        ball.x += nx * overlap;
-                        ball.y += ny * overlap;
+                        // Snap to the point ALONG THE BALL'S OWN PATH where
+                        // it first came within minDist (cp.c1x/y, at
+                        // parameter cp.s) rather than its raw end-of-tick
+                        // position — this is what actually stops tunneling:
+                        // even when the ball's final position had already
+                        // passed clean through the capsule, cp.c1 is never
+                        // further through than the real first contact.
+                        ball.x = cp.c1x + nx * overlap;
+                        ball.y = cp.c1y + ny * overlap;
                         ball.vx += nx * speed * cfg.collisionIntensity;
                         ball.vy += ny * speed * cfg.collisionIntensity;
-                    }
-                });
-            }
+                    });
+                }
 
-            // Auto-trigger: the ball crossing INTO the flick's own
-            // reachable zone (see ballInFlickTriggerZone's own comment)
-            // starts the sequence exactly as a real click would, without
-            // requiring one. Rising-edge only (wasInFlickTriggerZone) —
-            // a ball that's simply sitting in the zone doesn't keep
-            // re-triggering every frame, and !playing keeps a ball that
-            // entered the zone mid-flick from double-triggering the
-            // instant that flick ends while it's still sitting there.
-            const inTriggerZone = ballInFlickTriggerZone(ball, currentDirectionKey, rotationRad);
-            if (inTriggerZone && !wasInFlickTriggerZone && !playing) triggerFlick();
-            wasInFlickTriggerZone = inTriggerZone;
+                // Auto-trigger: the ball crossing INTO this entity's own
+                // reachable zone (see ballInFlickTriggerZone's own
+                // comment) starts ITS sequence, without requiring a
+                // click — manual click-to-flick was retired entirely once
+                // clicking became the spawn-placement gesture (see the
+                // canvas pointerdown handler below). Rising-edge only
+                // (entity.wasInFlickTriggerZone) — a ball simply sitting
+                // in the zone doesn't keep re-triggering every frame, and
+                // !entity.playing keeps a ball that entered the zone
+                // mid-flick from double-triggering the instant that flick
+                // ends while it's still sitting there.
+                const inTriggerZone = ballInFlickTriggerZone(ball, entity.directionKey, entityRotationRad(entity), entity.x, entity.y);
+                if (inTriggerZone && !entity.wasInFlickTriggerZone && !entity.playing) triggerFlick(entity);
+                entity.wasInFlickTriggerZone = inTriggerZone;
+            });
 
             // Fully below the bottom edge — gone, start the respawn timer.
             if (ball.y - radiusPx > h) {
@@ -2158,10 +2456,8 @@
                 ballRespawnCountdown = cfg.ballRespawnRate;
             }
         } else {
-            wasInFlickTriggerZone = false;
+            entities.forEach(entity => { entity.wasInFlickTriggerZone = false; });
         }
-
-        return { jointWorld, jointSpeed };
     }
 
     // ----------------------------------------------------------------
@@ -2185,28 +2481,72 @@
     }
     applyCursorVisibility();
 
-    // Not window.innerWidth/innerHeight read here directly - a real,
-    // documented quirk (DickoClicko hit the same thing) is that the
-    // viewport can briefly report 0 at script-parse time, before layout
-    // settles; a one-time snapshot taken then would permanently strand
-    // the entity at the top-left corner. hasMouse gates a live re-center
-    // in update()'s first real frame instead (requestAnimationFrame is
-    // guaranteed to run after layout).
+    // mouseX/mouseY only ever come from a real pointermove event now (no
+    // longer re-derived from window.innerWidth/innerHeight as a fallback —
+    // there's no continuously-following entity left to re-center). hasMouse
+    // just gates render()'s own live spawn-preview line, so it doesn't draw
+    // toward a stale (0,0) before the very first real mouse movement.
     let mouseX = 0, mouseY = 0;
     let hasMouse = false;
+    // Base/end-point drag state (Stop-mode entity adjustment, below) — the
+    // entity currently being dragged and which of its 2 points ('base' |
+    // 'end'), or null when nothing's being dragged. Lives here (not with
+    // pendingSpawnStart, further down) specifically so the pointermove
+    // handler right below — the only place drag position updates actually
+    // happen — can read it directly.
+    let draggingEntity = null;
+    let draggingPoint = null;
     window.addEventListener('pointermove', (e) => {
         mouseX = e.clientX; mouseY = e.clientY;
         hasMouse = true;
+        if (draggingEntity) {
+            if (draggingPoint === 'base') {
+                // Translate the whole entity — both points move together,
+                // so the line's own angle (and therefore rotation/
+                // direction) stays exactly what it was. This is the "move"
+                // half of "move and rotate and adjust."
+                const dx = mouseX - draggingEntity.x, dy = mouseY - draggingEntity.y;
+                draggingEntity.x = mouseX;
+                draggingEntity.y = mouseY;
+                draggingEntity.endX += dx;
+                draggingEntity.endY += dy;
+            } else {
+                // Base point stays fixed; only the aim/end point moves —
+                // the "rotate" half. Only directionKey needs updating here
+                // (via the same bucketing spawnEntityFromLine() uses) —
+                // rotation itself is no longer stored, it's recomputed
+                // live from endX/endY every time it's needed (see
+                // entityRotationRad()), so there's nothing else to set.
+                draggingEntity.endX = mouseX;
+                draggingEntity.endY = mouseY;
+                const dist = Math.hypot(draggingEntity.endX - draggingEntity.x, draggingEntity.endY - draggingEntity.y);
+                if (dist > 0.0001) {
+                    const lineAngle = mouseAngleFromCenter(draggingEntity.endX, draggingEntity.endY, draggingEntity.x, draggingEntity.y);
+                    const dirIndex = directionIndexForAngle(lineAngle);
+                    const directionKey = DIRECTIONS[dirIndex].key;
+                    if (directionKey !== draggingEntity.directionKey) {
+                        draggingEntity.directionKey = directionKey;
+                        ensureDirectionLoaded(directionKey);
+                    }
+                }
+            }
+        }
+    });
+    window.addEventListener('pointerup', () => {
+        draggingEntity = null;
+        draggingPoint = null;
     });
 
     // ----------------------------------------------------------------
-    // Angle math. "Up" (0°) = directly above the browser's centerpoint;
-    // angle increases CLOCKWISE. Verified against 2 concrete cases before
-    // trusting it: mouse directly above center -> 0° (bucket "Behind");
-    // mouse directly right of center -> 90° (bucket "Side Thumb"), and
-    // the entity's own rotation (mouseAngle + 180°) correctly points it
-    // back toward center in both cases (rotated "up" vector = (sinθ,
-    // -cosθ) in canvas x/y-down space).
+    // Angle math. "Up" (0°) = directly above a given pivot point; angle
+    // increases CLOCKWISE. Originally verified (back when there was a
+    // single mouse-anchored entity) against 2 concrete cases: mouse
+    // directly above the viewport center -> 0° (bucket "Behind"); mouse
+    // directly right of center -> 90° (bucket "Side Thumb"). Reused as-is
+    // for the spawn-placement line's own angle below — mouseAngleFromCenter(end,
+    // start) gives exactly "the angle of `end` as seen from `start`",
+    // which is exactly a spawned entity's own aim direction, no change to
+    // the function itself needed.
     // ----------------------------------------------------------------
     function mouseAngleFromCenter(mx, my, cx, cy) {
         const dx = mx - cx, dy = my - cy;
@@ -2223,45 +2563,234 @@
         return Math.floor(shifted / 45) % 8;
     }
 
-    // ----------------------------------------------------------------
-    // State: entity position/rotation (smoothed toward the mouse/target
-    // angle), current direction bucket, and the click-triggered
-    // forward+reverse play sequence.
-    // ----------------------------------------------------------------
-    let entityX = 0, entityY = 0;
-    let entityAngleDeg = 0;
-    let currentDirectionKey = DIRECTIONS[0].key;
-    let playing = false;
-    let playFrameIndex = 0;
-    let playFrameAccum = 0;
-    let playSequenceFrozen = null;
-    const FLICK_BASE_FPS = 12;
-
+    // angleLerp/expSmoothFactor are still used elsewhere (expSmoothFactor
+    // by the collision-speed smoothing in updateBallAndCollision), but
+    // angleLerp itself is currently UNUSED — it only ever eased a single
+    // entity's rotation toward a continuously-moving mouse target, which
+    // no longer exists now that entities are spawned once and never move.
+    // Left defined (harmless, cheap) rather than deleted, in case a future
+    // spawn-in ease transition wants it — flagged here rather than removed
+    // silently.
     function angleLerp(current, target, factor) {
         let delta = ((target - current + 540) % 360) - 180;
         return current + delta * factor;
     }
     function expSmoothFactor(smoothing, dt) {
-        // smoothing=1 -> factor=1 (instant, matches "wherever mouse goes,
-        // entity goes" literally by default); lower values ease in.
         if (smoothing >= 1) return 1;
         return 1 - Math.pow(1 - smoothing, dt * 60);
     }
 
+    // ----------------------------------------------------------------
+    // Entities: no longer a single mouse-anchored entity — the animation
+    // is invisible until placed. Each entity is spawned via a 2-click
+    // gesture (see the pointerdown handler below) and then permanently
+    // fixed: its position, rotation, and direction bucket never change
+    // again, only its own play state (idle vs. playing a flick, driven
+    // solely by the ball-proximity trigger — manual click-to-flick was
+    // retired once clicking became the spawn gesture, per explicit
+    // request). cfg.entityScale/clickAnimSpeed/peakHoldFrames and the
+    // per-direction rotation-offset map all stay GLOBAL, shared by every
+    // entity — only position/rotation/direction/play-state are per-entity.
+    // ----------------------------------------------------------------
+    let entities = [];
+    const FLICK_BASE_FPS = 12;
+
+    // The first click of a pending 2-click placement — {x,y} while
+    // awaiting the second click, null otherwise. Purely UI/interaction
+    // state, not simulation — updated directly by the pointerdown handler
+    // (not inside step()), read by render() to draw the live aim-preview
+    // line.
+    let pendingSpawnStart = null;
+
     // Shared by a real click AND the ball-proximity auto-trigger
     // (ballInFlickTriggerZone, checked inside updateBallAndCollision) —
-    // both just start the same forward+reverse play sequence for
-    // whichever direction is currently active.
-    function triggerFlick() {
-        playing = true;
-        playFrameIndex = 0;
-        playFrameAccum = 0;
-        playSequenceFrozen = ensureDirectionLoaded(currentDirectionKey).playSequence;
+    // both just start the same forward+reverse play sequence on the given
+    // entity, for whichever direction it was spawned with.
+    function triggerFlick(entity) {
+        entity.playing = true;
+        entity.playFrameIndex = 0;
+        entity.playFrameAccum = 0;
+        entity.playSequenceFrozen = ensureDirectionLoaded(entity.directionKey).playSequence;
     }
-    canvas.addEventListener('pointerdown', () => {
-        if (playing) return;
-        triggerFlick();
+
+    // Spawns a new entity anchored at (startX,startY) — the FIRST click —
+    // pointing along the line toward (endX,endY) — the SECOND click — per
+    // explicit spec ("click once, defining the start point, and click
+    // again, defining the end point... spawned on screen" / confirmed via
+    // AskUserQuestion: the start point is the entity's fixed anchor).
+    // lineAngle reuses mouseAngleFromCenter() by treating the START point
+    // as the pivot and the END point as "the point whose angle we want" —
+    // this is literally "the angle of end as seen from start", i.e. the
+    // start->end direction, in the same 0=up/clockwise convention the
+    // rest of this file already uses. Rotation is lineAngle DIRECTLY (no
+    // +180, unlike the old mouse-anchored entity's own rotation formula)
+    // since the entity should point THE SAME way the line points (toward
+    // where the user aimed), not the opposite way (the old model pointed
+    // BACK toward a fixed center from a moving mouse — a genuinely
+    // different geometric relationship). Verified with the same kind of
+    // concrete case the old formula was checked against: end directly
+    // above start (dx=0, dy<0) -> lineAngle=0° -> rotationRad=0 -> the
+    // sprite's own already-"pointing up" art needs no rotation at all to
+    // point at an end point that's directly above where it's anchored —
+    // correct.
+    function spawnEntityFromLine(startX, startY, endX, endY) {
+        const lineAngle = mouseAngleFromCenter(endX, endY, startX, startY);
+        const dirIndex = directionIndexForAngle(lineAngle);
+        const directionKey = DIRECTIONS[dirIndex].key;
+        entities.push({
+            // endX/endY (the 2nd click that originally set the aim
+            // direction) are kept around, not just baked into a frozen
+            // rotation value — Stop-mode's 2 draggable dots need a real
+            // screen point to render/hit-test the "end" handle at, AND
+            // (per explicit request) an already-placed entity's rotation
+            // must keep tracking a LIVE dev-panel change to Hand Rotation
+            // Offset, not just whatever offset happened to be set at spawn
+            // time. See entityRotationRad() below — rotationRad is
+            // deliberately NOT stored on the entity at all, only
+            // recomputed from endX/endY + the CURRENT cfg offset every
+            // time it's needed.
+            x: startX, y: startY, endX, endY, directionKey,
+            playing: false, playFrameIndex: 0, playFrameAccum: 0, playSequenceFrozen: null,
+            wasInFlickTriggerZone: false, prevJointLocal: null, smoothedJointSpeed: {},
+            jointWorld: null, jointSpeed: {},
+        });
+        ensureDirectionLoaded(directionKey);
+    }
+
+    // Recomputes an entity's current rotation LIVE from its own fixed
+    // endX/endY plus the direction's CURRENT cfg.entityRotationOffsetByDirection
+    // value, rather than reading a value frozen at spawn/drag time — this
+    // is what makes moving the Hand Rotation Offset slider immediately
+    // rotate every already-placed entity of that direction, per explicit
+    // request, with no extra bookkeeping needed when the slider changes.
+    function entityRotationRad(entity) {
+        const lineAngle = mouseAngleFromCenter(entity.endX, entity.endY, entity.x, entity.y);
+        return (lineAngle + (cfg.entityRotationOffsetByDirection[entity.directionKey] || 0)) * Math.PI / 180;
+    }
+
+    // Stop-mode entity-adjustment: hit-tests every entity's own base (x,y)
+    // and end (endX,endY) dot against a click point, nearest/topmost first
+    // (iterated back-to-front so a later-spawned, visually-on-top entity's
+    // dot wins a tie over an earlier one sitting underneath it). A fixed
+    // px hit radius (not %vmin-scaled) — this is a tap-target size, which
+    // per this workspace's own dev-panel convention (CLAUDE.md §12a) is
+    // exactly the kind of value that should stay a constant real-world
+    // size, not one that shrinks on a small viewport.
+    const ENTITY_DOT_HIT_RADIUS = 14;
+    function hitTestEntityDot(x, y) {
+        for (let i = entities.length - 1; i >= 0; i--) {
+            const entity = entities[i];
+            if (Math.hypot(x - entity.x, y - entity.y) <= ENTITY_DOT_HIT_RADIUS) return { entity, point: 'base' };
+            if (Math.hypot(x - entity.endX, y - entity.endY) <= ENTITY_DOT_HIT_RADIUS) return { entity, point: 'end' };
+        }
+        return null;
+    }
+
+    // Delete mode's own hit-test: a click anywhere within an entity's own
+    // drawn bounding box (the SAME rectangle Show Hitbox draws — transform
+    // the click point into the entity's local unrotated space, same
+    // rotate-by-negative-angle trick used to invert the render/collision
+    // transform), not just its small anchor dot — matches "click any
+    // placed entity" more literally than reusing hitTestEntityDot's tiny
+    // radius would.
+    function hitTestEntitySprite(x, y) {
+        const vmin = Math.min(window.innerWidth, window.innerHeight);
+        const size = vmin * (cfg.entityScale / 100);
+        for (let i = entities.length - 1; i >= 0; i--) {
+            const entity = entities[i];
+            const refImg = ensureDirectionLoaded(entity.directionKey).frames[0];
+            const aspect = (refImg && refImg.complete && refImg.naturalWidth > 0) ? (refImg.naturalHeight / refImg.naturalWidth) : 1;
+            const drawW = size, drawH = size * aspect;
+            const vb = visibleBoundsForDirection(entity.directionKey);
+            const xOffsetPx = vmin * ((cfg.entityXOffsetByDirection[entity.directionKey] || 0) / 100);
+            const rotationRad = entityRotationRad(entity);
+            const dx = x - entity.x, dy = y - entity.y;
+            const cos = Math.cos(-rotationRad), sin = Math.sin(-rotationRad);
+            const localX = dx * cos - dy * sin;
+            const localY = dx * sin + dy * cos;
+            const left = -drawW * vb.centerX + xOffsetPx, top = -drawH * vb.bottomY;
+            if (localX >= left && localX <= left + drawW && localY >= top && localY <= top + drawH) return entity;
+        }
+        return null;
+    }
+
+    // Every click is part of a repeating 2-click cycle now (manual click-
+    // to-flick is retired — see triggerFlick's own comment): the 1st click
+    // anywhere records the pending start point; the 2nd click spawns a new
+    // entity along that line and immediately starts listening for the
+    // NEXT pair. A 2nd click landing exactly on the 1st (a degenerate,
+    // zero-length line with no real angle) is ignored rather than spawning
+    // a broken entity — stays in "awaiting end point" state instead of
+    // silently resetting, so an accidental double-click-in-place doesn't
+    // quietly eat the user's own start point.
+    //
+    // Gated to Stop mode only ("Animation entities can only be placed when
+    // in Stop mode") — both the spawn gesture AND the base/end dot drag
+    // (which also only ever renders its dots while stopped, see render()).
+    canvas.addEventListener('pointerdown', (e) => {
+        if (running) return;
+        const x = e.clientX, y = e.clientY;
+
+        // Delete mode takes priority over placement/dragging entirely —
+        // never starts a spawn gesture or a dot drag while active.
+        if (deleteMode) {
+            const hitEntity = hitTestEntitySprite(x, y);
+            if (hitEntity) entities = entities.filter(en => en !== hitEntity);
+            return;
+        }
+
+        if (!pendingSpawnStart) {
+            const hit = hitTestEntityDot(x, y);
+            if (hit) {
+                draggingEntity = hit.entity;
+                draggingPoint = hit.point;
+                return;
+            }
+            pendingSpawnStart = { x, y };
+        } else if (Math.hypot(x - pendingSpawnStart.x, y - pendingSpawnStart.y) > 0.0001) {
+            spawnEntityFromLine(pendingSpawnStart.x, pendingSpawnStart.y, x, y);
+            pendingSpawnStart = null;
+        }
     });
+
+    // ----------------------------------------------------------------
+    // Start/Stop — Start lets balls spawn and fall (updateBallAndCollision's
+    // own `running` check, above); Stop halts that AND clears whatever
+    // ball is currently on screen immediately (not just letting it finish
+    // falling out the bottom on its own).
+    // ----------------------------------------------------------------
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    function setRunning(next) {
+        running = next;
+        if (!running) {
+            ball = null;
+            ballRespawnCountdown = 0;
+        } else {
+            setDeleteMode(false); // starting has nothing to delete/place anyway
+        }
+        startBtn.disabled = running;
+        stopBtn.disabled = !running;
+        deleteBtn.disabled = running;
+    }
+    // Delete mode — toggled independently of Start/Stop's own running
+    // state, but only meaningful while stopped (deleteBtn is disabled by
+    // setRunning above the same way startBtn/stopBtn are). Turning it on
+    // cancels any in-progress spawn/drag gesture so the 3 modes never mix.
+    function setDeleteMode(next) {
+        deleteMode = next;
+        if (deleteMode) {
+            pendingSpawnStart = null;
+            draggingEntity = null;
+            draggingPoint = null;
+        }
+        deleteBtn.classList.toggle('active', deleteMode);
+    }
+    startBtn.addEventListener('click', () => setRunning(true));
+    stopBtn.addEventListener('click', () => setRunning(false));
+    deleteBtn.addEventListener('click', () => setDeleteMode(!deleteMode));
+    setRunning(false);
 
     // Fixed-timestep physics — step() always advances by exactly FIXED_DT
     // (1/60s), never the raw/jittery per-real-frame delta. Previously
@@ -2285,40 +2814,25 @@
     const MAX_FRAME_DT = 0.25; // caps the catch-up burst after e.g. a backgrounded tab
     let accumulator = 0;
     let lastTime = performance.now();
-    let lastStepResult = null;
-
     function step(dt) {
-        const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-        if (!hasMouse) { mouseX = cx; mouseY = cy; entityX = cx; entityY = cy; }
-
-        const posFactor = expSmoothFactor(cfg.positionSmoothing, dt);
-        entityX += (mouseX - entityX) * posFactor;
-        entityY += (mouseY - entityY) * posFactor;
-
-        const targetAngle = mouseAngleFromCenter(mouseX, mouseY, cx, cy);
-        const rotFactor = expSmoothFactor(cfg.rotationSmoothing, dt);
-        entityAngleDeg = angleLerp(entityAngleDeg, targetAngle, rotFactor);
-
-        const dirIndex = directionIndexForAngle(targetAngle);
-        currentDirectionKey = DIRECTIONS[dirIndex].key;
-        if (!playing) ensureDirectionLoaded(currentDirectionKey);
-
-        if (playing && playSequenceFrozen) {
-            playFrameAccum += dt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
-            playFrameIndex = Math.floor(playFrameAccum);
-            const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, Math.round(cfg.peakHoldFrames));
-            if (playFrameIndex >= totalLen) {
-                playing = false;
-                playSequenceFrozen = null;
-                playFrameIndex = 0;
-                playFrameAccum = 0;
+        // Per-entity play-sequence frame advancement — mouse-follow
+        // smoothing/rotation is gone entirely (entities are fixed once
+        // spawned), so this is now just the flick-playback clock plus the
+        // ball/collision/trigger physics.
+        entities.forEach(entity => {
+            if (entity.playing && entity.playSequenceFrozen) {
+                entity.playFrameAccum += dt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
+                entity.playFrameIndex = Math.floor(entity.playFrameAccum);
+                const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, Math.round(cfg.peakHoldFrames));
+                if (entity.playFrameIndex >= totalLen) {
+                    entity.playing = false;
+                    entity.playSequenceFrozen = null;
+                    entity.playFrameIndex = 0;
+                    entity.playFrameAccum = 0;
+                }
             }
-        }
-
-        const rotationRad = (entityAngleDeg + 180 + (cfg.entityRotationOffsetByDirection[currentDirectionKey] || 0)) * Math.PI / 180;
-        const { jointWorld, jointSpeed } = updateBallAndCollision(dt, rotationRad);
-
-        return { targetAngle, dirIndex, rotationRad, jointWorld, jointSpeed };
+        });
+        updateBallAndCollision(dt);
     }
 
     function update(now) {
@@ -2327,8 +2841,8 @@
         // window.innerWidth/innerHeight read 0 at that first boot call (a
         // real, reproduced-in-this-session early-page-life quirk, same
         // class already documented in this workspace for mobile Safari/
-        // Chrome, and the same root cause already fixed for mouseX/
-        // entityX above), the canvas permanently sticks at 0×0 unless the
+        // Chrome, and the same root cause already fixed for mouseX above),
+        // the canvas permanently sticks at 0×0 unless the
         // user happens to resize their window afterward — which, on a
         // static desktop session, most users never do. A 0×0 canvas isn't
         // just a rendering bug: `#scene.cursor-hidden{cursor:none}` (Hide
@@ -2348,23 +2862,20 @@
         lastTime = now;
         accumulator += frameDt;
         while (accumulator >= FIXED_DT) {
-            lastStepResult = step(FIXED_DT);
+            step(FIXED_DT);
             accumulator -= FIXED_DT;
         }
 
-        // render() still runs once per real frame (not once per fixed
-        // step) — on a high-refresh-rate display a given callback may run
-        // 0 steps (accumulator hasn't reached FIXED_DT yet), so this
-        // renders whatever the most recent step produced rather than
-        // nothing. lastStepResult is only null before the very first
-        // step has ever run.
-        if (lastStepResult) {
-            render(lastStepResult.targetAngle, lastStepResult.dirIndex, lastStepResult.rotationRad, lastStepResult.jointWorld, lastStepResult.jointSpeed);
-        }
+        // render() runs once per real frame regardless of how many (0 or
+        // more) fixed steps just ran — every entity/ball field it reads is
+        // plain current state (no per-step return value to thread through
+        // anymore now that entities carry their own state), so redrawing
+        // the same state on a step-less callback is harmless.
+        render();
         requestAnimationFrame(update);
     }
 
-    function render(targetAngle, dirIndex, rotationRad, jointWorld, jointSpeed) {
+    function render() {
         const w = window.innerWidth, h = window.innerHeight;
         ctx.fillStyle = cfg.backgroundColor;
         ctx.fillRect(0, 0, w, h);
@@ -2382,58 +2893,161 @@
             ctx.restore();
         }
 
-        let img;
-        if (playing && playSequenceFrozen) {
-            const hold = Math.round(cfg.peakHoldFrames);
-            const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, hold);
-            const virtualIndex = Math.min(playFrameIndex, totalLen - 1);
-            img = playSequenceFrozen[resolvePlaySequenceIndex(virtualIndex, DIRECTION_FRAME_COUNT, hold)];
-        } else {
-            img = ensureDirectionLoaded(currentDirectionKey).frames[0];
-        }
-
         const vmin = Math.min(w, h);
         const size = vmin * (cfg.entityScale / 100);
-        let drawW = size, drawH = size;
-        if (img && img.complete && img.naturalWidth > 0) {
-            drawH = size * (img.naturalHeight / img.naturalWidth);
-        }
 
-        ctx.save();
-        ctx.translate(entityX, entityY);
-        ctx.rotate(rotationRad);
-        if (img && img.complete && img.naturalWidth > 0) {
-            ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
-        }
-        if (cfg.showHitbox) {
-            ctx.strokeStyle = '#ff3366';
-            ctx.lineWidth = 1.5;
-            ctx.strokeRect(-drawW / 2, -drawH / 2, drawW, drawH);
-        }
-        ctx.restore();
-
-        // Joint collision debug lines — drawn at the FIXED collision
-        // thickness (Joint Collision Thickness alone — no longer speed-
-        // derived, per explicit instruction: "collision circles will
-        // never rescale during the animation sequence unless otherwise
-        // told so by me"), matching updateBallAndCollision()'s own
-        // per-segment thicknessPx exactly, so the boundary the ball
-        // actually reacts to is directly visible at all times.
-        if (cfg.showJointCollisionLines && jointWorld) {
+        // Live aim-preview while awaiting the 2nd click of a spawn — a
+        // dashed line from the recorded start point to the current mouse
+        // position PLUS the actual sprite that will be placed, live-
+        // updating every frame from the current mouse angle (per explicit
+        // request: "show the animation frame to be placed live as I drag
+        // so i can see in real time what it will look like when placed").
+        // Recomputes angle/direction/rotation via the EXACT SAME formula
+        // spawnEntityFromLine() uses to commit the real entity (just fed
+        // the live mouse position instead of a committed end point), so
+        // what's previewed here is guaranteed to match what actually gets
+        // placed on the 2nd click — translucent (globalAlpha) so it always
+        // reads as a preview, never mistaken for an already-placed entity.
+        if (pendingSpawnStart && hasMouse) {
             ctx.save();
-            ctx.strokeStyle = '#ffcf5c';
-            ctx.globalAlpha = 0.55;
-            ctx.lineCap = 'round';
-            ctx.lineWidth = vmin * (cfg.jointThickness / 100);
-            [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']].forEach(([aKey, bKey]) => {
-                const a = jointWorld[aKey], b = jointWorld[bKey];
-                if (!a || !b) return;
-                ctx.beginPath();
-                ctx.moveTo(a.x, a.y);
-                ctx.lineTo(b.x, b.y);
-                ctx.stroke();
-            });
+            ctx.strokeStyle = '#ffffff';
+            ctx.globalAlpha = 0.5;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 6]);
+            ctx.beginPath();
+            ctx.moveTo(pendingSpawnStart.x, pendingSpawnStart.y);
+            ctx.lineTo(mouseX, mouseY);
+            ctx.stroke();
             ctx.restore();
+            ctx.save();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(pendingSpawnStart.x, pendingSpawnStart.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            const dist = Math.hypot(mouseX - pendingSpawnStart.x, mouseY - pendingSpawnStart.y);
+            if (dist > 0.0001) {
+                const previewAngle = mouseAngleFromCenter(mouseX, mouseY, pendingSpawnStart.x, pendingSpawnStart.y);
+                const previewDirectionKey = DIRECTIONS[directionIndexForAngle(previewAngle)].key;
+                const previewRotationRad = (previewAngle + (cfg.entityRotationOffsetByDirection[previewDirectionKey] || 0)) * Math.PI / 180;
+                const previewImg = ensureDirectionLoaded(previewDirectionKey).frames[0];
+                if (previewImg && previewImg.complete && previewImg.naturalWidth > 0) {
+                    const previewDrawW = size, previewDrawH = size * (previewImg.naturalHeight / previewImg.naturalWidth);
+                    const previewVb = visibleBoundsForDirection(previewDirectionKey);
+                    const previewXOffsetPx = vmin * ((cfg.entityXOffsetByDirection[previewDirectionKey] || 0) / 100);
+                    ctx.save();
+                    ctx.globalAlpha = 0.5;
+                    ctx.translate(pendingSpawnStart.x, pendingSpawnStart.y);
+                    ctx.rotate(previewRotationRad);
+                    ctx.drawImage(previewImg, -previewDrawW * previewVb.centerX + previewXOffsetPx, -previewDrawH * previewVb.bottomY, previewDrawW, previewDrawH);
+                    ctx.restore();
+                }
+            }
+        }
+
+        entities.forEach(entity => {
+            let img;
+            if (entity.playing && entity.playSequenceFrozen) {
+                const hold = Math.round(cfg.peakHoldFrames);
+                const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, hold);
+                const virtualIndex = Math.min(entity.playFrameIndex, totalLen - 1);
+                img = entity.playSequenceFrozen[resolvePlaySequenceIndex(virtualIndex, DIRECTION_FRAME_COUNT, hold)];
+            } else {
+                img = ensureDirectionLoaded(entity.directionKey).frames[0];
+            }
+
+            let drawW = size, drawH = size;
+            if (img && img.complete && img.naturalWidth > 0) {
+                drawH = size * (img.naturalHeight / img.naturalWidth);
+            }
+
+            const vb = visibleBoundsForDirection(entity.directionKey);
+            // Animation X Offset (cfg.entityXOffsetByDirection) — added to
+            // the local x AFTER vb.centerX, BEFORE rotation, so it shifts
+            // the drawn sprite/hitbox sideways relative to the entity's own
+            // facing direction, matching the same offset applied to the
+            // collision geometry above (updateBallAndCollision) and to the
+            // trigger-zone check (ballInFlickTriggerZone) — all 3 must stay
+            // in sync, same discipline as vb.centerX/bottomY.
+            const xOffsetPx = vmin * ((cfg.entityXOffsetByDirection[entity.directionKey] || 0) / 100);
+            ctx.save();
+            ctx.translate(entity.x, entity.y);
+            ctx.rotate(entityRotationRad(entity));
+            // Anchored at the center-base of the VISIBLE (non-transparent)
+            // content, not the raw PNG's own bottom-center — see
+            // localOffsetFromNormalized()'s comment; drawImage's own
+            // (dx,dy) is its TOP-LEFT corner, so -drawW*centerX/-drawH*bottomY
+            // puts that exact visible-content point at the entity's own
+            // origin.
+            if (img && img.complete && img.naturalWidth > 0) {
+                ctx.drawImage(img, -drawW * vb.centerX + xOffsetPx, -drawH * vb.bottomY, drawW, drawH);
+            }
+            if (cfg.showHitbox) {
+                ctx.strokeStyle = '#ff3366';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(-drawW * vb.centerX + xOffsetPx, -drawH * vb.bottomY, drawW, drawH);
+            }
+            ctx.restore();
+
+            // Joint collision debug lines — drawn at the FIXED collision
+            // thickness (Joint Collision Thickness alone — no longer speed-
+            // derived, per explicit instruction: "collision circles will
+            // never rescale during the animation sequence unless otherwise
+            // told so by me"), matching updateBallAndCollision()'s own
+            // per-segment thicknessPx exactly, so the boundary the ball
+            // actually reacts to is directly visible at all times.
+            if (cfg.showJointCollisionLines && entity.jointWorld) {
+                ctx.save();
+                ctx.strokeStyle = '#ffcf5c';
+                ctx.globalAlpha = 0.55;
+                ctx.lineCap = 'round';
+                ctx.lineWidth = vmin * (cfg.jointThickness / 100);
+                [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']].forEach(([aKey, bKey]) => {
+                    const a = entity.jointWorld[aKey], b = entity.jointWorld[bKey];
+                    if (!a || !b) return;
+                    ctx.beginPath();
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                    ctx.stroke();
+                });
+                ctx.restore();
+            }
+        });
+
+        // Stop-mode entity-adjustment handles: 2 dots per entity (base =
+        // the fixed anchor point / 1st click, end = the aim point / 2nd
+        // click) plus a dashed connecting line, draggable via the
+        // pointerdown/pointermove/pointerup handlers above — only shown
+        // (and only hit-testable, per those handlers) while stopped, same
+        // gating as the spawn-placement gesture itself.
+        if (!running) {
+            entities.forEach(entity => {
+                ctx.save();
+                ctx.strokeStyle = '#4dd2ff';
+                ctx.globalAlpha = 0.7;
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(entity.x, entity.y);
+                ctx.lineTo(entity.endX, entity.endY);
+                ctx.stroke();
+                ctx.restore();
+
+                ctx.save();
+                ctx.fillStyle = '#4dd2ff';
+                ctx.beginPath();
+                ctx.arc(entity.x, entity.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                ctx.save();
+                ctx.fillStyle = '#ff4da6';
+                ctx.beginPath();
+                ctx.arc(entity.endX, entity.endY, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
         }
 
         // Ball
@@ -2452,7 +3066,8 @@
             ctx.fillStyle = '#ffffff';
             ctx.font = '14px monospace';
             ctx.textBaseline = 'top';
-            ctx.fillText(`angle: ${targetAngle.toFixed(1)}°  direction[${dirIndex}]: ${currentDirectionKey}${playing ? '  (playing)' : ''}`, 12, 12);
+            const playingCount = entities.filter(en => en.playing).length;
+            ctx.fillText(`entities: ${entities.length}${playingCount ? `  (${playingCount} playing)` : ''}${pendingSpawnStart ? '  (placing...)' : ''}${draggingEntity ? '  (adjusting...)' : ''}${deleteMode ? '  (delete mode)' : ''}  [${running ? 'running' : 'stopped'}]`, 12, 12);
             ctx.restore();
         }
     }

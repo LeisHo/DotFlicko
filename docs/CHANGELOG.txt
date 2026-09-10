@@ -86,6 +86,185 @@ Verified:
   identical ball position across all 192 directly-comparable steps.
 
 --------------------------------------------------------------------------------
+2026-09-10 (continued) -- spawn-placement-mode branch, uncommitted
+
+A major architecture rework, proposed and explicitly approved by the user
+before implementation (CLAUDE.md §0a) on a new `spawn-placement-mode`
+branch, plus several follow-on refinement rounds in the same session.
+
+Added:
+- Spawn-and-place model, replacing the mouse-anchored entity entirely: the
+  animation is invisible on load; a 2-click gesture (1st click = fixed
+  anchor point, 2nd click = aim point) spawns a new, independently-tracked
+  entity along that line, at whichever of the 8 directions the line's angle
+  falls into. Multiple entities can be placed at any angle; each keeps its
+  own play/collision/trigger state. Manual click-to-flick was retired
+  (every click is now part of the spawn/adjust gesture) -- the ball-
+  proximity auto-trigger, generalized to loop over every entity
+  independently, is the only way any entity's flick fires.
+- Entity anchor point changed from image centroid to the bottom-center of
+  the frame's actual VISIBLE (non-transparent) content -- a one-time-per-
+  direction alpha-channel scan (computeVisibleContentBounds), cached per
+  direction. Confirmed real, non-trivial padding in the raw PNGs (e.g.
+  'front': centerX=0.4765, bottomY=0.9145, not the naive 0.5/1.0).
+- Swept (segment-vs-segment closest-approach) ball-vs-finger collision,
+  replacing a point-only test -- fixes a fast ball tunneling clean through
+  the hand between 2 physics ticks without ever registering a hit.
+- Live drag preview: while aiming (between the 1st and 2nd click), the
+  actual sprite renders translucently at the real live angle/direction, so
+  the user sees exactly what will be placed before committing.
+- Start/Stop buttons (always-visible UI, independent of the dev panel):
+  Start lets balls spawn and fall; Stop halts spawning and clears any ball
+  on screen immediately. Entity placement is gated to Stop mode only.
+- Stop-mode entity adjustment: 2 draggable dots per entity (base = the
+  fixed anchor point, end = the original aim point) plus a dashed
+  connecting line. Dragging the base dot translates the whole entity
+  (moves, keeps its rotation); dragging the end dot keeps the base fixed
+  and rotates the entity in place, recomputing direction/rotation with the
+  same formula the original 2-click spawn gesture uses (switching
+  direction, and preloading its frames, if the drag crosses a 45-degree
+  sector boundary).
+
+Fixed:
+- A freeze-on-first-click regression that the visible-content anchor scan
+  itself introduced: computeVisibleContentBounds ran at full image
+  resolution (measured 36-83ms per direction), and the new live drag
+  preview called it every animation frame for whichever direction the
+  mouse currently pointed toward -- sweeping across multiple direction
+  sectors while aiming chained several of these expensive scans together,
+  reading as a hang. Fixed by scanning a downscaled (200px) copy of the
+  image instead of the original (measured: sub-1ms per direction after a
+  one-time ~30-56ms warmup on the very first scan).
+
+Verified:
+- The spawn-placement rework end-to-end via real synthetic click sequences:
+  correct direction bucket/rotation for 2 different line angles, entities
+  staying fixed and independent of later mouse movement and of each other,
+  per-entity trigger isolation (forcing the ball onto one entity's tip only
+  flipped that entity's own playing flag), and that clicking an already-
+  spawned entity does NOT trigger it (starts a new spawn pair instead).
+- Both anchor-point changes visually (screenshot comparison, and a
+  temporary debug-marker crosshair at the entity's own exact anchor point)
+  and via the joint-collision debug lines, confirming the collision
+  geometry stayed in sync with the sprite draw through both changes.
+- The swept-collision algorithm in isolation (a fast ball crossing a
+  segment mid-tick correctly resolved at the true crossing point, where
+  the old point-only test would have missed it by 30px), then via a
+  realistic end-to-end integration test (a 500px/tick ball correctly
+  caught and resolved; the collision velocity kick still applies correctly
+  using real per-tick joint-speed data).
+- The live drag preview matches exactly what gets committed on the actual
+  2nd click (same direction, same rotation, to 2 decimal places).
+- The freeze fix via direct timing measurement (before/after) AND a full
+  realistic interactive end-to-end test matching the user's own reported
+  flow (click, sweep the mouse across 5 direction sectors via hover,
+  confirm `document.readyState` stays "complete" throughout with no hang,
+  2nd click completes the spawn correctly).
+- Start/Stop and the draggable dots live: base-dot drag confirmed to
+  translate x/y AND the end point by an identical delta with rotation/
+  direction unchanged; end-dot drag confirmed to leave x/y fixed while
+  rotation changed (screenshot-confirmed the hand visibly rotating in
+  place); Start confirmed to hide the dots, disable itself, and spawn a
+  falling ball; Stop confirmed to clear the ball immediately and re-show
+  the dots; a click while running confirmed to spawn nothing.
+
+Did not commit or push any of this branch's work -- stays local on
+`spawn-placement-mode` until the user asks to merge/push.
+
+--------------------------------------------------------------------------------
+2026-09-10 (continued again) -- spawn-placement-mode branch, uncommitted
+
+User report: "placing the entities still freezes" -- a regression report
+against the freeze already fixed earlier the same day. Investigated fresh
+rather than assuming the prior fix had failed.
+
+Fixed:
+- The dev panel (#devPanel) had no default-hidden state -- only a runtime
+  toggle. On any genuinely fresh page load (no saved localStorage, which
+  describes a real first-time visitor), the panel rendered wide open,
+  covering most of the left/upper viewport including the Start/Stop
+  buttons. A click meant to place an entity's first anchor point landed on
+  the panel instead of the canvas -- nothing happened, indistinguishable
+  from a freeze to a user with no reason to suspect an invisible overlay
+  was eating their clicks. This session's own earlier verification never
+  caught it because it reused an already-open browser tab where the panel
+  had already been manually hidden once, and that hidden state persisted
+  in the live DOM across reloads (not via localStorage) -- masking the
+  bug for every test after the first. Fixed by adding the `hidden` class
+  to `#devPanel` directly in the static HTML so it now boots hidden by
+  default; the existing "DEV" corner button still opens it on demand.
+- Added defensive try/catch around the visible-content anchor scan
+  (computeVisibleContentBounds, inside visibleBoundsForDirection) as a
+  precaution -- render() has no try/catch above it in the call stack, so
+  any uncaught throw there (e.g. a possible canvas-taint SecurityError on
+  some browsers for a file://-opened page) would silently kill the whole
+  animation loop after the first placement, looking identical to a real
+  freeze. Falls back to, and caches, the same existing 0.5/1 default on
+  any throw. Not confirmed as the actual cause of this particular report
+  (the dev-panel default explains it fully on its own) -- added as
+  hardening, labeled honestly as such.
+
+Verified:
+- Reproduced against a genuinely fresh load (`localStorage.clear()` +
+  reload, not the already-configured tab used for every earlier test) --
+  confirmed via screenshot the panel now starts hidden with the canvas
+  fully clickable, then confirmed a real 2-click placement sequence spawns
+  an entity correctly with no freeze (`document.readyState` stayed
+  "complete" throughout).
+
+--------------------------------------------------------------------------------
+2026-09-10 (continued again) -- spawn-placement-mode branch, uncommitted
+
+3 requests: bake tuned Hand Rotation Offset defaults, fix a remaining
+anchor-accuracy complaint, and add a new per-direction Animation X Offset
+control.
+
+Added:
+- Hand Rotation Offset defaults updated to a newly-tuned set (behind: 0,
+  behind-thumb: 2, side-thumb: 11, front-thumb: 5, front: 0, front-pinky:
+  -5, side-pinky: -3, behind-pinky: -2), baked directly into
+  cfg.entityRotationOffsetByDirection per the same "Set Hand Rotation
+  Offset defaults" convention established earlier this project.
+- Animation X Offset: a 2nd compound dropdown+slider dev-panel row (own
+  dropdown, own 8 per-direction sliders), mirroring Hand Rotation Offset's
+  own architecture. Lets each direction's sprite/collision placement be
+  manually shifted perpendicular to its own placement line (%vmin,
+  defaults 0/no-op) -- a local-x correction applied before rotation, so it
+  always reads as sideways-relative-to-facing rather than a raw screen
+  nudge, threaded through the same 4 call sites the visible-content anchor
+  already has to stay in sync across. Never touches the entity's real
+  clicked anchor/aim points (x/y/endX/endY), so the Stop-mode adjustment
+  dots are unaffected.
+
+Fixed:
+- The visible-content anchor (added, then freeze-fixed via a downscaled
+  scan, earlier the same day) was still measurably off after that freeze
+  fix: the downscale itself (MAX_SCAN_DIM=200) introduced a real, non-
+  trivial accuracy error (up to 0.0065 of image height, ~2-4px at typical
+  scale, on the worst-observed direction) versus a full-resolution scan,
+  confirmed via a direct empirical comparison across all 8 directions
+  rather than assumed. Retuned MAX_SCAN_DIM to 400 after measuring several
+  candidate values' own error/speed tradeoff -- cuts the error to ~0.0018
+  (sub-1px) while the scan itself still costs only ~1.2ms, far short of
+  freeze territory.
+
+Verified:
+- The rotation-offset defaults and the new X-offset row's own default (0
+  for all 8 directions) confirmed live via direct cfg inspection after a
+  fresh load.
+- The MAX_SCAN_DIM retune via a temporary full-resolution reference
+  implementation of the scan, compared numerically against the live
+  production function across all 8 directions; a pixel-level readback of
+  the actual rendered canvas (not just the source PNG) confirmed the
+  anchor lands within 1-2px of the sprite's own true rendered bottom edge.
+- The X Offset control's dev-panel row renders correctly (screenshot,
+  after scrolling to it); a direct test (a large, deliberately visible
+  offset value + Show Hitbox + Show Joint Collision Lines) confirmed the
+  drawn sprite, its hitbox, and its collision debug line all shift
+  together, staying in sync; a full real 2-click placement sweep after
+  resetting test state confirmed no regression of the freeze fix.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
