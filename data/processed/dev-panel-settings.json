@@ -12,6 +12,7 @@
     "colorBall": "#ff5c5c",
     "sliderBallBounciness": 0.45,
     "sliderBallRespawnRate": 0.8,
+    "sliderBallMaxSpeed": 110,
     "sliderJointThickness": 2.6,
     "sliderThicknessSmoothing": 0.89,
     "sliderCollisionIntensity": 0.7,
@@ -168,6 +169,7 @@
       {
         "key": "desktop:Ball",
         "rowKeys": [
+          "sliderBallMaxSpeed",
           "sliderBallGravity",
           "sliderBallRadius",
           "colorBall",
