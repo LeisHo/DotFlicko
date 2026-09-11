@@ -78,9 +78,16 @@ Inside `index.html`'s single `<script>`, in roughly this order:
    to-viewport-center case it was built for.
 6. **Entities** (`entities` array, `spawnEntityFromLine()`,
    `hitTestEntityDot()`, `hitTestEntitySprite()`, `entityRotationRad()`) --
-   the animation is invisible until placed. A 2-click gesture (canvas
-   `pointerdown`) spawns a new entity: 1st click sets its fixed anchor
-   (`x`,`y`); 2nd click sets its aim point (`endX`,`endY`, kept around
+   the animation is invisible until placed. Placement supports 2
+   interchangeable gestures ending in the same `spawnEntityFromLine()`
+   call: 2 SEPARATE taps (canvas `pointerdown` sets `pendingSpawnStart` on
+   the 1st, commits on the 2nd), OR a single press-drag-release (the
+   `pointerup` handler commits using the release position IF it's the
+   same `pointerId` that started the pending spawn AND moved past
+   `MIN_DRAG_PLACEMENT_DISTANCE` -- below that, an ordinary tap's own
+   release intentionally does nothing, preserving the 2-tap gesture). 1st
+   point sets the fixed anchor (`x`,`y`); 2nd point (however it arrived)
+   sets the aim point (`endX`,`endY`, kept around
    permanently -- Stop mode's adjustment dots render/drag a real handle at
    it, AND it's the live source `entityRotationRad(entity)` recomputes
    rotation from every time it's needed, NOT a value frozen at spawn time)
@@ -430,3 +437,18 @@ GOTCHAS
   through this same cache rather than a fresh `ctx.drawImage(img, ...)`
   call, or that 3rd site reintroduces the exact cost this exists to
   avoid.
+- **Tap-and-drag placement (mobile) and the original 2-separate-taps
+  gesture share the SAME `pendingSpawnStart`/`spawnEntityFromLine()` path
+  -- they're 2 ways to reach the same commit, not 2 separate systems.**
+  `spawnPointerId` (set alongside `pendingSpawnStart` in `pointerdown`)
+  is what lets the `pointerup` handler tell "this release belongs to the
+  press that started the pending spawn" apart from an unrelated
+  pointerup (a 2nd finger, or a stray event) -- don't remove it as
+  "unused" just because `pendingSpawnStart` alone looks sufficient.
+  `MIN_DRAG_PLACEMENT_DISTANCE` (24px) is a deliberate, real distinction:
+  a plain tap's own release (nearly 0px of movement, including ordinary
+  touch jitter) must NOT auto-complete a placement, or the 1st tap of the
+  ORIGINAL 2-tap gesture would immediately finish a degenerate,
+  near-zero-length placement on its own release instead of waiting for a
+  real 2nd tap. Don't lower this threshold without re-confirming ordinary
+  tap jitter still stays under it.

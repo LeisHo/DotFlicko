@@ -2865,9 +2865,31 @@
             }
         }
     });
-    window.addEventListener('pointerup', () => {
+    window.addEventListener('pointerup', (e) => {
         draggingEntity = null;
         draggingPoint = null;
+
+        // Tap-and-drag placement (mobile) — an alternative to the 2-
+        // SEPARATE-taps gesture in the pointerdown handler below, not a
+        // replacement for it: press for the 1st point, drag, release for
+        // the 2nd. Only completes when this release is the SAME press
+        // that started the current pendingSpawnStart (matched by
+        // pointerId — so an unrelated pointerup, e.g. a 2nd finger,
+        // can't accidentally finish it) AND moved a real minimum
+        // distance (MIN_DRAG_PLACEMENT_DISTANCE) from the start — a
+        // plain tap-then-release (near-zero distance, including ordinary
+        // touch jitter) must NOT auto-complete, or every 1st tap of the
+        // existing 2-tap flow would immediately finish a degenerate
+        // placement on its own release instead of waiting for a real 2nd
+        // tap.
+        if (pendingSpawnStart && !running && e.pointerId === spawnPointerId) {
+            const dist = Math.hypot(e.clientX - pendingSpawnStart.x, e.clientY - pendingSpawnStart.y);
+            if (dist > MIN_DRAG_PLACEMENT_DISTANCE) {
+                spawnEntityFromLine(pendingSpawnStart.x, pendingSpawnStart.y, e.clientX, e.clientY);
+                pendingSpawnStart = null;
+                spawnPointerId = null;
+            }
+        }
     });
 
     // ----------------------------------------------------------------
@@ -2934,6 +2956,22 @@
     // (not inside step()), read by render() to draw the live aim-preview
     // line.
     let pendingSpawnStart = null;
+    // Which pointer (touch/mouse) started the CURRENT pendingSpawnStart —
+    // lets the pointerup handler recognize "this is the same press being
+    // released" for tap-and-drag placement (see that handler's own
+    // comment), without also mistaking an unrelated pointerup (e.g. a
+    // 2nd finger) for the drag's own release.
+    let spawnPointerId = null;
+    // Minimum real movement (px) between press and release for a
+    // tap-and-drag release to count as "the 2nd point" rather than an
+    // ordinary tap's own natural touch jitter — per explicit request
+    // ("on mobile... click for the first point, then drag to the second
+    // point"), added ALONGSIDE the existing 2-separate-taps gesture, not
+    // in place of it. A plain tap-then-release (dist ~0) must keep
+    // leaving pendingSpawnStart active for a real 2nd tap, exactly like
+    // before, or every 1st tap of the existing flow would immediately
+    // "complete" a degenerate placement on its own release.
+    const MIN_DRAG_PLACEMENT_DISTANCE = 24;
 
     // Shared by a real click AND the ball-proximity auto-trigger
     // (ballInFlickTriggerZone, checked inside updateBallAndCollision) —
@@ -3124,9 +3162,11 @@
                 return;
             }
             pendingSpawnStart = { x, y };
+            spawnPointerId = e.pointerId;
         } else if (Math.hypot(x - pendingSpawnStart.x, y - pendingSpawnStart.y) > 0.0001) {
             spawnEntityFromLine(pendingSpawnStart.x, pendingSpawnStart.y, x, y);
             pendingSpawnStart = null;
+            spawnPointerId = null;
         }
     });
 

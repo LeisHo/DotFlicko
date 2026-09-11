@@ -40,7 +40,12 @@ report back** — if still laggy, the next real lead is the source PNGs
 themselves (up to 2400x1181px per frame, likely oversized for this
 project's own on-screen scale — DickoClicko's own history flagged this
 same "oversized PNGs" issue before) or lowering `DIRECTION_FRAME_COUNT`'s
-own asset footprint, neither of which this session attempted.
+own asset footprint, neither of which this session attempted. Also added
+(same mobile push, per explicit request): a press-drag-release placement
+gesture as an alternative to the original 2-separate-taps flow — verified
+logically correct (via mouse-drag simulation and the browser tool's own
+touch emulation), but real on-device touch-feel confirmation is the
+user's own to make too.
 
 **Note for a new session:** a *different*, concurrent Claude session has
 also been actively developing this same `index.html` (the ball/collision
@@ -118,6 +123,13 @@ new session should be aware they're there before touching `data/FLICK/`.
   direction/point keys missing. Synced to both
   `data/processed/flick-skeleton.json` and the embedded `FLICK_SKELETON`
   literal in `index.html` (confirmed byte-identical after the sync).
+- Mobile performance: canvas DPR capped at 2, and idle-entity/live-preview
+  sprites now draw from a pre-scaled cache instead of rescaling the
+  full-resolution source every frame (see Open item above).
+- Tap-and-drag placement: press for the 1st point, drag, release for the
+  2nd — an alternative to the original 2-separate-taps gesture, not a
+  replacement (a plain tap's own release still leaves the pending spawn
+  active, waiting for a real 2nd tap, exactly as before).
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

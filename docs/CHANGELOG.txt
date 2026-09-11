@@ -541,6 +541,44 @@ Verified:
   re-test on their own phone.
 
 --------------------------------------------------------------------------------
+2026-09-10 (continued once more) -- tap-and-drag placement (mobile)
+
+"on mobile, when placing entities, i want to be able to click and drag as
+well. Click for the first point, then drag to the second point."
+
+Added:
+- A press-drag-release placement gesture, alongside (not replacing) the
+  original 2-separate-taps flow -- both commit through the exact same
+  `spawnEntityFromLine()` call. `pointerdown` records `spawnPointerId`
+  alongside `pendingSpawnStart` when starting a NEW pending spawn; the
+  existing `pointerup` handler (previously only used to end a Stop-mode
+  dot-drag) now also checks: if there's a pending spawn, the release's
+  `pointerId` matches the press that started it, and the release moved
+  more than `MIN_DRAG_PLACEMENT_DISTANCE` (24px, a deliberate tap-vs-drag
+  threshold) from the start, commit the entity using the release position
+  as the 2nd point. Below that distance -- an ordinary tap's own release,
+  including normal touch jitter -- nothing happens, exactly as before,
+  so the original 2-tap gesture (1st tap, then a genuinely SEPARATE 2nd
+  tap) keeps working unchanged.
+
+Verified:
+- A plain quick tap (press+release at nearly the same point) leaves
+  `pendingSpawnStart` active rather than auto-completing -- the original
+  2-tap flow's own 1st-tap behavior is unaffected.
+- A real 2nd separate tap still completes a placement normally.
+- A single press-drag-release (simulated as one continuous mouse-drag)
+  places an entity correctly in one motion, rotated to point along the
+  drag direction, matching the live preview shown during the drag.
+- The same press-drag-release gesture works correctly under the browser
+  tool's own mobile/touch emulation (375x812 viewport with touch
+  translation), not just as a mouse drag.
+- No regression to the UNRELATED existing dot-drag (adjusting an
+  already-placed entity's base/end point in Stop mode) -- since that
+  flow never sets `pendingSpawnStart`, the new pointerup logic correctly
+  no-ops during it (confirmed: dragging an entity's end dot still
+  rotates it in place without spawning a stray new entity).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
