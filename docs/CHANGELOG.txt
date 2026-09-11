@@ -579,6 +579,46 @@ Verified:
   rotates it in place without spawning a stray new entity).
 
 --------------------------------------------------------------------------------
+2026-09-10 (continued once more) -- "Allow Placement While Running" debug
+checkbox
+
+"add a checkbox in the debug section. When turned on, I can place
+entities regardless of the start and stop state."
+
+Added:
+- `cfg.allowPlacementWhileRunning` (Debug group checkbox, default off) --
+  when on, both placement gestures (2-tap and press-drag-release) work
+  regardless of Start/Stop state. Deliberately scoped to NEW placement
+  only, per the request's own exact wording ("I can place entities") --
+  Delete mode keeps its own unconditional Stop-only check untouched, and
+  the dot-hit-test used to start dragging an EXISTING entity is forced
+  to skip (return null) whenever `running` is true, so a click on an
+  already-placed entity's own anchor point starts a NEW placement
+  instead of grabbing that entity to adjust it.
+
+Verified:
+- Default (checkbox off) behavior is byte-for-byte unchanged: a
+  press-drag-release while running still does nothing, exactly as
+  before this change.
+- With the checkbox on: the same drag gesture places a new entity
+  correctly while running (screenshot-confirmed: entity rendered, ball
+  actively bouncing at the same time).
+- Delete mode stays correctly disabled while running regardless of the
+  checkbox (the Delete button itself stays disabled via the existing
+  `setRunning()` logic, untouched by this change).
+- A synthetic pointerdown dispatched exactly at an existing entity's own
+  anchor point, while running with the checkbox on, correctly started a
+  NEW placement (`pendingSpawnStart` set) rather than grabbing that
+  entity's dot (`draggingEntity` stayed false) -- confirms the scoping
+  is real, not just a comment.
+
+Noted, not part of this change: another concurrent session is actively
+adding a "Scenes" (named, saved entity arrangements) feature to this
+same `index.html` and `.claude/launch.json` (a 3rd alt dev-server
+config) -- both left untouched by this session beyond what git already
+shows as unavoidably co-committed by editing the same shared file.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

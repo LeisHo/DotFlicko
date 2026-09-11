@@ -130,6 +130,10 @@ new session should be aware they're there before touching `data/FLICK/`.
   2nd — an alternative to the original 2-separate-taps gesture, not a
   replacement (a plain tap's own release still leaves the pending spawn
   active, waiting for a real 2nd tap, exactly as before).
+- Debug checkbox "Allow Placement While Running" — lets entities be
+  newly placed regardless of Start/Stop state. Scoped to new placement
+  only; dot-dragging an already-placed entity and Delete mode stay
+  Stop-only regardless of the checkbox.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

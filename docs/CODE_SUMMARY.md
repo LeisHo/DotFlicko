@@ -85,7 +85,11 @@ Inside `index.html`'s single `<script>`, in roughly this order:
    `pointerup` handler commits using the release position IF it's the
    same `pointerId` that started the pending spawn AND moved past
    `MIN_DRAG_PLACEMENT_DISTANCE` -- below that, an ordinary tap's own
-   release intentionally does nothing, preserving the 2-tap gesture). 1st
+   release intentionally does nothing, preserving the 2-tap gesture).
+   Both gestures are normally Stop-mode only, but `cfg.allowPlacementWhileRunning`
+   (a debug checkbox) bypasses that specifically for NEW placement --
+   dot-dragging an existing entity and Delete mode stay Stop-only
+   regardless of the checkbox (see that checkbox's own GOTCHAS entry). 1st
    point sets the fixed anchor (`x`,`y`); 2nd point (however it arrived)
    sets the aim point (`endX`,`endY`, kept around
    permanently -- Stop mode's adjustment dots render/drag a real handle at
@@ -452,3 +456,21 @@ GOTCHAS
   near-zero-length placement on its own release instead of waiting for a
   real 2nd tap. Don't lower this threshold without re-confirming ordinary
   tap jitter still stays under it.
+- **`cfg.allowPlacementWhileRunning` (Debug group checkbox) is scoped to
+  NEW placement ONLY -- it does NOT make dot-dragging or Delete mode
+  available while running.** The `pointerdown` handler checks it in 2
+  separate places rather than one shared top-level gate: `if (running &&
+  !cfg.allowPlacementWhileRunning) return;` guards the placement path
+  specifically (AFTER the `deleteMode` branch, which has its own
+  unconditional `if (running) return;` that this checkbox never touches),
+  and the dot-hit-test itself is forced to `null` whenever `running` is
+  true (`const hit = running ? null : hitTestEntityDot(x, y);`) so a
+  click landing exactly on an existing entity's own anchor point starts a
+  NEW placement instead of grabbing that entity's dot for adjustment.
+  Don't collapse these back into one shared `if (running &&
+  !cfg.allowPlacementWhileRunning) return;` at the very top of the
+  handler -- that would also let Delete mode and dot-dragging bypass
+  Stop mode, which was never asked for and is explicitly out of scope
+  for this checkbox. The `pointerup` handler's own drag-release-commit
+  check mirrors the same condition (`(!running ||
+  cfg.allowPlacementWhileRunning)`) for the press-drag-release gesture.

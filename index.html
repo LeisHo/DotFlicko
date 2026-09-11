@@ -397,6 +397,10 @@
                 <div class="dev-section-content"></div>
             </div>
             <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Scenes">▼ Scenes</div>
+                <div class="dev-section-content"></div>
+            </div>
+            <div class="dev-section">
                 <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Background">▼ Background</div>
                 <div class="dev-section-content"></div>
             </div>
@@ -1372,6 +1376,14 @@
             sectionCollapseState: captureSectionCollapseState(),
             devTextOverrides: { ...devTextOverrides },
             textEditModeEnabled,
+            // Named entity-placement scenes — see `scenes`' own top-of-
+            // declaration comment. Bundled into this same snapshot/file
+            // rather than a separate one, so the existing Save Settings
+            // 3-tier pipeline covers it for free; a regular Save Settings
+            // click (for unrelated tuning) harmlessly re-persists whatever
+            // scenes already existed in memory, same as it already does
+            // for every other piece of state here.
+            scenes: JSON.parse(JSON.stringify(scenes)),
         };
     }
     function applyFullDevPanelState(state) {
@@ -1391,6 +1403,10 @@
         }
         applySectionOrder(state.sectionOrder);
         applySectionCollapseState(state.sectionCollapseState);
+        if (state.scenes) {
+            scenes = state.scenes;
+            refreshSceneSelectOptions();
+        }
     }
     function copyDevPanelSettings() {
         const text = JSON.stringify(captureFullDevPanelState(), null, 2);
@@ -1763,6 +1779,13 @@
         ballGravity: 80, ballRadius: 3, ballColor: '#ff5c5c', ballBounciness: 0.6, ballRespawnRate: 1, ballMaxSpeed: 300,
         jointThickness: 4, thicknessSmoothing: 0.15, collisionIntensity: 1,
         showCenter: true, showAngleDebug: true, hideCursor: true, showHitbox: false, showJointCollisionLines: false,
+        // Debug override — per explicit request ("I can place entities
+        // regardless of the start and stop state"). Scoped to NEW
+        // placement only (both the 2-tap and press-drag-release
+        // gestures) — dot-dragging an already-placed entity and Delete
+        // mode stay Stop-only regardless of this checkbox, since neither
+        // was part of the request.
+        allowPlacementWhileRunning: false,
     };
 
     // Labels below still reflect the "Hand ..." rename set as default
@@ -1838,6 +1861,7 @@
         { group: 'Debug', id: 'checkboxShowAngleDebug', type: 'checkbox', label: 'Show Angle/Direction Debug Text' },
         { group: 'Debug', id: 'checkboxHideCursor', type: 'checkbox', label: 'Hide OS Cursor' },
         { group: 'Debug', id: 'checkboxShowHitbox', type: 'checkbox', label: 'Show Entity Bounding Box' },
+        { group: 'Debug', id: 'checkboxAllowPlacementWhileRunning', type: 'checkbox', label: 'Allow Placement While Running' },
     ];
 
     const PROJECT_CONTROL_ARRAYS = [
@@ -1854,6 +1878,7 @@
         });
         renderRotationOffsetRow();
         renderXOffsetRow();
+        renderSceneControls();
         // Default-checked checkboxes: the row builder never sets .checked,
         // so a true default needs applying explicitly right after render.
         document.getElementById('checkboxShowCenter').checked = cfg.showCenter;
@@ -1861,6 +1886,7 @@
         document.getElementById('checkboxHideCursor').checked = cfg.hideCursor;
         document.getElementById('checkboxShowHitbox').checked = cfg.showHitbox;
         document.getElementById('checkboxShowJointCollisionLines').checked = cfg.showJointCollisionLines;
+        document.getElementById('checkboxAllowPlacementWhileRunning').checked = cfg.allowPlacementWhileRunning;
     }
 
     function wireProjectControls() {
@@ -1880,6 +1906,7 @@
         bindSlider('sliderAngleOffset', 'angleOffset');
         wireRotationOffsetRow();
         wireXOffsetRow();
+        wireSceneControls();
         bindSlider('sliderBallGravity', 'ballGravity');
         bindSlider('sliderBallRadius', 'ballRadius');
         bindSlider('sliderBallBounciness', 'ballBounciness');
@@ -1903,6 +1930,7 @@
         bindCheckbox('checkboxHideCursor', 'hideCursor');
         bindCheckbox('checkboxShowHitbox', 'showHitbox');
         bindCheckbox('checkboxShowJointCollisionLines', 'showJointCollisionLines');
+        bindCheckbox('checkboxAllowPlacementWhileRunning', 'allowPlacementWhileRunning');
     }
 
     // ----------------------------------------------------------------
@@ -2091,6 +2119,137 @@
                 document.getElementById('sliderXOffset_' + dir.key).style.display = isSelected ? '' : 'none';
                 document.getElementById('valueXOffset_' + dir.key).style.display = isSelected ? '' : 'none';
             });
+        });
+    }
+
+    // ================================================================
+    // Scenes — named, saved entity arrangements (`scenes`, declared next
+    // to `entities` above). A hand-built compound row, same reasoning as
+    // Hand Rotation Offset/Animation X Offset: the generic per-control
+    // row builder only knows slider/color/select/checkbox/text-input, not
+    // a name field + Save/Load/Delete buttons + a live-populated list.
+    // ================================================================
+    function refreshSceneSelectOptions() {
+        const select = document.getElementById('selectSceneName');
+        if (!select) return;
+        const previousValue = select.value;
+        select.innerHTML = '';
+        const names = Object.keys(scenes).sort();
+        if (names.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = ''; opt.textContent = '(no scenes saved)';
+            select.appendChild(opt);
+            select.disabled = true;
+        } else {
+            select.disabled = false;
+            names.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name; opt.textContent = name + ' (' + scenes[name].length + ')';
+                select.appendChild(opt);
+            });
+            // Keep whichever scene was selected before the refresh
+            // selected afterward, if it still exists (e.g. right after
+            // Save Scene updates an EXISTING name) — otherwise default to
+            // the first (e.g. right after a brand-new name is added).
+            if (names.includes(previousValue)) select.value = previousValue;
+        }
+    }
+    function renderSceneControls() {
+        const content = findGroupContent('desktop', 'Scenes', 'renderSceneControls', 'rowScenes');
+        if (!content) return;
+
+        const saveRow = document.createElement('div');
+        saveRow.className = 'dev-row';
+        const saveLabel = document.createElement('span');
+        saveLabel.className = 'dev-label';
+        saveLabel.textContent = 'Scene Name:';
+        saveRow.appendChild(saveLabel);
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'dev-text-input dev-text-input-wide';
+        nameInput.id = 'inputSceneName';
+        nameInput.placeholder = 'e.g. My Setup';
+        saveRow.appendChild(nameInput);
+        const saveBtnWrap = document.createElement('div');
+        saveBtnWrap.className = 'dev-buttons';
+        saveBtnWrap.style.marginBottom = '0';
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'btnSaveScene';
+        saveBtn.textContent = 'Save Scene';
+        saveBtnWrap.appendChild(saveBtn);
+        saveRow.appendChild(saveBtnWrap);
+        content.appendChild(saveRow);
+
+        const loadRow = document.createElement('div');
+        loadRow.className = 'dev-row';
+        const loadLabel = document.createElement('span');
+        loadLabel.className = 'dev-label';
+        loadLabel.textContent = 'Load / Delete:';
+        loadRow.appendChild(loadLabel);
+        const select = document.createElement('select');
+        select.className = 'dev-select';
+        select.id = 'selectSceneName';
+        loadRow.appendChild(select);
+        const loadBtnWrap = document.createElement('div');
+        loadBtnWrap.className = 'dev-buttons';
+        loadBtnWrap.style.marginBottom = '0';
+        const loadBtn = document.createElement('button');
+        loadBtn.id = 'btnLoadScene';
+        loadBtn.textContent = 'Load Scene';
+        loadBtnWrap.appendChild(loadBtn);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.id = 'btnDeleteScene';
+        deleteBtn.textContent = 'Delete Scene';
+        loadBtnWrap.appendChild(deleteBtn);
+        loadRow.appendChild(loadBtnWrap);
+        content.appendChild(loadRow);
+
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'dev-value';
+        statusSpan.id = 'sceneStatus';
+        statusSpan.style.minWidth = 'auto';
+        loadRow.appendChild(statusSpan);
+
+        refreshSceneSelectOptions();
+    }
+    function wireSceneControls() {
+        const flashSceneStatus = (text) => {
+            const el = document.getElementById('sceneStatus');
+            if (!el) return;
+            el.textContent = text;
+            setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 1800);
+        };
+        document.getElementById('btnSaveScene').addEventListener('click', async () => {
+            const name = document.getElementById('inputSceneName').value.trim();
+            if (!name) { flashSceneStatus('enter a name'); return; }
+            // Only the 4 numbers spawnEntityFromLine() itself needs —
+            // directionKey/playing/jointWorld/etc. are all re-derived on
+            // load, never persisted (see `scenes`' own comment).
+            scenes[name] = entities.map(e => ({ x: e.x, y: e.y, endX: e.endX, endY: e.endY }));
+            refreshSceneSelectOptions();
+            document.getElementById('selectSceneName').value = name;
+            flashSceneStatus('saving…');
+            await saveDevPanelSettings();
+            flashSceneStatus('saved "' + name + '"');
+        });
+        document.getElementById('btnLoadScene').addEventListener('click', () => {
+            const name = document.getElementById('selectSceneName').value;
+            if (!name || !scenes[name]) return;
+            // Loading REPLACES whatever's currently placed — "come back to
+            // it" implies restoring the saved arrangement exactly, not
+            // merging on top of whatever happens to already be on screen.
+            entities.length = 0;
+            scenes[name].forEach(e => spawnEntityFromLine(e.x, e.y, e.endX, e.endY));
+            flashSceneStatus('loaded "' + name + '"');
+        });
+        document.getElementById('btnDeleteScene').addEventListener('click', async () => {
+            const name = document.getElementById('selectSceneName').value;
+            if (!name || !scenes[name]) return;
+            delete scenes[name];
+            refreshSceneSelectOptions();
+            flashSceneStatus('deleting…');
+            await saveDevPanelSettings();
+            flashSceneStatus('deleted "' + name + '"');
         });
     }
 
@@ -2882,7 +3041,7 @@
         // existing 2-tap flow would immediately finish a degenerate
         // placement on its own release instead of waiting for a real 2nd
         // tap.
-        if (pendingSpawnStart && !running && e.pointerId === spawnPointerId) {
+        if (pendingSpawnStart && (!running || cfg.allowPlacementWhileRunning) && e.pointerId === spawnPointerId) {
             const dist = Math.hypot(e.clientX - pendingSpawnStart.x, e.clientY - pendingSpawnStart.y);
             if (dist > MIN_DRAG_PLACEMENT_DISTANCE) {
                 spawnEntityFromLine(pendingSpawnStart.x, pendingSpawnStart.y, e.clientX, e.clientY);
@@ -2948,6 +3107,19 @@
     // entity — only position/rotation/direction/play-state are per-entity.
     // ----------------------------------------------------------------
     let entities = [];
+    // Named, saved entity arrangements ("scenes") — per explicit request
+    // ("if i placed entities very carefully and i like it, i want to be
+    // able to save it and come back to it"). Keyed by scene name; each
+    // value is just an array of {x,y,endX,endY} — the same 4 numbers
+    // spawnEntityFromLine() itself takes, deliberately NOT the full
+    // entity object (playing/jointWorld/etc. are transient runtime state,
+    // meaningless to persist and cheap to re-derive on load). Saved as
+    // part of the SAME git-tracked dev-panel-settings.json file (see
+    // captureFullDevPanelState()'s own `scenes` field) rather than a
+    // separate Vercel endpoint/file — reuses the existing 3-tier Save
+    // Settings pipeline with zero server-side changes, per explicit
+    // choice over a from-scratch persistence layer.
+    let scenes = {};
     const FLICK_BASE_FPS = 12;
 
     // The first click of a pending 2-click placement — {x,y} while
@@ -3141,21 +3313,33 @@
     //
     // Gated to Stop mode only ("Animation entities can only be placed when
     // in Stop mode") — both the spawn gesture AND the base/end dot drag
-    // (which also only ever renders its dots while stopped, see render()).
+    // (which also only ever renders its dots while stopped, see render()) —
+    // UNLESS cfg.allowPlacementWhileRunning (a debug checkbox) is on, per
+    // explicit request ("I can place entities regardless of the start and
+    // stop state"). That override is scoped to NEW placement only —
+    // Delete mode and dot-dragging an ALREADY-placed entity stay Stop-only
+    // regardless of the checkbox, since neither was part of the request.
     canvas.addEventListener('pointerdown', (e) => {
-        if (running) return;
         const x = e.clientX, y = e.clientY;
 
         // Delete mode takes priority over placement/dragging entirely —
-        // never starts a spawn gesture or a dot drag while active.
+        // never starts a spawn gesture or a dot drag while active. Always
+        // Stop-only, not affected by allowPlacementWhileRunning.
         if (deleteMode) {
+            if (running) return;
             const hitEntity = hitTestEntitySprite(x, y);
             if (hitEntity) entities = entities.filter(en => en !== hitEntity);
             return;
         }
 
+        if (running && !cfg.allowPlacementWhileRunning) return;
+
         if (!pendingSpawnStart) {
-            const hit = hitTestEntityDot(x, y);
+            // Dot-dragging an existing entity is always Stop-only too —
+            // only skip the hit-test (never start a drag) while running,
+            // regardless of the checkbox, so a new placement can still
+            // start below.
+            const hit = running ? null : hitTestEntityDot(x, y);
             if (hit) {
                 draggingEntity = hit.entity;
                 draggingPoint = hit.point;
