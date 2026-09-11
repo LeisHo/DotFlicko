@@ -202,6 +202,19 @@ new session should be aware they're there before touching `data/FLICK/`.
   sequence's forward/reverse frame-advance rate, independent of the
   normal flick's own Hand Anim Speed slider. The 2 hold durations are
   unaffected (real-time, not playback speed).
+- Fixed a real reported bug: on a cold page load, the first Win/Lose
+  click showed entities flashing in one at a time as each direction's 24
+  frames finished loading (Win/Lose assets are lazy-loaded, same as the
+  normal flick set) — an entity whose target frame wasn't ready yet drew
+  NOTHING at all that tick. Now falls back to the entity's own
+  already-cached idle frame while a Win/Lose frame is still loading, so
+  it never goes blank. Also now prefetches an entity's own Win AND Lose
+  assets the moment it's PLACED, not only once the button is actually
+  clicked, giving the network a head start for the common case (place,
+  look around, then click Win/Lose). Verified live: an entity remained
+  visible through a Win click on a fresh page load, and a newly-placed
+  entity's own Lose assets were confirmed fetching over the network with
+  zero Win/Lose button ever clicked.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

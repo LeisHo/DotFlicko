@@ -3477,6 +3477,19 @@
             winLoseType: null, winLosePhase: null, winLoseFrameAccum: 0, winLoseHoldRemaining: 0,
         });
         ensureDirectionLoaded(directionKey);
+        // Prefetch this direction's own Win/Lose frames right away too —
+        // not waiting for an actual Win/Lose click to start those 2x24
+        // fetches — so the network has a head start before the button is
+        // ever pressed. Real, reported symptom this reduces the odds of
+        // hitting at all ("on a hard refresh, the first time i hit Win
+        // and Lose... they each flash in succession" — the render-side
+        // idle-frame fallback, see render()'s own comment, is what
+        // actually eliminates the visible flash even on a cold cache;
+        // this prefetch just makes a cold cache less likely in the first
+        // place for the common case of placing entities, looking them
+        // over, THEN clicking Win/Lose).
+        ensureWinLoseLoaded(directionKey, 'win');
+        ensureWinLoseLoaded(directionKey, 'lose');
     }
 
     // Recomputes an entity's current rotation LIVE from its own fixed
@@ -4010,9 +4023,39 @@
                 if (img && img.complete && img.naturalWidth > 0) {
                     drawH = size * (img.naturalHeight / img.naturalWidth);
                     drawSource = img;
+                    const wl = WIN_LOSE_ASSETS[entity.directionKey];
+                    vb = wl ? { centerX: wl.centerX, bottomY: wl.bottomY } : { centerX: 0.5, bottomY: 1 };
+                } else {
+                    // This exact frame hasn't finished loading yet (all 24
+                    // of a direction's own Win/Lose frames are only
+                    // fetched starting the first time that direction is
+                    // actually used — see ensureWinLoseLoaded()'s own
+                    // comment) — a real, reported symptom on a cold cache
+                    // ("on a hard refresh, the first time i hit Win and
+                    // Lose... the app seems to have to load the entities
+                    // one by one... they each flash in succession"): with
+                    // no fallback, drawSource stays null here and the
+                    // entity draws NOTHING until this exact image
+                    // finishes downloading, so several entities (each
+                    // fetching a different direction's own 24 images at
+                    // different network speeds) blink in one at a time.
+                    // Falls back to the entity's own already-cached idle
+                    // frame instead — it was already visibly idle the
+                    // instant before this Win/Lose click, so this is
+                    // always available with zero extra loading, and reads
+                    // as "still settling into its new pose" rather than
+                    // "missing" — same idle-frame source AND anchor
+                    // (visibleBoundsForDirection(), not the Win/Lose
+                    // table) the plain idle branch below uses, not a
+                    // half-composed mix of the two.
+                    const scaled = getScaledIdleFrame(entity.directionKey, size);
+                    if (scaled) {
+                        drawW = scaled.drawW;
+                        drawH = scaled.drawH;
+                        drawSource = scaled.canvas;
+                        vb = visibleBoundsForDirection(entity.directionKey);
+                    }
                 }
-                const wl = WIN_LOSE_ASSETS[entity.directionKey];
-                vb = wl ? { centerX: wl.centerX, bottomY: wl.bottomY } : { centerX: 0.5, bottomY: 1 };
             } else if (entity.playing && entity.playSequenceFrozen) {
                 const hold = Math.round(cfg.peakHoldFrames);
                 const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, hold);

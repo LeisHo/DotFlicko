@@ -561,3 +561,23 @@ GOTCHAS
   hardcoded), and `WIN_LOSE_FIST_INDEX` re-confirmed against wherever
   the NEW sequence's own hold-pose frame actually lands -- it is NOT
   automatically "13" again just because the old one was.
+- **A Win/Lose entity's draw dispatch in `render()` MUST fall back to
+  its own idle frame whenever the target frame isn't loaded yet -- never
+  leave `drawSource` as `null` in that branch.** `ensureWinLoseLoaded()`
+  is lazy (same as the normal flick set) and can genuinely still be
+  mid-fetch the first time a direction is actually used; a real,
+  reported bug ("on a hard refresh, the first time i hit Win and
+  Lose... they each flash in succession") traced to exactly this --
+  with no fallback, an entity whose current frame hadn't finished
+  downloading drew NOTHING that tick, so several entities (each
+  fetching a different direction's own 24 images at different network
+  speeds) blinked into existence one at a time as their own fetches
+  happened to complete. The fallback reuses `getScaledIdleFrame()` +
+  `visibleBoundsForDirection()` -- the SAME source/anchor the plain
+  idle branch just below it uses, not a half-composed mix of the 2
+  asset families. `spawnEntityFromLine()` also now calls
+  `ensureWinLoseLoaded()` for BOTH types the moment an entity is
+  placed (not only once Win/Lose is actually clicked) as a genuine,
+  directly-relevant reduction in how often this fallback path is even
+  needed -- not a substitute for it, since a fast-enough click after
+  placement can still race the network either way.

@@ -880,6 +880,55 @@ sliderClickAnimSpeed's own value completely unchanged, confirming the 2
 speeds are genuinely independent cfg fields, not aliased.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- fix: entities flashing in one-by-one on first
+Win/Lose click after a hard refresh
+
+"on a hard refresh, the first time i hit Win and Lose. the app seems to
+have ot load the entities one by one with the new frames. they each
+flash in succession"
+
+Root cause: Win/Lose frames are lazy-loaded (ensureWinLoseLoaded(),
+same lazy pattern as the normal flick asset set) -- the FIRST time a
+given direction is actually used, all 24 of its frames start a fresh
+fetch. render()'s own draw dispatch for a Win/Lose entity only set
+drawSource when its current frame's Image was already `.complete` --
+with no fallback, an entity whose frame hadn't finished loading yet
+drew NOTHING that tick. Since each placed entity's own direction fetches
+independently and completes at its own network speed, entities blinked
+into view one at a time as their own fetches happened to finish --
+exactly the reported symptom.
+
+Fixed:
+- render()'s Win/Lose draw branch now falls back to the entity's own
+  idle frame (getScaledIdleFrame() + visibleBoundsForDirection() -- the
+  SAME source/anchor the plain idle branch already uses, not a mix of
+  the 2 asset families) whenever its actual Win/Lose frame isn't ready
+  yet, instead of leaving drawSource null. An entity now never goes
+  blank -- worst case it keeps showing its own idle pose until the real
+  frame streams in.
+- spawnEntityFromLine() now also calls ensureWinLoseLoaded() for BOTH
+  'win' and 'lose' the moment an entity is placed, not only once the
+  Win/Lose button is actually clicked -- gives the network a head start
+  for the common case (place entities, look them over, then click Win/
+  Lose), directly reducing how often the fallback above is even needed
+  (not a substitute for it -- a fast-enough click right after placement
+  can still race the network either way).
+
+Verified:
+- Syntax-checked all inline <script> blocks after every edit.
+- Live in the browser, fresh navigation (fresh JS state, so
+  ensureWinLoseLoaded() genuinely started new fetches, not served from
+  an already-populated in-memory cache): placed an entity, clicked Win
+  immediately, entity remained visible (screenshot-confirmed) rather
+  than going blank.
+- Live in the browser, fresh navigation: placed an entity and NEVER
+  clicked Win or Lose -- confirmed via read_network_requests that its
+  own Lose (_MF) asset fetches were already firing anyway, proving the
+  placement-time prefetch works independently of the render-side
+  fallback.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
