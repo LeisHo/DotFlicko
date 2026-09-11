@@ -2073,7 +2073,7 @@
         'front':        { lose: { folder: 'FRONT_MF',          prefix: '2T - ABOVE - PF_F180_MF180', frameCount: 24 },            win: { folder: 'FRONT_TU',         prefix: '2T - ABOVE - PF_F_TU', frameCount: 24 },                 centerX: 0.4771, bottomY: 0.9145 },
         'front-pinky':  { lose: { folder: 'FRONT PINKY_MF',    prefix: '2T - FP - PF_F145_MF145', frameCount: 24 },               win: { folder: 'FRONT PINKY_TU',   prefix: '2T - FP - PF_F_TU-35', frameCount: 24 },                 centerX: 0.4943, bottomY: 0.9221 },
         'side-pinky':   { lose: { folder: 'SIDE PINKY_MF',     prefix: '2T -DP - PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE PINKY_TU',    prefix: 'DirectPink - TU', frameCount: 24 },                      centerX: 0.5188, bottomY: 0.9265 },
-        'behind-pinky': { lose: { folder: 'BEHIND PINKY_MF',   prefix: '2T - B - PF_F70_MF70', frameCount: 24 },                  win: { folder: 'BEHIND PINKY_TU',  prefix: '2T -BP - PF_F-130_180_TU-110_180 FFF', frameCount: 24 }, centerX: 0.5203, bottomY: 0.9167 },
+        'behind-pinky': { lose: { folder: 'BEHIND PINKY_MF',   prefix: '2T - B - PF_F70_MF70', frameCount: 24 },                  win: { folder: 'BEHIND PINKY_TU',  prefix: '2T -BP - PF_F-130_180_TU-110_180 FFF', frameCount: 48 }, centerX: 0.5203, bottomY: 0.9167 },
     };
     function winLoseFrameUrl(asset, n) {
         return `data/FLICK/2TONED/${encodeURIComponent(asset.folder)}/FIST/${encodeURIComponent(asset.prefix + '_' + String(n).padStart(3, '0') + '.png')}`;
