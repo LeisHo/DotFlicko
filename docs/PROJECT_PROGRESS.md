@@ -47,6 +47,26 @@ logically correct (via mouse-drag simulation and the browser tool's own
 touch emulation), but real on-device touch-feel confirmation is the
 user's own to make too.
 
+**Open item:** the reported "click and drag to place entities doesn't work
+on mobile" bug was root-caused to a missing `touch-action: none` on
+`#scene` (the canvas) — every other draggable element in this file already
+had it, the canvas didn't. Without it, a real touchscreen's native gesture
+recognizer hijacks a press-drag on the canvas as a pan attempt, firing
+`pointercancel` instead of letting the drag complete — plain taps still
+worked (not enough movement to trigger the browser's pan detection), which
+matches exactly what was reported. Fixed by adding `touch-action: none` to
+`#scene`'s CSS, plus a `window` `pointercancel` handler that resets
+`pendingSpawnStart`/`spawnPointerId`/`draggingEntity`/`draggingPoint` so a
+genuine cancel (OS interruption, edge-swipe nav gesture) can't leave
+placement permanently stuck. **Verified:** the full gesture logic (press →
+drag → release → `spawnEntityFromLine`) completes correctly end-to-end via
+synthetic touch-type `PointerEvent`s in this environment's own browser tool
+— but a synthetic dispatch never goes through a real browser's native
+touch-gesture recognizer, so this environment cannot reproduce the actual
+hijack-and-cancel failure mode itself. **The user should re-test on their
+actual phone to confirm the real fix**, the same open-verification caveat
+as the mobile-lag item below.
+
 **Note for a new session:** a *different*, concurrent Claude session has
 also been actively developing this same `index.html` (the ball/collision
 physics system and the skeleton-annotation tool) throughout this project's

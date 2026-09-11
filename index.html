@@ -7,7 +7,7 @@
 <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; }
-    #scene { position: fixed; top: 0; left: 0; display: block; }
+    #scene { position: fixed; top: 0; left: 0; display: block; touch-action: none; }
     #scene.cursor-hidden { cursor: none; }
 
     /* ================================================================
@@ -242,6 +242,8 @@
     #stopBtn { border-color: #ff5c5c; }
     #deleteBtn { border-color: #ff9500; }
     #deleteBtn.active { background: #ff9500; color: #1b1f2a; }
+    #ballBtn { border-color: #ff5c5c; }
+    #ballBtn.active { background: #ff5c5c; color: #1b1f2a; }
 
     .dev-buttons { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
     .dev-save-sync-status { font-size: calc(var(--dev-setting-title-font-size-px, 12) * 1px); white-space: nowrap; flex-shrink: 0; }
@@ -358,6 +360,7 @@
     <button id="startBtn">Start</button>
     <button id="stopBtn">Stop</button>
     <button id="deleteBtn">Delete</button>
+    <button id="ballBtn">Ball</button>
 </div>
 
 <button class="dev-toggle-btn" id="devToggleBtn" onclick="devPanel.classList.toggle('hidden')">DEV</button>
@@ -1777,6 +1780,7 @@
         rotationSmoothing: 1, positionSmoothing: 1, angleOffset: 180,
         backgroundColor: '#1b1f2a',
         ballGravity: 80, ballRadius: 3, ballColor: '#ff5c5c', ballBounciness: 0.6, ballRespawnRate: 1, ballMaxSpeed: 300,
+        ballDrag: 0, ballSpawnSpread: 0,
         jointThickness: 4, thicknessSmoothing: 0.15, collisionIntensity: 1,
         showCenter: true, showAngleDebug: true, hideCursor: true, showHitbox: false, showJointCollisionLines: false,
         // Debug override — per explicit request ("I can place entities
@@ -1823,6 +1827,18 @@
         { group: 'Ball', id: 'sliderBallBounciness', type: 'slider', label: 'Ball Bounciness (x):', min: 0, max: 1.5, step: 0.05, value: cfg.ballBounciness },
         { group: 'Ball', id: 'sliderBallRespawnRate', type: 'slider', label: 'Respawn Rate (s):', min: 0, max: 5, step: 0.1, value: cfg.ballRespawnRate },
         { group: 'Ball', id: 'sliderBallMaxSpeed', type: 'slider', label: 'Max Speed (%vmin/s):', min: 20, max: 800, step: 10, value: cfg.ballMaxSpeed },
+        // Air Drag: exponential velocity decay per second (0 = off,
+        // matching prior behavior exactly — a ball keeps whatever speed
+        // it has forever, same as before this slider existed). Applied
+        // once per tick, frame-rate-independent via Math.pow(1-drag, dt),
+        // same pattern expSmoothFactor() already uses elsewhere in this
+        // file for smoothing (inverted: decaying TOWARD zero, not toward
+        // a target).
+        { group: 'Ball', id: 'sliderBallDrag', type: 'slider', label: 'Air Drag (0-1):', min: 0, max: 0.99, step: 0.01, value: cfg.ballDrag },
+        // Spawn Horizontal Spread: gives a freshly-spawned ball a random
+        // initial vx in [-spread, +spread] instead of always falling
+        // perfectly straight down. 0 = off (existing behavior unchanged).
+        { group: 'Ball', id: 'sliderBallSpawnSpread', type: 'slider', label: 'Spawn Horizontal Spread (%vmin/s):', min: 0, max: 200, step: 5, value: cfg.ballSpawnSpread },
     ];
     // Joint collision is capsule-shaped (a thick LINE per segment —
     // knuckle→joint1, joint1→joint2, joint2→tip — not just 4 points),
@@ -1912,6 +1928,8 @@
         bindSlider('sliderBallBounciness', 'ballBounciness');
         bindSlider('sliderBallRespawnRate', 'ballRespawnRate');
         bindSlider('sliderBallMaxSpeed', 'ballMaxSpeed');
+        bindSlider('sliderBallDrag', 'ballDrag');
+        bindSlider('sliderBallSpawnSpread', 'ballSpawnSpread');
         bindSlider('sliderJointThickness', 'jointThickness');
         bindSlider('sliderThicknessSmoothing', 'thicknessSmoothing');
         bindSlider('sliderCollisionIntensity', 'collisionIntensity');
@@ -2425,20 +2443,34 @@
     }
 
     // ----------------------------------------------------------------
-    // Ball: falls from top-center, gravity-driven, bounces off the left/
-    // right viewport edges only (never top/bottom — it's meant to exit
-    // off the bottom and respawn after a delay), and reacts to the 3
-    // finger segments (knuckle→joint1, joint1→joint2, joint2→tip) as
-    // thick capsules. `ball` is null while waiting to respawn.
-    // ----------------------------------------------------------------
-    // Starts null (not spawned via an immediate call here) so the first
-    // real spawn happens inside updateBallAndCollision()'s own respawn
-    // path, on the first real requestAnimationFrame — window.innerWidth/
-    // innerHeight can briefly read 0 at script-parse time before layout
-    // settles, the same early-page-life quirk documented elsewhere in
-    // this file (see the canvas self-healing size check in update()).
-    let ball = null;
-    let ballRespawnCountdown = 0;
+    // Ball(s): gravity-driven, bounce off the left/right viewport edges
+    // only (never top/bottom — meant to exit off the bottom and respawn
+    // after a delay), and react to the 3 finger segments (knuckle→joint1,
+    // joint1→joint2, joint2→tip) as thick capsules.
+    //
+    // Multiple simultaneous balls, one per "generator" — per explicit
+    // request ("select where i would like the ball or as many balls as i
+    // want to start from"). ballSpawnPoints ({x,y}, placed via the Ball
+    // button, Stop-mode only) is the source of truth for HOW MANY
+    // generators exist and where; ballGenerators itself is rebuilt fresh
+    // from it every time Start is pressed (spawn points can't change while
+    // running — placement is gated Stop-only, same as entity placement).
+    // Each generator independently falls/respawns at its OWN spawn point,
+    // exactly like the single default ball always did at window-center —
+    // this is that same original behavior, generalized to N independent
+    // instances instead of hard-assuming exactly 1.
+    //
+    // Empty ballSpawnPoints (the default, unchanged-from-before state) —
+    // rebuildBallGenerators() falls back to exactly 1 generator at the
+    // original default spawn (falls from off-screen-above window-center)
+    // — this reproduces the pre-existing single-ball behavior exactly,
+    // not a special case bolted on top of it. Per explicit request ("when
+    // they are all deleted, they will resume spawning from the default
+    // location") — deleting every placed point (Delete mode) is what
+    // returns ballSpawnPoints to empty and therefore restores this
+    // fallback the next time Start runs.
+    let ballSpawnPoints = [];
+    let ballGenerators = [];
     // Start/Stop — gates ball spawning/physics only; entity placement and
     // the base/end-point drag handles (below) are gated the OPPOSITE way
     // (only available while stopped). Boots stopped, matching this
@@ -2447,20 +2479,54 @@
     let running = false;
     // Delete mode — only meaningful while stopped (same gating as
     // placement/dragging); toggled by the Delete button. While on, a
-    // canvas click removes whichever placed entity it lands on instead of
-    // starting a spawn/drag gesture.
+    // canvas click removes whichever placed entity OR ball spawn point it
+    // lands on instead of starting a spawn/drag/ball-placement gesture.
     let deleteMode = false;
+    // Ball-placement mode — toggled by the new Ball button, mutually
+    // exclusive with Delete mode and entity placement/dragging (same
+    // "only one mode active at a time" discipline setDeleteMode() already
+    // enforces). While on, the OS cursor is replaced by a live ball-shaped
+    // preview (per explicit request: "my cursor becomes the ball
+    // geometry") that follows the mouse, and each canvas click adds a new
+    // point to ballSpawnPoints rather than placing/dragging/deleting an
+    // entity. Stays on across multiple clicks — placing "as many balls as
+    // i want" is repeated clicks in the SAME activation, not one click
+    // per toggle.
+    let ballPlacementMode = false;
     // wasInFlickTriggerZone (the auto-trigger's rising-edge state) moved
     // onto each entity object itself — see the "Entities" section below —
     // since every spawned entity now needs its own independent trigger
     // history, not one shared global.
-    function spawnBall() {
-        const radiusPx = Math.min(window.innerWidth, window.innerHeight) * (cfg.ballRadius / 100);
-        // hasEnteredFrame stays false for the initial fall from this
-        // off-screen-above spawn point, so the top-edge collision below
-        // doesn't bounce it right back out before it's ever been seen -
-        // see that check's own comment.
-        return { x: window.innerWidth / 2, y: -radiusPx * 2, vx: 0, vy: 0, hasEnteredFrame: false };
+    // isDefault: the original single-ball behavior — falls from off-
+    // screen-above window-center, hasEnteredFrame starts false (see that
+    // field's own comment at its usage below) so the top-edge collision
+    // doesn't bounce it back out before it's ever visible. A user-placed
+    // spawn point (isDefault=false) starts EXACTLY where it was placed —
+    // the user already chose the visible on-screen spot, so there's no
+    // "fall into frame from off-screen" step to protect against;
+    // hasEnteredFrame starts true so top-edge collision behaves normally
+    // immediately.
+    function spawnBallAt(spawnX, spawnY, isDefault) {
+        const vmin = Math.min(window.innerWidth, window.innerHeight);
+        const radiusPx = vmin * (cfg.ballRadius / 100);
+        // Spawn Horizontal Spread: 0 (default) reproduces the exact old
+        // behavior (always vx=0, perfectly straight fall) — only spreads
+        // when explicitly turned up.
+        const spreadPx = vmin * (cfg.ballSpawnSpread / 100);
+        const vx = spreadPx > 0 ? (Math.random() * 2 - 1) * spreadPx : 0;
+        if (isDefault) {
+            return { x: window.innerWidth / 2, y: -radiusPx * 2, vx, vy: 0, hasEnteredFrame: false };
+        }
+        return { x: spawnX, y: spawnY, vx, vy: 0, hasEnteredFrame: true };
+    }
+    // Rebuilds the generator list from ballSpawnPoints — called once each
+    // time Start is pressed (see setRunning below). Empty spawn points ->
+    // exactly 1 generator, the original default behavior; N placed points
+    // -> N independent generators, one per point.
+    function rebuildBallGenerators() {
+        ballGenerators = ballSpawnPoints.length === 0
+            ? [{ spawnX: null, spawnY: null, isDefault: true, ball: null, respawnCountdown: 0 }]
+            : ballSpawnPoints.map(p => ({ spawnX: p.x, spawnY: p.y, isDefault: false, ball: null, respawnCountdown: 0 }));
     }
 
     // Nearest point on segment AB to point P, plus t (0=A, 1=B) — needed
@@ -2770,15 +2836,29 @@
         });
 
         // Respawn cycle — gated by `running` (Start/Stop). Stop's own
-        // handler (setRunning, below) already clears any ball that was on
-        // screen the moment it's pressed; this just stops a NEW one from
-        // spawning while stopped.
-        if (running && !ball) {
-            ballRespawnCountdown -= dt;
-            if (ballRespawnCountdown <= 0) ball = spawnBall();
+        // handler (setRunning, below) already clears every ball the
+        // moment it's pressed; this just stops NEW ones from spawning
+        // while stopped. One independent countdown per generator, not one
+        // shared timer — each spawn point respawns on its own schedule.
+        if (running) {
+            ballGenerators.forEach(gen => {
+                if (!gen.ball) {
+                    gen.respawnCountdown -= dt;
+                    if (gen.respawnCountdown <= 0) gen.ball = spawnBallAt(gen.spawnX, gen.spawnY, gen.isDefault);
+                }
+            });
         }
 
-        if (ball) {
+        // Per-entity rising-edge trigger state, OR'd across every
+        // currently-active ball this tick (a ball sitting in the zone
+        // doesn't keep re-triggering, same as the original single-ball
+        // rule — just evaluated per-entity across however many balls
+        // exist now, instead of assuming exactly one).
+        const anyBallInZone = new Map();
+
+        ballGenerators.forEach(gen => {
+            const ball = gen.ball;
+            if (!ball) return;
             const radiusPx = vmin * (cfg.ballRadius / 100);
             // Captured BEFORE this tick's own integration below — the
             // start point of the ball's swept path for the finger-capsule
@@ -2792,16 +2872,19 @@
 
             // Left/right walls — always. Bottom — never (that's the exit/
             // respawn edge, handled below). Top — collides too, EXCEPT
-            // during the ball's initial fall from its off-screen-above
-            // spawn point (spawnBall() starts it at y = -radiusPx*2, well
-            // above the top edge, specifically so it visibly falls INTO
-            // frame) — bouncing off the top edge during that entry would
-            // just reflect it straight back out before it's ever seen.
-            // hasEnteredFrame latches true the first frame the ball's own
-            // top edge reaches y=0 (i.e. it's now at least partially
-            // visible) and never resets, so every later moment — a strong
-            // joint-collision kick launching it back up past the top,
-            // for instance — does bounce normally.
+            // during a DEFAULT ball's initial fall from its off-screen-
+            // above spawn point (spawnBallAt() starts a default ball at
+            // y = -radiusPx*2, well above the top edge, specifically so
+            // it visibly falls INTO frame) — bouncing off the top edge
+            // during that entry would just reflect it straight back out
+            // before it's ever seen. A user-placed spawn point's ball
+            // never has this problem (hasEnteredFrame starts true — see
+            // spawnBallAt()'s own comment). hasEnteredFrame latches true
+            // the first frame the ball's own top edge reaches y=0 (i.e.
+            // it's now at least partially visible) and never resets, so
+            // every later moment — a strong joint-collision kick
+            // launching it back up past the top, for instance — does
+            // bounce normally.
             if (ball.y - radiusPx >= 0) ball.hasEnteredFrame = true;
 
             if (ball.x < radiusPx) { ball.x = radiusPx; ball.vx = -ball.vx * cfg.ballBounciness; }
@@ -2809,9 +2892,9 @@
             if (ball.hasEnteredFrame && ball.y < radiusPx) { ball.y = radiusPx; ball.vy = -ball.vy * cfg.ballBounciness; }
 
             // Joint-segment collision (3 capsules per entity) + the
-            // proximity auto-trigger, once per spawned entity — a ball
-            // sitting near several entities at once reacts to/can trigger
-            // all of them independently, same rules as a single entity did.
+            // proximity auto-trigger, once per spawned entity — this ball
+            // reacts to/can trigger every entity independently, same
+            // rules as before, now just run once per active ball.
             //
             // SWEPT: tests the ball's whole PATH this tick (prevBallX,Y ->
             // ball.x,y) against each finger capsule, via closestPointsBetweenSegments,
@@ -2891,21 +2974,31 @@
                     });
                 }
 
-                // Auto-trigger: the ball crossing INTO this entity's own
+                // Auto-trigger: a ball crossing INTO this entity's own
                 // reachable zone (see ballInFlickTriggerZone's own
                 // comment) starts ITS sequence, without requiring a
                 // click — manual click-to-flick was retired entirely once
                 // clicking became the spawn-placement gesture (see the
-                // canvas pointerdown handler below). Rising-edge only
-                // (entity.wasInFlickTriggerZone) — a ball simply sitting
-                // in the zone doesn't keep re-triggering every frame, and
-                // !entity.playing keeps a ball that entered the zone
-                // mid-flick from double-triggering the instant that flick
-                // ends while it's still sitting there.
-                const inTriggerZone = ballInFlickTriggerZone(ball, entity.directionKey, entityRotationRad(entity), entity.x, entity.y);
-                if (inTriggerZone && !entity.wasInFlickTriggerZone && !entity.playing) triggerFlick(entity);
-                entity.wasInFlickTriggerZone = inTriggerZone;
+                // canvas pointerdown handler below). Accumulated across
+                // every active ball this tick (anyBallInZone), rising-edge
+                // applied once per entity below, after this forEach.
+                if (ballInFlickTriggerZone(ball, entity.directionKey, entityRotationRad(entity), entity.x, entity.y)) {
+                    anyBallInZone.set(entity, true);
+                }
             });
+
+            // Air Drag — exponential velocity decay, applied ONCE per
+            // tick after every velocity change above (same "apply once,
+            // after everything else" placement Ball Max Speed already
+            // uses just below, for the same reason: consistent regardless
+            // of which source changed the velocity this tick). 0 (default)
+            // is an exact no-op (Math.pow(1,dt)=1), so existing behavior
+            // is unchanged unless this is explicitly turned up.
+            if (cfg.ballDrag > 0) {
+                const dragRetain = Math.pow(1 - cfg.ballDrag, dt);
+                ball.vx *= dragRetain;
+                ball.vy *= dragRetain;
+            }
 
             // Ball Max Speed — a hard cap on the ball's own speed, applied
             // ONCE per tick after every velocity change above (gravity,
@@ -2923,14 +3016,28 @@
                 ball.vy *= scale;
             }
 
-            // Fully below the bottom edge — gone, start the respawn timer.
+            // Fully below the bottom edge — gone, start THIS generator's
+            // own respawn timer (it'll spawn again at its own spawnX/Y —
+            // or the shared default spot, if this is the default
+            // generator — once the countdown above elapses).
             if (ball.y - radiusPx > h) {
-                ball = null;
-                ballRespawnCountdown = cfg.ballRespawnRate;
+                gen.ball = null;
+                gen.respawnCountdown = cfg.ballRespawnRate;
             }
-        } else {
-            entities.forEach(entity => { entity.wasInFlickTriggerZone = false; });
-        }
+        });
+
+        // Rising-edge trigger, once per entity, using the OR across every
+        // ball active this tick — same semantics as the original single-
+        // ball version (a ball simply sitting in the zone doesn't keep
+        // re-triggering, and !entity.playing keeps a ball that entered
+        // mid-flick from double-triggering the instant that flick ends
+        // while it's still sitting there), generalized to "any ball" in
+        // place of "the one ball that used to be the only possibility."
+        entities.forEach(entity => {
+            const inTriggerZone = anyBallInZone.get(entity) || false;
+            if (inTriggerZone && !entity.wasInFlickTriggerZone && !entity.playing) triggerFlick(entity);
+            entity.wasInFlickTriggerZone = inTriggerZone;
+        });
     }
 
     // ----------------------------------------------------------------
@@ -2968,8 +3075,12 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
+    // Also hidden while placing balls (the ball-shaped preview drawn in
+    // render() IS the cursor at that point, per explicit request: "my
+    // cursor becomes the ball geometry") — a single shared function so
+    // toggling Hide OS Cursor mid-placement can't clobber that state.
     function applyCursorVisibility() {
-        canvas.classList.toggle('cursor-hidden', cfg.hideCursor);
+        canvas.classList.toggle('cursor-hidden', cfg.hideCursor || ballPlacementMode);
     }
     applyCursorVisibility();
 
@@ -3048,6 +3159,22 @@
                 pendingSpawnStart = null;
                 spawnPointerId = null;
             }
+        }
+    });
+    // A cancelled pointer (OS interruption, an edge-swipe navigation
+    // gesture, etc.) never fires pointerup — without this, a cancelled
+    // press-drag would leave pendingSpawnStart/spawnPointerId stuck,
+    // silently blocking every future placement (since the pointerdown
+    // handler above only starts a new spawn when pendingSpawnStart is
+    // already null) until an unrelated tap happened to land far enough
+    // away to complete the stale gesture. Treat a cancel the same as an
+    // abandoned gesture, for both drag types.
+    window.addEventListener('pointercancel', (e) => {
+        draggingEntity = null;
+        draggingPoint = null;
+        if (e.pointerId === spawnPointerId) {
+            pendingSpawnStart = null;
+            spawnPointerId = null;
         }
     });
 
@@ -3228,6 +3355,21 @@
         }
         return null;
     }
+    // Delete-mode hit-test for a placed ball spawn point — same tap-target
+    // sizing idea as ENTITY_DOT_HIT_RADIUS, but at least as big as the
+    // actual drawn ball-radius marker (see render()'s own spawn-point
+    // drawing), so a large configured Ball Radius doesn't leave part of
+    // its own visible marker outside its clickable area. Returns an
+    // INDEX into ballSpawnPoints (splice-ready), or -1.
+    function hitTestBallSpawnPoint(x, y) {
+        const radiusPx = Math.min(window.innerWidth, window.innerHeight) * (cfg.ballRadius / 100);
+        const hitRadius = Math.max(ENTITY_DOT_HIT_RADIUS, radiusPx);
+        for (let i = ballSpawnPoints.length - 1; i >= 0; i--) {
+            const p = ballSpawnPoints[i];
+            if (Math.hypot(x - p.x, y - p.y) <= hitRadius) return i;
+        }
+        return -1;
+    }
 
     // Per-direction offscreen canvas holding that direction's idle (frame 1)
     // pixels at full natural resolution — drawn ONCE per direction (cached),
@@ -3324,11 +3466,28 @@
 
         // Delete mode takes priority over placement/dragging entirely —
         // never starts a spawn gesture or a dot drag while active. Always
-        // Stop-only, not affected by allowPlacementWhileRunning.
+        // Stop-only, not affected by allowPlacementWhileRunning. Checks
+        // entities first, then ball spawn points (per explicit request:
+        // "the delete button also works for these balls") — either one a
+        // click lands on gets removed; only one at a time (an entity click
+        // never also happens to remove an unrelated spawn point).
         if (deleteMode) {
             if (running) return;
             const hitEntity = hitTestEntitySprite(x, y);
-            if (hitEntity) entities = entities.filter(en => en !== hitEntity);
+            if (hitEntity) { entities = entities.filter(en => en !== hitEntity); return; }
+            const hitPointIndex = hitTestBallSpawnPoint(x, y);
+            if (hitPointIndex !== -1) ballSpawnPoints.splice(hitPointIndex, 1);
+            return;
+        }
+
+        // Ball-placement mode — every click adds a new spawn point; stays
+        // active for repeated clicks (per explicit request: "as many balls
+        // as i want"), only exited by pressing the Ball button again.
+        // Stop-only, same as entity placement/Delete — allowPlacementWhileRunning
+        // doesn't apply here since it isn't part of that explicit request.
+        if (ballPlacementMode) {
+            if (running) return;
+            ballSpawnPoints.push({ x, y });
             return;
         }
 
@@ -3363,34 +3522,60 @@
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
     const deleteBtn = document.getElementById('deleteBtn');
+    const ballBtn = document.getElementById('ballBtn');
     function setRunning(next) {
         running = next;
         if (!running) {
-            ball = null;
-            ballRespawnCountdown = 0;
+            // Clear every active ball immediately (not just letting each
+            // one finish falling out the bottom on its own) — same
+            // behavior as before, generalized across every generator.
+            ballGenerators.forEach(gen => { gen.ball = null; gen.respawnCountdown = 0; });
         } else {
             setDeleteMode(false); // starting has nothing to delete/place anyway
+            setBallPlacementMode(false); // ditto — nowhere to place a spawn point while running
+            // Rebuilt fresh from ballSpawnPoints every Start — spawn
+            // points can't change while running (placement is Stop-only),
+            // so this is the one moment that matters.
+            rebuildBallGenerators();
         }
         startBtn.disabled = running;
         stopBtn.disabled = !running;
         deleteBtn.disabled = running;
+        ballBtn.disabled = running;
     }
     // Delete mode — toggled independently of Start/Stop's own running
     // state, but only meaningful while stopped (deleteBtn is disabled by
     // setRunning above the same way startBtn/stopBtn are). Turning it on
-    // cancels any in-progress spawn/drag gesture so the 3 modes never mix.
+    // cancels any in-progress spawn/drag/ball-placement gesture so the 4
+    // modes never mix.
     function setDeleteMode(next) {
         deleteMode = next;
         if (deleteMode) {
             pendingSpawnStart = null;
             draggingEntity = null;
             draggingPoint = null;
+            setBallPlacementMode(false);
         }
         deleteBtn.classList.toggle('active', deleteMode);
+    }
+    // Ball-placement mode — same "only one mode at a time" discipline as
+    // Delete mode above; turning it on cancels any in-progress entity
+    // spawn/drag gesture and Delete mode.
+    function setBallPlacementMode(next) {
+        ballPlacementMode = next;
+        if (ballPlacementMode) {
+            pendingSpawnStart = null;
+            draggingEntity = null;
+            draggingPoint = null;
+            setDeleteMode(false);
+        }
+        ballBtn.classList.toggle('active', ballPlacementMode);
+        applyCursorVisibility();
     }
     startBtn.addEventListener('click', () => setRunning(true));
     stopBtn.addEventListener('click', () => setRunning(false));
     deleteBtn.addEventListener('click', () => setDeleteMode(!deleteMode));
+    ballBtn.addEventListener('click', () => setBallPlacementMode(!ballPlacementMode));
     setRunning(false);
 
     // Fixed-timestep physics — step() always advances by exactly FIXED_DT
@@ -3668,13 +3853,49 @@
             });
         }
 
-        // Ball
-        if (ball) {
+        // Balls — one per active generator, not a single shared ball.
+        {
+            const radiusPx = vmin * (cfg.ballRadius / 100);
+            ballGenerators.forEach(gen => {
+                if (!gen.ball) return;
+                ctx.save();
+                ctx.fillStyle = cfg.ballColor;
+                ctx.beginPath();
+                ctx.arc(gen.ball.x, gen.ball.y, radiusPx, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        // Placed ball spawn points — shown only while stopped (Delete
+        // mode needs to see/click them; while running, the real balls
+        // spawned there speak for themselves). Drawn as a dashed outline
+        // in the ball's own color/size, distinct from a solid live ball.
+        if (!running && ballSpawnPoints.length > 0) {
             const radiusPx = vmin * (cfg.ballRadius / 100);
             ctx.save();
+            ctx.strokeStyle = cfg.ballColor;
+            ctx.setLineDash([4, 4]);
+            ctx.lineWidth = 2;
+            ballSpawnPoints.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, radiusPx, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+
+        // Ball-placement live cursor preview — "my cursor becomes the
+        // ball geometry" — a solid preview ball following the mouse,
+        // drawn only while actually placing (Stop mode; running has
+        // nothing to preview since a click can't place anything then).
+        if (ballPlacementMode && !running && hasMouse) {
+            const radiusPx = vmin * (cfg.ballRadius / 100);
+            ctx.save();
+            ctx.globalAlpha = 0.7;
             ctx.fillStyle = cfg.ballColor;
             ctx.beginPath();
-            ctx.arc(ball.x, ball.y, radiusPx, 0, Math.PI * 2);
+            ctx.arc(mouseX, mouseY, radiusPx, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
         }

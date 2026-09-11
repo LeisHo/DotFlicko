@@ -474,3 +474,21 @@ GOTCHAS
   for this checkbox. The `pointerup` handler's own drag-release-commit
   check mirrors the same condition (`(!running ||
   cfg.allowPlacementWhileRunning)`) for the press-drag-release gesture.
+- **`#scene` (the canvas) MUST keep `touch-action: none` in its CSS rule.**
+  Without it, a real touchscreen's native gesture recognizer treats a
+  press-drag on the canvas as a pan attempt and hijacks the touch mid-
+  gesture, firing `pointercancel` instead of letting `pointermove`/
+  `pointerup` continue -- this is what broke the tap-and-drag placement
+  gesture (§ above) on real mobile hardware even though it worked
+  correctly in this environment's own synthetic-event testing (a
+  dispatched `PointerEvent` never goes through native gesture
+  recognition, so this exact class of bug is invisible to that kind of
+  test -- only code inspection + matching the convention already used by
+  every OTHER draggable element in this file, e.g. `.dev-header`/the
+  resize handles, actually catches it). A `pointercancel` listener on
+  `window` clears `draggingEntity`/`draggingPoint` and, when it matches
+  `spawnPointerId`, `pendingSpawnStart`/`spawnPointerId` too -- defensive
+  cleanup for a genuine cancel (OS interruption, an edge-swipe nav
+  gesture) that `touch-action: none` doesn't fully rule out; without it a
+  cancelled press-drag would leave `pendingSpawnStart` stuck, silently
+  blocking every future placement.

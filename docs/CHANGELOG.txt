@@ -619,6 +619,56 @@ config) -- both left untouched by this session beyond what git already
 shows as unavoidably co-committed by editing the same shared file.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 -- fix: click-and-drag entity placement broken on mobile
+touchscreens
+
+"clicking and dragging to place entities doesnt work on mobile. check
+some touch screen thing, or maybe its some chrome browser on touchscreen
+thing"
+
+Root cause: `#scene` (the canvas) had no `touch-action: none` -- every
+other draggable element in this file (`.dev-header`, the dev-panel
+resize edges/corners) already sets it, the canvas never did. Without it,
+a real touchscreen's native gesture recognizer treats a press-drag on
+the canvas as a pan/scroll attempt and hijacks the touch mid-gesture,
+firing `pointercancel` instead of letting `pointermove`/`pointerup`
+continue -- kills exactly the press-drag-release placement gesture while
+a plain tap (not enough movement to trigger the browser's own pan
+detection) keeps working, matching the report precisely.
+
+Fixed:
+- Added `touch-action: none` to `#scene`'s CSS rule.
+- Added a `window` `pointercancel` handler (mirroring the existing
+  `pointerup` handler's own cleanup) that clears
+  `draggingEntity`/`draggingPoint`, and -- when the cancelled pointer
+  matches `spawnPointerId` -- `pendingSpawnStart`/`spawnPointerId` too.
+  Not part of the reported bug itself, but directly relevant to making
+  the fix robust: without it, a genuine cancel that `touch-action: none`
+  doesn't prevent (an OS interruption, an edge-swipe navigation gesture)
+  would leave `pendingSpawnStart` stuck, silently blocking every future
+  placement until an unrelated tap happened to land far enough away to
+  complete the stale gesture.
+
+Verified:
+- `getComputedStyle(#scene).touchAction` confirmed `"none"` live in the
+  browser tool's own mobile-viewport emulation (375x812).
+- A full press-drag-release gesture dispatched as synthetic touch-type
+  `PointerEvent`s (`pointerdown` -> `pointermove` x2 -> `pointerup`, 100px
+  of movement) on the canvas completed end-to-end: `spawnEntityFromLine`
+  fired, entity count went 0 -> 1, screenshot-confirmed the new entity
+  rendered at the drag's end point.
+- Syntax-checked all inline `<script>` blocks after both edits.
+
+Explicit, disclosed limitation: a JS-dispatched `PointerEvent` never
+goes through a real browser's native touch-gesture recognizer, so this
+environment cannot reproduce the actual hijack-and-cancel failure mode
+itself -- only code inspection (matching the same `touch-action: none`
+convention already used by every other draggable element in this exact
+file) identifies the root cause and fix with confidence. The user should
+re-test on their actual phone to confirm the real-hardware fix.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
