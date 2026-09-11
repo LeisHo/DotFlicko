@@ -1804,6 +1804,14 @@
         // triggerWinLoseSequence()'s own comment for the full sequence
         // this gates.
         winLoseFistHoldDuration: 1, winLoseFinalHoldDuration: 1,
+        // Win/Lose's own frame-advance speed (the forward1/forward2/
+        // reverse phases only — the 2 hold phases above are real-time
+        // durations, unaffected by this) — independent of the normal
+        // flick's own Hand Anim Speed slider (cfg.clickAnimSpeed) per
+        // explicit request, defaulted to that same value/range so this
+        // slider's introduction doesn't silently change existing Win/
+        // Lose playback speed on first load.
+        winLoseAnimSpeed: 11.7,
     };
 
     // Labels below still reflect the "Hand ..." rename set as default
@@ -1899,6 +1907,7 @@
     const WIN_LOSE_CONTROLS = [
         { group: 'Win / Lose', id: 'sliderWinLoseFistHoldDuration', type: 'slider', label: 'Win/Lose Fist Hold Duration (s):', min: 0, max: 5, step: 0.1, value: cfg.winLoseFistHoldDuration },
         { group: 'Win / Lose', id: 'sliderWinLoseFinalHoldDuration', type: 'slider', label: 'Win/Lose Final Hold Duration (s):', min: 0, max: 5, step: 0.1, value: cfg.winLoseFinalHoldDuration },
+        { group: 'Win / Lose', id: 'sliderWinLoseAnimSpeed', type: 'slider', label: 'Win/Lose Anim Speed (x):', min: 0.1, max: 14.04, step: 0.1, value: cfg.winLoseAnimSpeed },
     ];
 
     const PROJECT_CONTROL_ARRAYS = [
@@ -1957,6 +1966,7 @@
         bindSlider('sliderCollisionIntensity', 'collisionIntensity');
         bindSlider('sliderWinLoseFistHoldDuration', 'winLoseFistHoldDuration');
         bindSlider('sliderWinLoseFinalHoldDuration', 'winLoseFinalHoldDuration');
+        bindSlider('sliderWinLoseAnimSpeed', 'winLoseAnimSpeed');
 
         document.getElementById('colorBackground').addEventListener('input', (e) => { cfg.backgroundColor = e.target.value; });
         document.getElementById('colorBall').addEventListener('input', (e) => { cfg.ballColor = e.target.value; });
@@ -3806,12 +3816,14 @@
 
     // Advances every entity's own Win/Lose state machine, one tick at a
     // time — see triggerWinLoseSequence()'s own comment for the 5 phases.
-    // Reuses the SAME FLICK_BASE_FPS/cfg.clickAnimSpeed frame-advance rate
-    // the normal flick sequence above uses (no separate speed slider was
-    // requested), but the 2 hold phases advance a real-seconds countdown
+    // Uses its OWN cfg.winLoseAnimSpeed for the forward1/forward2/reverse
+    // frame-advance rate (per explicit request — independent of the
+    // normal flick's own Hand Anim Speed / cfg.clickAnimSpeed, not
+    // shared with it), still against the same FLICK_BASE_FPS base rate.
+    // The 2 hold phases advance a real-seconds countdown
     // (cfg.winLoseFistHoldDuration/winLoseFinalHoldDuration) instead of a
-    // frame count, since the request specifically says "duration", not a
-    // frame hold like the normal flick's own peakHoldFrames.
+    // frame count, unaffected by this speed slider — a hold's own
+    // duration is real time, not animation playback.
     const WIN_LOSE_FIST_INDEX = 12; // frame _013 (0-based)
     const WIN_LOSE_LAST_INDEX = WIN_LOSE_FRAME_COUNT - 1; // frame _024
     function advanceWinLoseSequences(dt) {
@@ -3819,7 +3831,7 @@
             if (!entity.winLoseType) return;
             const phase = entity.winLosePhase;
             if (phase === 'forward1' || phase === 'forward2') {
-                entity.winLoseFrameAccum += dt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
+                entity.winLoseFrameAccum += dt * FLICK_BASE_FPS * cfg.winLoseAnimSpeed;
                 const target = phase === 'forward1' ? WIN_LOSE_FIST_INDEX : WIN_LOSE_LAST_INDEX;
                 if (entity.winLoseFrameAccum >= target) {
                     entity.winLoseFrameAccum = target; // clamp exactly — never overshoot the hold frame
@@ -3844,7 +3856,7 @@
                 // "without any in between frame holding", per explicit
                 // instruction — this phase has no target-check branching
                 // at all, just a continuous decrement to 0.
-                entity.winLoseFrameAccum -= dt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
+                entity.winLoseFrameAccum -= dt * FLICK_BASE_FPS * cfg.winLoseAnimSpeed;
                 if (entity.winLoseFrameAccum <= 0) {
                     // Sequence complete — entity returns to its own normal
                     // idle rendering (render()'s draw dispatch falls back

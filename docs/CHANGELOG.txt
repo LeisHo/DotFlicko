@@ -855,6 +855,31 @@ through in a real, focused browser tab is the first genuinely real-time
 test.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- Win/Lose Anim Speed slider
+
+"provide me a slider to control the animation speed of the win/ lose
+animations"
+
+Previously advanceWinLoseSequences() (the Win/Lose state machine added
+last turn) reused the normal flick's own cfg.clickAnimSpeed for its
+forward1/forward2/reverse frame-advance rate, since no separate speed
+control had been requested at the time. Added a dedicated
+cfg.winLoseAnimSpeed (new "Win/Lose Anim Speed (x)" slider in the
+existing "Win / Lose" dev-panel group), defaulted to clickAnimSpeed's
+own default/range (11.7, 0.1-14.04) so introducing this slider doesn't
+silently change existing Win/Lose playback speed on first load. Swapped
+both of advanceWinLoseSequences()'s own cfg.clickAnimSpeed reads
+(forward1/forward2's increment, reverse's decrement) to this new field
+-- the 2 hold-duration sliders (Fist/Final) are untouched, since a
+hold's own duration is real time, not playback speed.
+
+Verified: syntax-checked; live in the browser, confirmed the new
+slider defaults to 11.7 and setting it to a different value leaves
+sliderClickAnimSpeed's own value completely unchanged, confirming the 2
+speeds are genuinely independent cfg fields, not aliased.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

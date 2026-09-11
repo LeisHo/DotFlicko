@@ -197,6 +197,11 @@ new session should be aware they're there before touching `data/FLICK/`.
   known, previously-documented environment limitation, not a code
   issue) — the user's own click-through in a real, focused browser is
   the first real-time-accurate check.
+- Win/Lose Anim Speed — a dedicated dev-panel slider (default 11.7,
+  same default/range as Hand Anim Speed) controlling only the Win/Lose
+  sequence's forward/reverse frame-advance rate, independent of the
+  normal flick's own Hand Anim Speed slider. The 2 hold durations are
+  unaffected (real-time, not playback speed).
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-
