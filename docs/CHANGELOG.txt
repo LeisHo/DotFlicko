@@ -1160,6 +1160,67 @@ the old "flickIntensity"/"FlickIntensity" names anywhere in the file
 after the rename.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- re-sync updated Win (TU) frames for 5
+directions, add per-type anchor override + fix a pre-existing asset gap
+
+"J:\CLAUDE\PROJECTS\DICKOCLICKO\data\FLICK\2TONED\FRONT PINKY_TU\FIST
+updated these frames" / (follow-up) "and these
+J:\CLAUDE\PROJECTS\DICKOCLICKO\data\FLICK\2TONED\FRONT_TU\FIST"
+
+Started with the 1 named folder (front-pinky), but per this project's
+own established discipline for these re-sync tasks, re-scanned ALL 16
+direction/type folders via diff -rq rather than trusting only the named
+one -- found 3 MORE already differing (BEHIND PINKY_TU, BEHIND THUMB_TU,
+FRONT THUMB_TU) that neither the user's own message nor a shallow check
+would have caught. Investigated why: `index.html`'s own WIN_LOSE_ASSETS
+table ALREADY referenced these 3 directions' new 48-frame prefixes (a
+DIFFERENT concurrent session's own already-committed, already-pushed
+work generalizing frame counts per-asset), but the matching PNG files
+were never actually copied into this repo -- a real, live, currently-
+broken gap (those 3 directions' Win sequences would 404 the moment
+anyone tried them), not something introduced by this task. The user's
+own follow-up message named a 5th folder (FRONT_TU) mid-task, added to
+the same pass; a final full re-scan of the remaining folders confirmed
+nothing else had changed.
+
+Synced all 5 (72-96 files each, new prefixes, all now 48 frames except
+front's own lose side and every other direction's own lose side, still
+24): FRONT PINKY_TU, BEHIND PINKY_TU, BEHIND THUMB_TU, FRONT THUMB_TU,
+FRONT_TU. Updated `index.html`'s own `win.prefix`/`frameCount` for
+front-pinky and front specifically (the only 2 of the 5 whose CODE
+side hadn't already been updated by the other session).
+
+Re-computed (not assumed) all 5 directions' own visible-content anchor
+against their new frame-1 art. 4 came back numerically identical to
+the already-stored shared value (front, behind-pinky, behind-thumb,
+front-thumb) -- but front-pinky's own NEW Win/TU frame 1 measured
+genuinely different (centerX/bottomY 0.4846/0.9189 vs. the shared
+0.4943/0.9221 every other still-unrevised entry uses), the first real
+case this asset family has hit where win/lose diverge. Extended
+WIN_LOSE_ASSETS to support an OPTIONAL per-type centerX/bottomY
+override on the `lose`/`win` sub-object (falling back to the shared
+direction-level value when absent) via a new `winLoseVisibleBounds()`
+helper, used by render()'s own draw dispatch in place of a direct
+`WIN_LOSE_ASSETS[key].centerX/bottomY` read -- added the override ONLY
+for front-pinky's own `win` entry, since it's the only one a real
+recompute actually showed differing.
+
+Also corrected 2 now-stale CODE_SUMMARY.md GOTCHAS entries left behind
+by the other concurrent session's own frameCount-generalization work
+(the old shared `WIN_LOSE_FIST_INDEX`/`WIN_LOSE_LAST_INDEX` constants
+they replaced with per-entity fields were still described as current).
+
+Verified: syntax-checked after every edit; live in the browser (fresh,
+cache-busted navigation to rule out a stale browser cache after an
+initial confusing test result), confirmed front-pinky, front, and
+BEHIND THUMB_TU (one of the 3 previously-broken directions) all
+resolve correctly, fetch their real new frames with genuine 200 OK
+responses, and render with correctly-anchored sprites
+(screenshot-confirmed for front-pinky and front, base dot lining up
+with the sprite's own foot in both cases).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

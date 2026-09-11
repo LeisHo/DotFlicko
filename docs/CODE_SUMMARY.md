@@ -577,15 +577,33 @@ GOTCHAS
   OWN `data/FLICK/2TONED/<FOLDER>_MF|_TU/FIST/` (384 files, ~15MB), not
   just referenced by a DICKOCLICKO-relative path. `_MF` = Lose, `_TU` =
   Win, per explicit instruction -- don't swap these.
-- **`WIN_LOSE_FIST_INDEX = 12` and `WIN_LOSE_LAST_INDEX = 23` are
-  0-based array indices, matching 1-based file suffixes `_013`/`_024`
-  the request itself specified** -- a future change to
-  `WIN_LOSE_FRAME_COUNT` (e.g. a reshot sequence with a different frame
-  count) needs `WIN_LOSE_LAST_INDEX` re-derived from it
-  (`WIN_LOSE_FRAME_COUNT - 1`, already expressed that way, not
-  hardcoded), and `WIN_LOSE_FIST_INDEX` re-confirmed against wherever
-  the NEW sequence's own hold-pose frame actually lands -- it is NOT
-  automatically "13" again just because the old one was.
+- **Frame count is PER-ASSET (`WIN_LOSE_ASSETS[key][type].frameCount`),
+  not a shared global** -- a real asset replacement report ("i replaced
+  the animation frames for BehindThumb_TU. There are now 48 frames, so
+  instead of pausing on frame 13, you will pause on frame 25") proved a
+  single global count can't survive a real per-direction frame-count
+  change. `triggerWinLoseSequence()` derives and stores
+  `entity.winLoseFistIndex`/`.winLoseLastIndex` PER ENTITY at trigger
+  time (`Math.floor(frameCount / 2)` 0-based / `frameCount - 1`) from
+  THAT entity's own asset's own `frameCount` -- don't reintroduce a
+  shared top-level `WIN_LOSE_FIST_INDEX`/`WIN_LOSE_LAST_INDEX` constant,
+  2 different directions can now genuinely have 2 different frame counts
+  (e.g. several `_TU` sequences sit at 48 frames while every `_MF`
+  sequence and the unrevised `_TU` ones stay at 24) at the same time.
+- **`winLoseVisibleBounds(directionKey, type)` reads a PER-TYPE
+  `centerX`/`bottomY` override on the `lose`/`win` sub-object first,
+  falling back to the shared direction-level value** -- render()'s own
+  Win/Lose draw dispatch calls this (never reads
+  `WIN_LOSE_ASSETS[key].centerX/bottomY` directly). Every direction
+  originally shared ONE anchor between lose/win (both start from the
+  same "pre-flick" pose) -- 'front-pinky' broke that assumption when its
+  own Win/TU frame 1 was replaced with genuinely different art (measured
+  centerX/bottomY 0.4846/0.9189 vs. the shared 0.4943/0.9221 every other
+  still-unrevised entry uses) -- confirmed by an actual recompute, not
+  assumed. Only add a per-type override when a real recompute shows a
+  genuine difference (as with front-pinky) -- don't add one
+  speculatively "just in case" for an entry that still measures
+  identically.
 - **A Win/Lose entity's draw dispatch in `render()` MUST fall back to
   its own idle frame whenever the target frame isn't loaded yet -- never
   leave `drawSource` as `null` in that branch.** `ensureWinLoseLoaded()`

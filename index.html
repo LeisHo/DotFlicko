@@ -2063,6 +2063,16 @@
     // per the "PF" prefix both share) — if a future asset replacement ever
     // makes them diverge, recompute both and store them separately then.
     //
+    // That divergence DID eventually happen (front-pinky's own Win/TU
+    // frame 1 was replaced with genuinely different art, measured
+    // centerX/bottomY 0.4846/0.9189 vs. the shared 0.4943/0.9221 every
+    // other still-unrevised direction/lose side uses) — `lose`/`win` sub-
+    // objects support an OPTIONAL per-type `centerX`/`bottomY` override
+    // for exactly this case, read by `winLoseVisibleBounds()` (below) in
+    // preference to the shared direction-level value when present. Only
+    // add an override when a real recompute actually shows a difference
+    // (as here) — don't add one speculatively "just in case."
+    //
     // TO REGENERATE (e.g. after replacing a direction's own frame 1 art):
     //   node -e "const sharp=require('sharp'); (async()=>{const img=sharp('data/FLICK/2TONED/<FOLDER>_MF/FIST/<prefix>_001.png'); const {data,info}=await img.raw().ensureAlpha().toBuffer({resolveWithObject:true}); const w=info.width,h=info.height,c=info.channels; let minX=w,maxX=-1,minY=h,maxY=-1; for(let y=0;y<h;y++){for(let x=0;x<w;x++){const a=data[(y*w+x)*c+(c-1)]; if(a>10){if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;}}} console.log({centerX:+(((minX+maxX)/2)/w).toFixed(4), bottomY:+(((maxY+1)/h)).toFixed(4)});})()"
     const WIN_LOSE_ASSETS = {
@@ -2070,11 +2080,22 @@
         'behind-thumb': { lose: { folder: 'BEHIND THUMB_MF',   prefix: '2T - BT- PF_F-30_MF30', frameCount: 24 },                 win: { folder: 'BEHIND THUMB_TU',  prefix: 'BehindThumb _ TU', frameCount: 48 },                     centerX: 0.4987, bottomY: 0.8925 },
         'side-thumb':   { lose: { folder: 'SIDE THUMB_MF',     prefix: '2T - DT- PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE THUMB_TU',    prefix: 'DirectThumb - TU', frameCount: 24 },                     centerX: 0.4794, bottomY: 0.8816 },
         'front-thumb':  { lose: { folder: 'FRONT THUMB_MF',    prefix: '2T - FT - PF_F135_MF135', frameCount: 24 },               win: { folder: 'FRONT THUMB_TU',   prefix: 'FrontThumb_TU', frameCount: 48 },                        centerX: 0.4745, bottomY: 0.9013 },
-        'front':        { lose: { folder: 'FRONT_MF',          prefix: '2T - ABOVE - PF_F180_MF180', frameCount: 24 },            win: { folder: 'FRONT_TU',         prefix: '2T - ABOVE - PF_F_TU', frameCount: 24 },                 centerX: 0.4771, bottomY: 0.9145 },
-        'front-pinky':  { lose: { folder: 'FRONT PINKY_MF',    prefix: '2T - FP - PF_F145_MF145', frameCount: 24 },               win: { folder: 'FRONT PINKY_TU',   prefix: '2T - FP - PF_F_TU-35', frameCount: 24 },                 centerX: 0.4943, bottomY: 0.9221 },
+        'front':        { lose: { folder: 'FRONT_MF',          prefix: '2T - ABOVE - PF_F180_MF180', frameCount: 24 },            win: { folder: 'FRONT_TU',         prefix: 'Front_ TU', frameCount: 48 },                            centerX: 0.4771, bottomY: 0.9145 },
+        'front-pinky':  { lose: { folder: 'FRONT PINKY_MF',    prefix: '2T - FP - PF_F145_MF145', frameCount: 24 },               win: { folder: 'FRONT PINKY_TU',   prefix: 'FrontPink_ TU', frameCount: 48, centerX: 0.4846, bottomY: 0.9189 }, centerX: 0.4943, bottomY: 0.9221 },
         'side-pinky':   { lose: { folder: 'SIDE PINKY_MF',     prefix: '2T -DP - PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE PINKY_TU',    prefix: 'DirectPink - TU', frameCount: 24 },                      centerX: 0.5188, bottomY: 0.9265 },
         'behind-pinky': { lose: { folder: 'BEHIND PINKY_MF',   prefix: '2T - B - PF_F70_MF70', frameCount: 24 },                  win: { folder: 'BEHIND PINKY_TU',  prefix: 'BehindPink_ TU', frameCount: 48 },                       centerX: 0.5203, bottomY: 0.9167 },
     };
+    // Per-type override first (asset.centerX is only ever set when a real
+    // recompute showed it genuinely differs from the shared value — see
+    // the table's own comment above), falling back to the shared
+    // direction-level centerX/bottomY every other entry still uses.
+    function winLoseVisibleBounds(directionKey, type) {
+        const wl = WIN_LOSE_ASSETS[directionKey];
+        if (!wl) return { centerX: 0.5, bottomY: 1 };
+        const asset = wl[type];
+        if (asset && asset.centerX !== undefined) return { centerX: asset.centerX, bottomY: asset.bottomY };
+        return { centerX: wl.centerX, bottomY: wl.bottomY };
+    }
     function winLoseFrameUrl(asset, n) {
         return `data/FLICK/2TONED/${encodeURIComponent(asset.folder)}/FIST/${encodeURIComponent(asset.prefix + '_' + String(n).padStart(3, '0') + '.png')}`;
     }
@@ -4133,7 +4154,9 @@
                 // ahead of both the normal playing/idle branches (the 2
                 // states are mutually exclusive — triggerWinLoseSequence()
                 // already clears entity.playing when this starts) — its
-                // OWN anchor (WIN_LOSE_ASSETS[key].centerX/bottomY), not
+                // OWN anchor (winLoseVisibleBounds() — a per-type override
+                // when one's been measured to genuinely differ, else the
+                // shared direction-level value), not
                 // visibleBoundsForDirection(), since this is a genuinely
                 // different source image, not reused from the normal set.
                 const frames = ensureWinLoseLoaded(entity.directionKey, entity.winLoseType);
@@ -4142,8 +4165,7 @@
                 if (img && img.complete && img.naturalWidth > 0) {
                     drawH = size * (img.naturalHeight / img.naturalWidth);
                     drawSource = img;
-                    const wl = WIN_LOSE_ASSETS[entity.directionKey];
-                    vb = wl ? { centerX: wl.centerX, bottomY: wl.bottomY } : { centerX: 0.5, bottomY: 1 };
+                    vb = winLoseVisibleBounds(entity.directionKey, entity.winLoseType);
                 } else {
                     // This exact frame hasn't finished loading yet (all 24
                     // of a direction's own Win/Lose frames are only

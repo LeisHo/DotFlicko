@@ -221,6 +221,22 @@ new session should be aware they're there before touching `data/FLICK/`.
   visible through a Win click on a fresh page load, and a newly-placed
   entity's own Lose assets were confirmed fetching over the network with
   zero Win/Lose button ever clicked.
+- Win/Lose asset re-syncing from DICKOCLICKO is an ongoing, recurring
+  task as the user keeps revising individual directions' own frame art
+  there (see `CHANGELOG.txt` for the full history of each round) — each
+  round: `diff -rq` the full 16 folders against DOTFLICKO's own copy
+  (never assume only the folder(s) the user explicitly names are the
+  only ones that changed — 3 extra already-broken directions were found
+  this way in one round, where the OTHER concurrent session had already
+  updated the CODE to expect new 48-frame assets but the actual PNG
+  files were never copied in), copy in whatever differs, recompute (not
+  assume) that direction's own visible-content anchor. Frame count is
+  now genuinely PER-ASSET (some `_TU` sequences sit at 48 frames, others
+  still at 24) via `WIN_LOSE_ASSETS[key][type].frameCount`, and win/lose
+  can now have genuinely DIFFERENT anchors within the same direction
+  (`winLoseVisibleBounds()`'s own per-type override, added when
+  front-pinky's own Win art was replaced with visibly different-anchored
+  art) — see `CODE_SUMMARY.md`'s own GOTCHAS for both mechanisms.
 - "Collision Only While Playing" (new Collision-group checkbox, default
   off/unchanged behavior) — when on, an entity's own finger-joint
   capsules stop physically colliding with the ball (position
