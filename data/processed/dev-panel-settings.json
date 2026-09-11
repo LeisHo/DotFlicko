@@ -1,6 +1,6 @@
 {
   "controls": {
-    "sliderEntityScale": 76,
+    "sliderEntityScale": 120,
     "sliderClickAnimSpeed": 11.7,
     "sliderPeakHoldFrames": 30,
     "sliderRotationSmoothing": 1,
@@ -10,9 +10,11 @@
     "sliderBallGravity": 80,
     "sliderBallRadius": 3,
     "colorBall": "#ff5c5c",
-    "sliderBallBounciness": 0.2,
+    "sliderBallBounciness": 1.5,
     "sliderBallRespawnRate": 0.8,
     "sliderBallMaxSpeed": 110,
+    "sliderBallDrag": 0.36,
+    "sliderBallSpawnSpread": 0,
     "sliderJointThickness": 2,
     "sliderThicknessSmoothing": 0.36,
     "sliderCollisionIntensity": 0.2,
@@ -21,6 +23,7 @@
     "checkboxShowAngleDebug": true,
     "checkboxHideCursor": false,
     "checkboxShowHitbox": false,
+    "checkboxAllowPlacementWhileRunning": true,
     "selectRotationOffsetDirection": "front-pinky",
     "sliderRotOffset_behind": 1,
     "sliderRotOffset_behind-thumb": 0,
@@ -41,10 +44,10 @@
     "sliderXOffset_behind-pinky": -0.5
   },
   "layout": {
-    "left": 19,
-    "top": 172,
-    "width": 340,
-    "height": 446
+    "left": 26,
+    "top": 53,
+    "width": 344,
+    "height": 299
   },
   "devPanelStyle": {
     "titleFontSize": 22,
@@ -121,6 +124,14 @@
   "sectionOrder": {
     "desktopTabContent": [
       {
+        "key": "desktop:Scenes",
+        "rowKeys": [
+          "inputSceneName",
+          "selectSceneName"
+        ],
+        "subgroups": []
+      },
+      {
         "key": "desktop:Dev Panel",
         "rowKeys": [
           "sliderDevPanelTitleFontSize",
@@ -169,6 +180,8 @@
       {
         "key": "desktop:Ball",
         "rowKeys": [
+          "sliderBallDrag",
+          "sliderBallSpawnSpread",
           "sliderBallMaxSpeed",
           "sliderBallGravity",
           "sliderBallRadius",
@@ -191,6 +204,7 @@
       {
         "key": "desktop:Debug",
         "rowKeys": [
+          "checkboxAllowPlacementWhileRunning",
           "checkboxShowCenter",
           "checkboxShowAngleDebug",
           "checkboxHideCursor",
@@ -231,11 +245,12 @@
     ]
   },
   "sectionCollapseState": {
+    "desktop:Scenes": true,
     "desktop:Dev Panel": true,
     "desktop:Entity": true,
     "desktop:Background": true,
     "desktop:Ball": false,
-    "desktop:Collision": false,
+    "desktop:Collision": true,
     "desktop:Debug": true,
     "mobile:Dev Panel": false,
     "landscape:Dev Panel": false
@@ -244,5 +259,6 @@
     "desktop:Dev Panel": null,
     "desktop:Entity": "HAND"
   },
-  "textEditModeEnabled": false
+  "textEditModeEnabled": false,
+  "scenes": {}
 }
