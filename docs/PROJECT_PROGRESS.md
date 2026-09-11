@@ -226,17 +226,25 @@ new session should be aware they're there before touching `data/FLICK/`.
   there (see `CHANGELOG.txt` for the full history of each round) — each
   round: `diff -rq` the full 16 folders against DOTFLICKO's own copy
   (never assume only the folder(s) the user explicitly names are the
-  only ones that changed — 3 extra already-broken directions were found
-  this way in one round, where the OTHER concurrent session had already
+  only ones that changed — one round found 3 extra already-broken
+  directions this way, where the OTHER concurrent session had already
   updated the CODE to expect new 48-frame assets but the actual PNG
-  files were never copied in), copy in whatever differs, recompute (not
+  files were never copied in; another found 2 directions the user's own
+  message hadn't named at all), copy in whatever differs, recompute (not
   assume) that direction's own visible-content anchor. Frame count is
-  now genuinely PER-ASSET (some `_TU` sequences sit at 48 frames, others
-  still at 24) via `WIN_LOSE_ASSETS[key][type].frameCount`, and win/lose
-  can now have genuinely DIFFERENT anchors within the same direction
+  now genuinely PER-ASSET (most `_TU` Win sequences sit at 48 frames,
+  `_MF` Lose sequences and a couple of still-unrevised `_TU` ones stay
+  at 24) via `WIN_LOSE_ASSETS[key][type].frameCount`, and win/lose can
+  now have genuinely DIFFERENT anchors within the same direction
   (`winLoseVisibleBounds()`'s own per-type override, added when
   front-pinky's own Win art was replaced with visibly different-anchored
-  art) — see `CODE_SUMMARY.md`'s own GOTCHAS for both mechanisms.
+  art) — see `CODE_SUMMARY.md`'s own GOTCHAS for both mechanisms. **Known
+  asset gap, not a code bug**: side-pinky's own Win/TU source in
+  DICKOCLICKO is genuinely missing frames 028-032 (43 real files out of
+  a 001-048 range) — the render()-side idle-frame fallback already
+  handles this gracefully (same mechanism as a still-loading frame), so
+  it just briefly holds the idle pose for those 5 frame indices rather
+  than erroring; would need the source itself completed to fully fix.
 - "Collision Only While Playing" (new Collision-group checkbox, default
   off/unchanged behavior) — when on, an entity's own finger-joint
   capsules stop physically colliding with the ball (position

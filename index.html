@@ -2076,13 +2076,23 @@
     // TO REGENERATE (e.g. after replacing a direction's own frame 1 art):
     //   node -e "const sharp=require('sharp'); (async()=>{const img=sharp('data/FLICK/2TONED/<FOLDER>_MF/FIST/<prefix>_001.png'); const {data,info}=await img.raw().ensureAlpha().toBuffer({resolveWithObject:true}); const w=info.width,h=info.height,c=info.channels; let minX=w,maxX=-1,minY=h,maxY=-1; for(let y=0;y<h;y++){for(let x=0;x<w;x++){const a=data[(y*w+x)*c+(c-1)]; if(a>10){if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;}}} console.log({centerX:+(((minX+maxX)/2)/w).toFixed(4), bottomY:+(((maxY+1)/h)).toFixed(4)});})()"
     const WIN_LOSE_ASSETS = {
-        'behind':       { lose: { folder: 'BEHIND_MF',        prefix: '2T - B - PF_F_MF', frameCount: 24 },                      win: { folder: 'BEHIND_TU',        prefix: '2T -B - PF_F180_TU-176-90 FFF', frameCount: 24 },        centerX: 0.5255, bottomY: 0.8914 },
+        'behind':       { lose: { folder: 'BEHIND_MF',        prefix: '2T - B - PF_F_MF', frameCount: 24 },                      win: { folder: 'BEHIND_TU',        prefix: 'Behind_TU', frameCount: 48 },                            centerX: 0.5255, bottomY: 0.8914 },
         'behind-thumb': { lose: { folder: 'BEHIND THUMB_MF',   prefix: '2T - BT- PF_F-30_MF30', frameCount: 24 },                 win: { folder: 'BEHIND THUMB_TU',  prefix: 'BehindThumb _ TU', frameCount: 48 },                     centerX: 0.4987, bottomY: 0.8925 },
-        'side-thumb':   { lose: { folder: 'SIDE THUMB_MF',     prefix: '2T - DT- PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE THUMB_TU',    prefix: 'DirectThumb - TU', frameCount: 24 },                     centerX: 0.4794, bottomY: 0.8816 },
+        'side-thumb':   { lose: { folder: 'SIDE THUMB_MF',     prefix: '2T - DT- PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE THUMB_TU',    prefix: 'DirctThumbTU', frameCount: 48 },                        centerX: 0.4794, bottomY: 0.8816 },
         'front-thumb':  { lose: { folder: 'FRONT THUMB_MF',    prefix: '2T - FT - PF_F135_MF135', frameCount: 24 },               win: { folder: 'FRONT THUMB_TU',   prefix: 'FrontThumb_TU', frameCount: 48 },                        centerX: 0.4745, bottomY: 0.9013 },
         'front':        { lose: { folder: 'FRONT_MF',          prefix: '2T - ABOVE - PF_F180_MF180', frameCount: 24 },            win: { folder: 'FRONT_TU',         prefix: 'Front_ TU', frameCount: 48 },                            centerX: 0.4771, bottomY: 0.9145 },
         'front-pinky':  { lose: { folder: 'FRONT PINKY_MF',    prefix: '2T - FP - PF_F145_MF145', frameCount: 24 },               win: { folder: 'FRONT PINKY_TU',   prefix: 'FrontPink_ TU', frameCount: 48, centerX: 0.4846, bottomY: 0.9189 }, centerX: 0.4943, bottomY: 0.9221 },
-        'side-pinky':   { lose: { folder: 'SIDE PINKY_MF',     prefix: '2T -DP - PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE PINKY_TU',    prefix: 'DirectPink - TU', frameCount: 24 },                      centerX: 0.5188, bottomY: 0.9265 },
+        // side-pinky's own win/TU sequence has a real, confirmed gap in
+        // its SOURCE (not this project's own copy) -- frames 028-032 are
+        // simply absent from DICKOCLICKO's own folder (43 real files,
+        // numbered 001-027 then 033-048), not just slow to load.
+        // frameCount stays 48 (matching the highest real frame number
+        // present) -- the existing render()-side idle-frame fallback
+        // (added for the cold-load-flash fix, see that GOTCHA) already
+        // handles a permanently-missing frame the same way it handles a
+        // still-loading one, so this isn't a crash risk, just a brief
+        // hold on the idle pose for those 5 frame indices.
+        'side-pinky':   { lose: { folder: 'SIDE PINKY_MF',     prefix: '2T -DP - PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE PINKY_TU',    prefix: 'DirctPink_TU', frameCount: 48 },                        centerX: 0.5188, bottomY: 0.9265 },
         'behind-pinky': { lose: { folder: 'BEHIND PINKY_MF',   prefix: '2T - B - PF_F70_MF70', frameCount: 24 },                  win: { folder: 'BEHIND PINKY_TU',  prefix: 'BehindPink_ TU', frameCount: 48 },                       centerX: 0.5203, bottomY: 0.9167 },
     };
     // Per-type override first (asset.centerX is only ever set when a real

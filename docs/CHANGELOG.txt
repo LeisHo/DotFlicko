@@ -1221,6 +1221,59 @@ responses, and render with correctly-anchored sprites
 with the sprite's own foot in both cases).
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- re-sync updated Win (TU) frames for behind,
+side-pinky, side-thumb
+
+"also updated front and behind frames" / (follow-up) "as well as
+SidePinky and SideThumb"
+
+Full 16-folder `diff -rq` scan (per this project's own established
+discipline, not trusting the message's own literal wording) found
+exactly 3 actually differing: BEHIND_TU, SIDE PINKY_TU, SIDE THUMB_TU
+-- "front" itself was already in sync from an earlier round this
+session; the user's own follow-up named the other 2 before this task
+otherwise would have needed to ask. None of these 3 directions' own
+code entries had been touched by the other concurrent session (unlike
+several directions in the previous round), so both the asset copy and
+the `WIN_LOSE_ASSETS` prefix/frameCount update were this task's own to
+do for all 3.
+
+Synced: behind (48 frames, new prefix `Behind_TU`), side-pinky (new
+prefix `DirctPink_TU`), side-thumb (48 frames, new prefix
+`DirctThumbTU`). Re-computed (not assumed) all 3 directions' own
+visible-content anchor against the new art -- all 3 came back
+numerically identical to the already-stored shared value (same
+"shared pre-flick pose" pattern confirmed several times now).
+
+Found and DELIBERATELY did NOT try to fix a real gap in the SOURCE
+itself: side-pinky's own Win/TU folder in DICKOCLICKO has only 43 real
+files across a 001-048 numbering range -- frames 028-032 are simply
+absent, not slow to load or corrupted. `frameCount` set to 48 anyway
+(matching the highest real frame present, the established convention
+for a still-in-progress source), and documented the gap directly in
+`WIN_LOSE_ASSETS`'s own comment rather than fabricating replacement
+frames or silently working around it -- the existing render()-side
+idle-frame fallback (originally added for the cold-load-flash bug)
+already handles a permanently-missing frame exactly like a still-
+loading one, so this doesn't need a special case, just an honest note
+for whoever next touches this table.
+
+One real self-caught mistake during editing: initially wrote the
+missing-frames comment on side-thumb's own entry instead of
+side-pinky's (side-thumb's own 48 files are actually complete, no
+gap) -- caught by re-checking my own earlier `ls`/gap-analysis output
+against what I'd just written before moving on, not by a later test
+failure; corrected before commit.
+
+Verified live in the browser (cache-busted navigation): placed one
+entity per affected direction (behind, side-pinky, side-thumb),
+clicked Win, confirmed all 3 fetch their real new frame 1 with genuine
+200 OK responses and render correctly anchored (screenshot-confirmed).
+Final full 16-folder re-scan after all edits confirmed nothing else
+had changed.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
