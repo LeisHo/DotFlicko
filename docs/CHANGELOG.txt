@@ -1274,6 +1274,33 @@ Final full 16-folder re-scan after all edits confirmed nothing else
 had changed.
 
 --------------------------------------------------------------------------------
+2026-09-11 (2)
+
+Added a 3rd Stop-mode entity-adjustment dot (yellow) as a dedicated
+whole-entity move handle.
+
+Added:
+- A yellow dot, rendered exactly at the midpoint between a placed
+  entity's existing base (blue) and end (pink) dots, draggable via the
+  same pointerdown/pointermove/pointerup handlers as the other 2 --
+  dragging it translates the whole entity (both points move together
+  by an identical delta), preserving the line's own angle and length.
+
+Fixed:
+- Base (blue) and end (pink) dots now BOTH move fully independently
+  when dragged, each pivoting on whichever one isn't being dragged.
+  Previously only end moved independently (pivoting on base); base's
+  own drag instead translated the whole entity -- that "move" behavior
+  has moved to the new yellow midpoint dot above, per explicit request
+  ("the 2 endpoints... will move independently... I want the opposite
+  to be true" of end-only independence).
+
+Verified via synthetic PointerEvents dispatched through the real
+listeners (not direct state mutation) for all 3 drag modes, then a
+real mouse-driven drag on the yellow dot in the browser pane visually
+confirmed the same.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
