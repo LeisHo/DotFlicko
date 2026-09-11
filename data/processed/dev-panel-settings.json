@@ -25,7 +25,7 @@
     "checkboxShowHitbox": false,
     "checkboxAllowPlacementWhileRunning": true,
     "sliderWinLoseFistHoldDuration": 1,
-    "sliderWinLoseFinalHoldDuration": 2,
+    "sliderWinLoseFinalHoldDuration": 4.9,
     "selectRotationOffsetDirection": "front-pinky",
     "sliderRotOffset_behind": 1,
     "sliderRotOffset_behind-thumb": 0,
