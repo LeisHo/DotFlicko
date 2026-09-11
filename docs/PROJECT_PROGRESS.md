@@ -154,6 +154,26 @@ new session should be aware they're there before touching `data/FLICK/`.
   newly placed regardless of Start/Stop state. Scoped to new placement
   only; dot-dragging an already-placed entity and Delete mode stay
   Stop-only regardless of the checkbox.
+- Fixed mobile touch-drag entity placement (missing `touch-action: none`
+  on the canvas — see CHANGELOG for the full root cause). Still needs
+  the user's own real-hardware retest to confirm.
+- Flick Intensity Multiplier — per explicit request, the placement
+  line's own length (base to aim point) now scales the flick's
+  ball-collision-kick strength: up to 100% of that direction's own idle-
+  frame visible content height (at the current Entity Scale) is 1x,
+  100%-200% ramps linearly to 2x, 200%+ caps at 2x. Recomputed live from
+  each entity's own permanent endX/endY (same pattern as its rotation),
+  so a Stop-mode end-dot drag updates it immediately — confirmed live.
+  The live spawn/drag preview and Stop-mode end-dot adjustment both show
+  a running `intensity X.XXx` readout next to the existing debug status
+  text (gated by the same "Show Angle Debug" checkbox) so the value
+  being set is visible while placing, not just after the fact. **Not
+  independently verified against live ball physics** — confirmed the
+  multiplier's own formula/live-recompute is correct, and confirmed by
+  direct code review that it's multiplied into the existing, already-
+  proven collision-kick line alongside `cfg.collisionIntensity`, but
+  didn't separately stage a live ball-hit to observe the resulting kick
+  amplitude difference.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

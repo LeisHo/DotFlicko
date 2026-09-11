@@ -669,6 +669,70 @@ file) identifies the root cause and fix with confidence. The user should
 re-test on their actual phone to confirm the real-hardware fix.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- new feature: Flick Intensity Multiplier from
+placement line length
+
+"when placing entities, the distance between the 2 points matters. from
+the base up to 100% up the visible image, that will be '1'. The length
+of the line is capped at 2X the length of the visible image. At full
+length, it will be '2'. That is the range. These 2 numbers are a
+multiplier to the flick intensity. So at 100% height or less, it will
+just be 1, at 2X height, the flick intensity will be 2x."
+
+Added:
+- `VISIBLE_BOUNDS_BY_DIRECTION` extended with a `heightFrac` field per
+  direction (visible-content height as a fraction of the full raster,
+  bottomY - topY) -- computed the SAME way as the existing centerX/
+  bottomY fields (Node + `sharp` against the real frame-1 PNGs, not
+  guessed), from the exact same idle-frame source images. The table's
+  own regeneration one-liner comment updated to compute and log all 3
+  fields together.
+- `flickIntensityMultiplierForLine(directionKey, startX, startY, endX,
+  endY)` -- the shared formula: distance / (idle-frame visible height at
+  the current Entity Scale), clamped to [1, 2]. Since the 1x-2x
+  multiplier range maps 1:1 onto the 1x-2x distance-ratio range, the
+  formula is just the clamped ratio itself.
+- `entityFlickIntensityMultiplier(entity)` -- thin per-entity wrapper,
+  reading the entity's own permanent endX/endY LIVE every call (same
+  pattern as the existing `entityRotationRad()`), so it isn't frozen at
+  spawn time -- a live Entity Scale change or a Stop-mode end-dot drag
+  updates it immediately, with zero extra bookkeeping, exactly like
+  rotation already does.
+- Wired into the ball-collision kick as an ADDITIONAL factor alongside
+  the existing global `cfg.collisionIntensity` slider (not a
+  replacement): `ball.vx/vy += nx/ny * speed * cfg.collisionIntensity *
+  flickIntensityMult`, computed once per entity per tick (not once per
+  the 3 segments each entity has).
+- A live `intensity X.XXx` readout added to the existing debug status
+  text (gated by the same "Show Angle Debug" checkbox that already
+  showed entity counts etc.) while placing (2-tap/drag preview) or
+  adjusting (Stop-mode end-dot drag) -- lets the user see the exact
+  value their gesture is setting, not just find out later from ball
+  behavior.
+
+Verified:
+- Live in the browser: a 40px drag showed `intensity 1.00x` (well under
+  the visible-height threshold); a 200px drag showed a scaled
+  intermediate value; an extreme (~5000px) drag capped correctly at
+  `intensity 2.00x`.
+- Completed a real placement at the capped distance (`entities: 1`),
+  then dragged that entity's own end dot back to a much shorter
+  distance and confirmed the debug readout dropped from 2.00x back to
+  1.00x immediately -- confirms the live-recompute-from-endX/endY
+  behavior, not a value frozen at spawn.
+- Syntax-checked all inline `<script>` blocks after every edit.
+
+Explicit, disclosed limitation: did NOT independently stage a live ball-
+collision hit to observe the resulting kick amplitude difference between
+a 1x and 2x placement -- the multiplier's own formula and live-recompute
+behavior were directly confirmed, and the multiplication site was
+confirmed by direct code review to be correctly wired into the existing,
+already-proven collision-kick line (same call site `cfg.collisionIntensity`,
+Air Drag, and Ball Max Speed were each previously verified at), but the
+end-to-end ball-physics amplification itself wasn't separately traced.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

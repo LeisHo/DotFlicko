@@ -2680,23 +2680,36 @@
     // alpha checks), independently cross-checked against this session's
     // own earlier in-browser measurements (matched to 4 decimal places).
     //
+    // heightFrac (added alongside centerX/bottomY, same offline computation,
+    // same source PNGs — NOT a separate scan) is the visible content's own
+    // height as a fraction of the full raster height (bottomY - topY,
+    // topY being the fractional Y of the first non-transparent row) — this
+    // is what entityFlickIntensityMultiplier() (below) uses as "100% up
+    // the visible image" for the Flick Intensity distance scale, per
+    // explicit request. Deliberately the SAME frame-1 art the anchor
+    // point already derives from (not the peak/most-extended flick frame),
+    // so placing an entity always measures against its own idle silhouette
+    // regardless of which frame the animation happens to be on later.
+    //
     // TO REGENERATE (e.g. after replacing a direction's frame 1 art):
-    //   node -e "const sharp=require('sharp'); (async()=>{const img=sharp('data/FLICK/2TONED/<FOLDER>/A/<prefix>_001.png'); const {data,info}=await img.raw().ensureAlpha().toBuffer({resolveWithObject:true}); const w=info.width,h=info.height,c=info.channels; let minX=w,maxX=-1,minY=h,maxY=-1; for(let y=0;y<h;y++){for(let x=0;x<w;x++){const a=data[(y*w+x)*c+(c-1)]; if(a>10){if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;}}} console.log({centerX:+(((minX+maxX)/2)/w).toFixed(4), bottomY:+(((maxY+1)/h)).toFixed(4)});})()"
+    //   node -e "const sharp=require('sharp'); (async()=>{const img=sharp('data/FLICK/2TONED/<FOLDER>/A/<prefix>_001.png'); const {data,info}=await img.raw().ensureAlpha().toBuffer({resolveWithObject:true}); const w=info.width,h=info.height,c=info.channels; let minX=w,maxX=-1,minY=h,maxY=-1; for(let y=0;y<h;y++){for(let x=0;x<w;x++){const a=data[(y*w+x)*c+(c-1)]; if(a>10){if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;}}} const bottomY=+(((maxY+1)/h)).toFixed(4), topY=+((minY/h)).toFixed(4); console.log({centerX:+(((minX+maxX)/2)/w).toFixed(4), bottomY, heightFrac:+(bottomY-topY).toFixed(4)});})()"
     const VISIBLE_BOUNDS_BY_DIRECTION = {
-        'behind':       { centerX: 0.5265, bottomY: 0.8916 },
-        'behind-thumb': { centerX: 0.5029, bottomY: 0.9009 },
-        'side-thumb':   { centerX: 0.4788, bottomY: 0.8815 },
-        'front-thumb':  { centerX: 0.4738, bottomY: 0.9009 },
-        'front':        { centerX: 0.4763, bottomY: 0.9145 },
-        'front-pinky':  { centerX: 0.4942, bottomY: 0.9221 },
-        'side-pinky':   { centerX: 0.5194, bottomY: 0.9272 },
-        'behind-pinky': { centerX: 0.521,  bottomY: 0.917  },
+        'behind':       { centerX: 0.5265, bottomY: 0.8916, heightFrac: 0.5919 },
+        'behind-thumb': { centerX: 0.5029, bottomY: 0.9009, heightFrac: 0.5952 },
+        'side-thumb':   { centerX: 0.4788, bottomY: 0.8815, heightFrac: 0.5809 },
+        'front-thumb':  { centerX: 0.4738, bottomY: 0.9009, heightFrac: 0.6028 },
+        'front':        { centerX: 0.4763, bottomY: 0.9145, heightFrac: 0.6156 },
+        'front-pinky':  { centerX: 0.4942, bottomY: 0.9221, heightFrac: 0.6376 },
+        'side-pinky':   { centerX: 0.5194, bottomY: 0.9272, heightFrac: 0.6334 },
+        'behind-pinky': { centerX: 0.521,  bottomY: 0.917,  heightFrac: 0.6257 },
     };
-    // Thin, synchronous lookup — the 0.5/1 fallback only matters for a
-    // direction key that isn't in the table above (e.g. a newly-added
-    // direction whose bounds haven't been regenerated yet).
+    // Thin, synchronous lookup — the fallback only matters for a direction
+    // key that isn't in the table above (e.g. a newly-added direction
+    // whose bounds haven't been regenerated yet); heightFrac: 1 there
+    // means "assume the whole raster is visible" (a safe, no-crash default
+    // for entityFlickIntensityMultiplier(), not a real measurement).
     function visibleBoundsForDirection(directionKey) {
-        return VISIBLE_BOUNDS_BY_DIRECTION[directionKey] || { centerX: 0.5, bottomY: 1 };
+        return VISIBLE_BOUNDS_BY_DIRECTION[directionKey] || { centerX: 0.5, bottomY: 1, heightFrac: 1 };
     }
 
     function ballInFlickTriggerZone(ball, directionKey, rotationRad, ex, ey) {
@@ -2911,6 +2924,11 @@
             // collision system already had before this change.
             entities.forEach(entity => {
                 if (entity.jointWorld) {
+                    // Computed once per entity per tick (not once per
+                    // segment below) — it's the same value for all 3
+                    // segments of a given entity this tick, no reason to
+                    // recompute it 3x.
+                    const flickIntensityMult = entityFlickIntensityMultiplier(entity);
                     const segments = [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']];
                     segments.forEach(([aKey, bKey]) => {
                         const a = entity.jointWorld[aKey], b = entity.jointWorld[bKey];
@@ -2969,8 +2987,8 @@
                             ball.vx -= reflectScale * nx;
                             ball.vy -= reflectScale * ny;
                         }
-                        ball.vx += nx * speed * cfg.collisionIntensity;
-                        ball.vy += ny * speed * cfg.collisionIntensity;
+                        ball.vx += nx * speed * cfg.collisionIntensity * flickIntensityMult;
+                        ball.vy += ny * speed * cfg.collisionIntensity * flickIntensityMult;
                     });
                 }
 
@@ -3336,6 +3354,40 @@
     function entityRotationRad(entity) {
         const lineAngle = mouseAngleFromCenter(entity.endX, entity.endY, entity.x, entity.y);
         return (lineAngle + (cfg.entityRotationOffsetByDirection[entity.directionKey] || 0)) * Math.PI / 180;
+    }
+
+    // Flick Intensity Multiplier — per explicit request: a placement
+    // line's own length (base to aim point) scales the flick's
+    // collision-kick strength. Up to 100% of the direction's own VISIBLE
+    // content height (at the CURRENT Entity Scale) -> 1x, exactly the
+    // baseline/unchanged behavior; 100%-200% of that height -> linear ramp
+    // 1x-2x; 200%+ -> capped at 2x ("the length of the line is capped at
+    // 2X the length of the visible image... at full length, it will be
+    // '2'"). Since the 1x-2x multiplier range maps onto the exact same
+    // 1x-2x distance-ratio range, the mapping is simply the ratio itself,
+    // clamped — no separate interpolation formula needed.
+    // Takes raw (directionKey, startX, startY, endX, endY) rather than an
+    // entity object so the SAME formula can preview a not-yet-placed
+    // gesture (render()'s live spawn/drag preview, below) without
+    // fabricating a fake entity — entityFlickIntensityMultiplier() (right
+    // after this) is the thin per-entity wrapper real entities use.
+    function flickIntensityMultiplierForLine(directionKey, startX, startY, endX, endY) {
+        const vmin = Math.min(window.innerWidth, window.innerHeight);
+        const size = vmin * (cfg.entityScale / 100);
+        const refImg = ensureDirectionLoaded(directionKey).frames[0];
+        const aspect = (refImg && refImg.complete && refImg.naturalWidth > 0) ? (refImg.naturalHeight / refImg.naturalWidth) : 1;
+        const drawH = size * aspect;
+        const visibleHeightPx = drawH * visibleBoundsForDirection(directionKey).heightFrac;
+        if (visibleHeightPx <= 0) return 1;
+        const distPx = Math.hypot(endX - startX, endY - startY);
+        return Math.min(2, Math.max(1, distPx / visibleHeightPx));
+    }
+    // Recomputed live from the entity's own permanent endX/endY every time
+    // it's needed (same pattern as entityRotationRad() just above), NOT
+    // frozen at spawn time, so it also tracks a live Entity Scale change
+    // and a Stop-mode end-dot drag, exactly like rotation already does.
+    function entityFlickIntensityMultiplier(entity) {
+        return flickIntensityMultiplierForLine(entity.directionKey, entity.x, entity.y, entity.endX, entity.endY);
     }
 
     // Stop-mode entity-adjustment: hit-tests every entity's own base (x,y)
@@ -3906,12 +3958,35 @@
             ctx.font = '14px monospace';
             ctx.textBaseline = 'top';
             const playingCount = entities.filter(en => en.playing).length;
+            // Live Flick Intensity readout while placing/adjusting — lets
+            // the user actually SEE the value this exact gesture is
+            // setting (per the same request that introduced the
+            // multiplier itself), rather than only finding out once a
+            // ball reacts to it later. "placing": recomputes the same
+            // angle/direction the live spawn-preview above already draws,
+            // fed to flickIntensityMultiplierForLine() directly (not
+            // re-deriving a fake entity). "adjusting":
+            // entityFlickIntensityMultiplier() already reads
+            // draggingEntity's own LIVE endX/endY, so no
+            // separate live-position handling is needed here.
+            let intensityText = '';
+            if (pendingSpawnStart && hasMouse) {
+                const dist = Math.hypot(mouseX - pendingSpawnStart.x, mouseY - pendingSpawnStart.y);
+                if (dist > 0.0001) {
+                    const previewAngle = mouseAngleFromCenter(mouseX, mouseY, pendingSpawnStart.x, pendingSpawnStart.y);
+                    const previewDirectionKey = DIRECTIONS[directionIndexForAngle(previewAngle)].key;
+                    const mult = flickIntensityMultiplierForLine(previewDirectionKey, pendingSpawnStart.x, pendingSpawnStart.y, mouseX, mouseY);
+                    intensityText = `  intensity ${mult.toFixed(2)}x`;
+                }
+            } else if (draggingEntity && draggingPoint === 'end') {
+                intensityText = `  intensity ${entityFlickIntensityMultiplier(draggingEntity).toFixed(2)}x`;
+            }
             // y=50, not 12 — the Start/Stop/Delete buttons (.sim-controls)
             // sit at top:10px/left:10px and are tall enough to overlap a
             // y=12 baseline; a real user report ("remove the text behind
             // the start stop delete buttons") confirmed this was actually
             // happening, not just a theoretical overlap.
-            ctx.fillText(`entities: ${entities.length}${playingCount ? `  (${playingCount} playing)` : ''}${pendingSpawnStart ? '  (placing...)' : ''}${draggingEntity ? '  (adjusting...)' : ''}${deleteMode ? '  (delete mode)' : ''}  [${running ? 'running' : 'stopped'}]`, 12, 50);
+            ctx.fillText(`entities: ${entities.length}${playingCount ? `  (${playingCount} playing)` : ''}${pendingSpawnStart ? '  (placing...)' : ''}${draggingEntity ? '  (adjusting...)' : ''}${deleteMode ? '  (delete mode)' : ''}${intensityText}  [${running ? 'running' : 'stopped'}]`, 12, 50);
             ctx.restore();
         }
     }

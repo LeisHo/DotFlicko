@@ -492,3 +492,37 @@ GOTCHAS
   gesture) that `touch-action: none` doesn't fully rule out; without it a
   cancelled press-drag would leave `pendingSpawnStart` stuck, silently
   blocking every future placement.
+- **`entityFlickIntensityMultiplier(entity)` (Flick Intensity Multiplier)
+  follows the EXACT SAME live-recompute pattern as `entityRotationRad()`
+  -- NOT a value frozen at spawn time.** Per explicit request, a
+  placement line's own length (base to aim point) relative to that
+  direction's own VISIBLE content height (`VISIBLE_BOUNDS_BY_DIRECTION`'s
+  new `heightFrac` field, at the CURRENT Entity Scale) scales the flick's
+  ball-collision-kick strength: <=100% of that height -> 1x, 100%-200% ->
+  linear ramp 1x-2x, 200%+ -> capped at 2x (the 1x-2x multiplier range
+  maps 1:1 onto the 1x-2x distance-ratio range, so the formula is just
+  the clamped ratio itself, `Math.min(2, Math.max(1, dist/visibleHeightPx))`
+  -- no separate interpolation curve). Reads the entity's own permanent
+  `endX`/`endY` fresh every call (via `flickIntensityMultiplierForLine()`,
+  the underlying formula shared with the live spawn/drag preview's own
+  debug-text readout), so it automatically tracks a live Entity Scale
+  slider change AND a Stop-mode end-dot drag -- confirmed live: dragging
+  an already-placed entity's end dot back to a shorter distance
+  immediately dropped the debug readout from a capped 2.00x back to
+  1.00x, with zero extra bookkeeping, exactly like rotation already does.
+  Applied at the ball-collision-kick site (`ball.vx/vy += nx/ny * speed *
+  cfg.collisionIntensity * flickIntensityMult`) as an ADDITIONAL factor
+  alongside the existing global `cfg.collisionIntensity` slider, not a
+  replacement for it -- computed ONCE per entity per tick (before the
+  3-segment `forEach`), not once per segment, since it's the same value
+  for all 3 of an entity's own capsules that tick.
+- **`VISIBLE_BOUNDS_BY_DIRECTION`'s `heightFrac` field measures frame 1's
+  (idle) visible content only** -- deliberately the SAME frame the
+  `centerX`/`bottomY` anchor fields already derive from, not the
+  peak/most-extended flick frame, so a placement's own Flick Intensity
+  reading always measures against the entity's idle silhouette
+  regardless of which frame the animation later plays. If a direction's
+  frame 1 art is ever replaced, regenerate `heightFrac` (and
+  `centerX`/`bottomY`) together via the one Node+`sharp` one-liner in the
+  comment directly above the table -- don't hand-guess it, and don't
+  regenerate only 2 of the 3 fields from a stale computation.
