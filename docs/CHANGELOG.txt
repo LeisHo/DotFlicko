@@ -1337,6 +1337,68 @@ specific previously-missing one) now loads with a genuine 200 OK, and
 the entity renders correctly anchored (screenshot-confirmed).
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- fix: ball auto-trigger accidentally firing
+during an active Win/Lose sequence
+
+"?the ball still gets stuck sometimes Look at this screenshot of the
+ball stuck. Is it a settings issue" (screenshot: ~16 entities arranged
+in a ring, all mid-Win animation, a ball visually wedged near one hand)
+
+Root-caused via direct code reading, not guessing: the ball-proximity
+auto-trigger (`entities.forEach` rising-edge check in
+`updateBallAndCollision()`) only guarded on `!entity.wasInFlickTriggerZone
+&& !entity.playing` before calling `triggerFlick()`. `entity.playing`
+is deliberately `false` throughout an ENTIRE Win/Lose sequence (so the
+2 systems don't fight over render()'s own draw dispatch, which checks
+`winLoseType` first) -- meaning nothing stopped a ball drifting near a
+Win/Lose-active entity from ALSO silently triggering a normal flick
+underneath it. That accidental flick is invisible on screen
+(`winLoseType` still wins the draw dispatch), but
+`entityRealFrameNumber()` -- which drives the ACTUAL collision geometry,
+completely independent of what's rendered -- immediately starts
+tracking that flick's own animating frames instead of the static idle
+pose. With ~16 entities in a tight ring each capable of doing this
+independently and asynchronously, the ball can get caught in an
+unpredictable, constantly-shifting collision field that looks like it's
+"stuck" against a hand whose displayed pose looks static.
+
+Answered the user's own question directly: NOT a settings issue -- no
+slider controlled this, it was a real gap between 2 features (the
+ball-proximity auto-trigger, built early this project's history, and
+the Win/Lose system, added much later) that were never reconciled.
+
+Fixed with a single added condition: `if (inTriggerZone &&
+!entity.wasInFlickTriggerZone && !entity.playing && !entity.winLoseType)
+triggerFlick(entity);`
+
+Verified via manually-driven fixed-timestep ticks (temporary
+`window.__testTrigger` hook, grep-confirmed removed after): parked a
+ball continuously in a Win-active entity's own trigger zone across its
+ENTIRE sequence (forward1 -> holdFist -> forward2 -> holdFinal, 120
+ticks / 2 simulated seconds) and confirmed `entity.playing` never
+flipped true; then confirmed, against a fresh entity with NO Win/Lose
+active, the exact same ball setup still correctly triggered a normal
+flick at the expected tick (36) -- proves the fix without a regression
+to the original mechanism. Hit one real environment hiccup mid-testing
+(a transient `ERR_CONNECTION_RESET` + a stale hook not yet present on
+first load) -- diagnosed via a direct in-page `fetch('/index.html')`
+content check (confirmed the served file was already correct) before
+simply retrying the navigation, rather than assuming the fix itself was
+broken.
+
+Separately flagged, NOT fixed, and documented as a real open item: the
+underlying ball-vs-capsule collision resolver is sequential (each
+entity's own segments resolved one at a time per tick), not a genuine
+simultaneous solve -- in a very densely-packed arrangement like the
+reported screenshot, this could still independently contribute to
+stuck-feeling behavior on top of the bug just fixed. Properly
+addressing that would need a real physics-engine-level change
+(iterative constraint resolution across all overlapping capsules in the
+same tick), well beyond this fix's scope -- surfaced to the user rather
+than silently left unmentioned or attempted without confirmation.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

@@ -257,6 +257,33 @@ new session should be aware they're there before touching `data/FLICK/`.
   collision kick only landed 3 ticks after `entity.playing` had already
   flipped true via the (unaffected) proximity trigger — confirmed with
   real logged tick numbers, not just a visual check.
+- Fixed a real reported bug ("the ball still gets stuck sometimes",
+  screenshot of a dense ring of ~16 Win-animating entities): the
+  ball-proximity auto-trigger only checked `!entity.playing` before
+  starting a normal flick, never whether the entity was already
+  mid-Win/Lose — since `entity.playing` is deliberately false
+  throughout a Win/Lose sequence, a ball near a Win/Lose-active entity
+  could silently ALSO trigger a normal flick underneath it, invisible
+  on screen but desyncing the entity's actual collision geometry
+  (which follows the accidental flick's own animating frames) from
+  what's rendered (which stays on the Win/Lose pose) — with many
+  entities doing this independently in a tight cluster, the ball could
+  get caught in an unpredictable, shifting collision field. Fixed by
+  also checking `!entity.winLoseType`. **Not a settings issue** — no
+  slider controlled this; it was a real gap between the auto-trigger
+  and the (later-added) Win/Lose system. Verified via manually-driven
+  fixed-timestep ticks: a ball parked continuously in a Win-active
+  entity's own trigger zone across its entire sequence never flipped
+  `entity.playing`, while the same setup against a normal entity still
+  triggered correctly — confirms the fix without breaking the original
+  mechanism. **Separately flagged, NOT fixed**: the underlying
+  collision resolver is still sequential (each entity's capsules
+  resolved one at a time per tick, not a simultaneous solve — see
+  `CODE_SUMMARY.md`'s own note on this) — in a very densely-packed
+  arrangement like the reported screenshot, this could still contribute
+  to stuck-feeling behavior independent of the bug just fixed; would
+  need a genuinely bigger physics-engine change to address, not
+  attempted here.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

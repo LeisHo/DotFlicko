@@ -641,3 +641,47 @@ GOTCHAS
   this checkbox on, an idle entity still starts its own flick normally,
   it just doesn't get shoved by the ball's geometry until it's actually
   mid-flick.
+- **The ball-proximity auto-trigger MUST also check `!entity.winLoseType`,
+  not just `!entity.playing`, before calling `triggerFlick()`.** A real,
+  reported bug ("the ball still gets stuck sometimes" -- screenshot of a
+  dense ring of Win-animating entities) traced to exactly this gap:
+  `entity.playing` is deliberately `false` throughout an entire Win/Lose
+  sequence (so the 2 systems don't fight over `render()`'s draw
+  dispatch), but with no `winLoseType` check, a ball drifting near a
+  Win/Lose-active entity would ALSO silently `triggerFlick()` a normal
+  flick underneath it -- invisible on screen (`winLoseType` still wins
+  the draw dispatch), but `entityRealFrameNumber()` (which drives the
+  ACTUAL collision geometry, independent of what's rendered) would
+  start tracking that accidental flick's own animating frames instead
+  of the static idle pose, desyncing collision geometry from what's
+  shown. With many entities doing this independently and
+  asynchronously in a tight cluster, the ball can get caught in an
+  unpredictable, constantly-shifting collision field. Verified via
+  manually-driven fixed-timestep ticks (same technique as the
+  `collisionOnlyWhilePlaying` entry above): a ball parked continuously
+  in a Win-active entity's own trigger zone across a full sequence
+  (forward1/holdFist/forward2/holdFinal) never flipped `entity.playing`
+  true, while the identical setup against a normal (non-Win/Lose)
+  entity still triggered correctly at the expected tick -- confirms the
+  fix without a regression to the original mechanism.
+- **The ball-vs-finger-capsule collision resolver is SEQUENTIAL, not a
+  simultaneous solve -- a KNOWN, documented scope limitation, not an
+  oversight to "fix" reflexively.** `updateBallAndCollision()` resolves
+  each entity's own 3 segments one at a time within the same tick, each
+  one correcting the ball's position/velocity in place before the next
+  segment's own sweep runs (see that function's own comment: "resolved
+  sequentially, not a rigorous simultaneous solve"). In a normal, sparse
+  placement this is invisible: rarely does the ball touch 2+ capsules in
+  the exact same tick. In a very densely-packed arrangement (e.g. a
+  screenshot showing ~16 entities in a tight ring, reported as "the ball
+  still gets stuck sometimes"), the ball can plausibly be within
+  collision range of SEVERAL capsules simultaneously, and each one's own
+  sequential correction can push it right back toward a neighboring
+  one's own zone -- a real, still-open contributing factor to reported
+  stuck-ball behavior, SEPARATE from and in addition to the
+  `winLoseType`-auto-trigger bug fixed above. Properly solving this
+  would mean a real simultaneous-constraint solve (e.g. iterative
+  impulse resolution across all overlapping capsules in the same tick),
+  a genuinely bigger physics-engine change -- not attempted as part of
+  fixing the auto-trigger bug, since that fix already fully explains and
+  resolves the specific reported mechanism (collision geometry desync).

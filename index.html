@@ -3197,9 +3197,24 @@
         // mid-flick from double-triggering the instant that flick ends
         // while it's still sitting there), generalized to "any ball" in
         // place of "the one ball that used to be the only possibility."
+        // Also excludes an entity currently mid-Win/Lose (!entity.winLoseType)
+        // — a REAL bug this fixes, not a defensive guess: entity.playing is
+        // false throughout a Win/Lose sequence (by design, so the 2 systems
+        // don't visually fight over render()'s draw dispatch), so without
+        // this check a ball drifting near a Win/Lose-active entity would
+        // silently ALSO triggerFlick() a normal flick underneath it —
+        // invisible on screen (winLoseType still wins the draw dispatch)
+        // but entityRealFrameNumber() (which drives the actual collision
+        // geometry) would start tracking that accidental flick's own
+        // animating frames instead of the static idle pose, desyncing
+        // collision geometry from what's shown. Reported directly as "the
+        // ball still gets stuck sometimes" in a dense ring of many
+        // Win-animating entities — exactly the scenario where several
+        // entities doing this independently and asynchronously would
+        // produce an unpredictable, shifting collision field.
         entities.forEach(entity => {
             const inTriggerZone = anyBallInZone.get(entity) || false;
-            if (inTriggerZone && !entity.wasInFlickTriggerZone && !entity.playing) triggerFlick(entity);
+            if (inTriggerZone && !entity.wasInFlickTriggerZone && !entity.playing && !entity.winLoseType) triggerFlick(entity);
             entity.wasInFlickTriggerZone = inTriggerZone;
         });
     }
