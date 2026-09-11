@@ -959,6 +959,27 @@ unreferenced prefix) and the entity renders correctly anchored
 (screenshot-confirmed, base dot lines up with the sprite's own foot).
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- re-sync updated Win (TU) frames for
+side-pinky/side-thumb
+
+"I updated frames for SidePinky TU and SideThumb TU. updat and push"
+
+Confirmed exactly these 2 of 16 folders had new content (SIDE
+PINKY_TU, SIDE THUMB_TU -- new prefixes, still 24 frames each) via
+diff -rq against all 16, not assumed. Replaced the 48 old-prefix files
+with the new ones, updated WIN_LOSE_ASSETS' own `win.prefix` for
+side-pinky/side-thumb to match. Re-computed (not assumed) both
+directions' own visible-content anchor against the new frame-1 art --
+came back numerically identical to the prior values, same "shared
+pre-flick starting pose" pattern as the previous Lose re-sync.
+
+Verified: syntax-checked; live in the browser (fresh navigation),
+placed a side-pinky entity and a side-thumb entity, clicked Win,
+confirmed all 48 new-prefix frames loaded with real 200 OK responses
+and both entities rendered correctly anchored (screenshot-confirmed).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
