@@ -3277,27 +3277,48 @@
         mouseX = e.clientX; mouseY = e.clientY;
         hasMouse = true;
         if (draggingEntity) {
-            if (draggingPoint === 'base') {
-                // Translate the whole entity — both points move together,
-                // so the line's own angle (and therefore rotation/
-                // direction) stays exactly what it was. This is the "move"
-                // half of "move and rotate and adjust."
-                const dx = mouseX - draggingEntity.x, dy = mouseY - draggingEntity.y;
-                draggingEntity.x = mouseX;
-                draggingEntity.y = mouseY;
+            if (draggingPoint === 'mid') {
+                // Translate the whole entity — both endpoints move
+                // together by the same delta, so the line's own length AND
+                // angle (rotation/direction) stay exactly what they were.
+                // This is the dedicated "move" handle (per explicit
+                // request, replacing the base dot's old dual-purpose
+                // move+independent-anchor role below) — the delta is
+                // computed from the CURRENT midpoint so the yellow dot
+                // itself always ends up exactly under the cursor, the same
+                // way the base/end dots already track the cursor 1:1 while
+                // being dragged.
+                const midX = (draggingEntity.x + draggingEntity.endX) / 2;
+                const midY = (draggingEntity.y + draggingEntity.endY) / 2;
+                const dx = mouseX - midX, dy = mouseY - midY;
+                draggingEntity.x += dx;
+                draggingEntity.y += dy;
                 draggingEntity.endX += dx;
                 draggingEntity.endY += dy;
-            } else {
-                // Base point stays fixed; only the aim/end point moves —
-                // the "rotate" half. Only directionKey needs updating here
-                // (via the same bucketing spawnEntityFromLine() uses) —
-                // rotation itself is no longer stored, it's recomputed
-                // live from endX/endY every time it's needed (see
-                // entityRotationRad()), so there's nothing else to set.
-                draggingEntity.endX = mouseX;
-                draggingEntity.endY = mouseY;
-                const dist = Math.hypot(draggingEntity.endX - draggingEntity.x, draggingEntity.endY - draggingEntity.y);
+            } else if (draggingPoint === 'base' || draggingPoint === 'end') {
+                // Both endpoints move fully independently now (per explicit
+                // request: "the 2 endpoints... will move independently...
+                // I want the opposite to be true [of only end rotating
+                // around base]") — whichever dot ISN'T being dragged is
+                // this drag's fixed anchor/pivot, the exact same
+                // move-one-point/pivot-on-the-other logic either way, just
+                // with the 2 property pairs swapped. directionKey always
+                // needs updating (via the same bucketing
+                // spawnEntityFromLine() uses) — rotation itself is no
+                // longer stored, it's recomputed live from endX/endY every
+                // time it's needed (see entityRotationRad()).
+                const movingIsBase = draggingPoint === 'base';
+                const pivotX = movingIsBase ? draggingEntity.endX : draggingEntity.x;
+                const pivotY = movingIsBase ? draggingEntity.endY : draggingEntity.y;
+                if (movingIsBase) { draggingEntity.x = mouseX; draggingEntity.y = mouseY; }
+                else { draggingEntity.endX = mouseX; draggingEntity.endY = mouseY; }
+                const dist = Math.hypot(mouseX - pivotX, mouseY - pivotY);
                 if (dist > 0.0001) {
+                    // Direction bucketing is always "the aim/end point's
+                    // angle as seen from the base point" regardless of
+                    // which one is actually the one moving right now — same
+                    // formula spawnEntityFromLine()/the old end-only drag
+                    // both already used.
                     const lineAngle = mouseAngleFromCenter(draggingEntity.endX, draggingEntity.endY, draggingEntity.x, draggingEntity.y);
                     const dirIndex = directionIndexForAngle(lineAngle);
                     const directionKey = DIRECTIONS[dirIndex].key;
@@ -3308,11 +3329,16 @@
                 }
                 // Same MAX_PLACEMENT_LINE_RATIO cap as initial placement,
                 // per explicit request — an already-placed entity's own
-                // end-dot drag shouldn't be able to exceed the same "2
-                // hand lengths" limit a fresh placement can't. Direction
-                // is already resolved above from the RAW mouse position,
-                // so clamping here afterward doesn't affect it.
-                ({ x: draggingEntity.endX, y: draggingEntity.endY } = clampLineEndpoint(draggingEntity.directionKey, draggingEntity.x, draggingEntity.y, draggingEntity.endX, draggingEntity.endY));
+                // dot drag shouldn't be able to exceed the same "2 hand
+                // lengths" limit a fresh placement can't, regardless of
+                // which of the 2 points is the one being dragged.
+                // clampLineEndpoint(directionKey, pivotX, pivotY, rawX,
+                // rawY) treats the pivot as the fixed point and clamps the
+                // OTHER (moving) point relative to it — works unchanged for
+                // either direction of drag, just fed the current pivot.
+                const clamped = clampLineEndpoint(draggingEntity.directionKey, pivotX, pivotY, movingIsBase ? draggingEntity.x : draggingEntity.endX, movingIsBase ? draggingEntity.y : draggingEntity.endY);
+                if (movingIsBase) { draggingEntity.x = clamped.x; draggingEntity.y = clamped.y; }
+                else { draggingEntity.endX = clamped.x; draggingEntity.endY = clamped.y; }
             }
         }
     });
@@ -3673,6 +3699,11 @@
     function hitTestEntityDot(x, y) {
         for (let i = entities.length - 1; i >= 0; i--) {
             const entity = entities[i];
+            // Mid (yellow, whole-entity move handle) checked first — on a
+            // short line its hit circle can overlap base/end's, and the
+            // move handle is the more commonly reached-for gesture.
+            const midX = (entity.x + entity.endX) / 2, midY = (entity.y + entity.endY) / 2;
+            if (Math.hypot(x - midX, y - midY) <= ENTITY_DOT_HIT_RADIUS) return { entity, point: 'mid' };
             if (Math.hypot(x - entity.x, y - entity.y) <= ENTITY_DOT_HIT_RADIUS) return { entity, point: 'base' };
             if (Math.hypot(x - entity.endX, y - entity.endY) <= ENTITY_DOT_HIT_RADIUS) return { entity, point: 'end' };
         }
@@ -4277,9 +4308,11 @@
             }
         });
 
-        // Stop-mode entity-adjustment handles: 2 dots per entity (base =
-        // the fixed anchor point / 1st click, end = the aim point / 2nd
-        // click) plus a dashed connecting line, draggable via the
+        // Stop-mode entity-adjustment handles: 3 dots per entity (base =
+        // 1st click, end = 2nd click/aim point — each independently
+        // draggable, using the OTHER as its pivot; mid = the whole-entity
+        // move handle, sitting exactly at the base/end midpoint) plus a
+        // dashed connecting line, draggable via the
         // pointerdown/pointermove/pointerup handlers above — only shown
         // (and only hit-testable, per those handlers) while stopped, same
         // gating as the spawn-placement gesture itself.
@@ -4307,6 +4340,13 @@
                 ctx.fillStyle = '#ff4da6';
                 ctx.beginPath();
                 ctx.arc(entity.endX, entity.endY, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                ctx.save();
+                ctx.fillStyle = '#ffe64d';
+                ctx.beginPath();
+                ctx.arc((entity.x + entity.endX) / 2, (entity.y + entity.endY) / 2, 6, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
             });
