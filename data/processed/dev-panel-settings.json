@@ -18,12 +18,14 @@
     "sliderJointThickness": 2,
     "sliderThicknessSmoothing": 0.36,
     "sliderCollisionIntensity": 0.7,
-    "checkboxShowJointCollisionLines": true,
-    "checkboxShowCenter": true,
-    "checkboxShowAngleDebug": true,
+    "checkboxShowJointCollisionLines": false,
+    "checkboxShowCenter": false,
+    "checkboxShowAngleDebug": false,
     "checkboxHideCursor": false,
     "checkboxShowHitbox": false,
     "checkboxAllowPlacementWhileRunning": true,
+    "sliderWinLoseFistHoldDuration": 1,
+    "sliderWinLoseFinalHoldDuration": 1,
     "selectRotationOffsetDirection": "front-pinky",
     "sliderRotOffset_behind": 1,
     "sliderRotOffset_behind-thumb": 0,
@@ -123,6 +125,14 @@
   },
   "sectionOrder": {
     "desktopTabContent": [
+      {
+        "key": "desktop:Win / Lose",
+        "rowKeys": [
+          "sliderWinLoseFistHoldDuration",
+          "sliderWinLoseFinalHoldDuration"
+        ],
+        "subgroups": []
+      },
       {
         "key": "desktop:Scenes",
         "rowKeys": [
@@ -245,12 +255,13 @@
     ]
   },
   "sectionCollapseState": {
+    "desktop:Win / Lose": true,
     "desktop:Scenes": true,
     "desktop:Dev Panel": true,
-    "desktop:Entity": false,
+    "desktop:Entity": true,
     "desktop:Background": true,
-    "desktop:Ball": false,
-    "desktop:Collision": false,
+    "desktop:Ball": true,
+    "desktop:Collision": true,
     "desktop:Debug": true,
     "mobile:Dev Panel": false,
     "landscape:Dev Panel": false
