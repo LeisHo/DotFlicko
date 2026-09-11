@@ -238,13 +238,11 @@ new session should be aware they're there before touching `data/FLICK/`.
   now have genuinely DIFFERENT anchors within the same direction
   (`winLoseVisibleBounds()`'s own per-type override, added when
   front-pinky's own Win art was replaced with visibly different-anchored
-  art) — see `CODE_SUMMARY.md`'s own GOTCHAS for both mechanisms. **Known
-  asset gap, not a code bug**: side-pinky's own Win/TU source in
-  DICKOCLICKO is genuinely missing frames 028-032 (43 real files out of
-  a 001-048 range) — the render()-side idle-frame fallback already
-  handles this gracefully (same mechanism as a still-loading frame), so
-  it just briefly holds the idle pose for those 5 frame indices rather
-  than erroring; would need the source itself completed to fully fix.
+  art) — see `CODE_SUMMARY.md`'s own GOTCHAS for both mechanisms.
+  (side-pinky's own Win/TU source briefly had a real gap, frames
+  028-032 missing from DICKOCLICKO itself — since fixed at the source
+  and re-synced; the render()-side idle-frame fallback that would have
+  covered a permanently-missing frame is still in place regardless.)
 - "Collision Only While Playing" (new Collision-group checkbox, default
   off/unchanged behavior) — when on, an entity's own finger-joint
   capsules stop physically colliding with the ball (position

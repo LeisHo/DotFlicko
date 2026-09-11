@@ -2082,17 +2082,7 @@
         'front-thumb':  { lose: { folder: 'FRONT THUMB_MF',    prefix: '2T - FT - PF_F135_MF135', frameCount: 24 },               win: { folder: 'FRONT THUMB_TU',   prefix: 'FrontThumb_TU', frameCount: 48 },                        centerX: 0.4745, bottomY: 0.9013 },
         'front':        { lose: { folder: 'FRONT_MF',          prefix: '2T - ABOVE - PF_F180_MF180', frameCount: 24 },            win: { folder: 'FRONT_TU',         prefix: 'Front_ TU', frameCount: 48 },                            centerX: 0.4771, bottomY: 0.9145 },
         'front-pinky':  { lose: { folder: 'FRONT PINKY_MF',    prefix: '2T - FP - PF_F145_MF145', frameCount: 24 },               win: { folder: 'FRONT PINKY_TU',   prefix: 'FrontPink_ TU', frameCount: 48, centerX: 0.4846, bottomY: 0.9189 }, centerX: 0.4943, bottomY: 0.9221 },
-        // side-pinky's own win/TU sequence has a real, confirmed gap in
-        // its SOURCE (not this project's own copy) -- frames 028-032 are
-        // simply absent from DICKOCLICKO's own folder (43 real files,
-        // numbered 001-027 then 033-048), not just slow to load.
-        // frameCount stays 48 (matching the highest real frame number
-        // present) -- the existing render()-side idle-frame fallback
-        // (added for the cold-load-flash fix, see that GOTCHA) already
-        // handles a permanently-missing frame the same way it handles a
-        // still-loading one, so this isn't a crash risk, just a brief
-        // hold on the idle pose for those 5 frame indices.
-        'side-pinky':   { lose: { folder: 'SIDE PINKY_MF',     prefix: '2T -DP - PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE PINKY_TU',    prefix: 'DirctPink_TU', frameCount: 48 },                        centerX: 0.5188, bottomY: 0.9265 },
+        'side-pinky':   { lose: { folder: 'SIDE PINKY_MF',     prefix: '2T -DP - PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE PINKY_TU',    prefix: 'DirectPink_TU', frameCount: 48 },                       centerX: 0.5188, bottomY: 0.9265 },
         'behind-pinky': { lose: { folder: 'BEHIND PINKY_MF',   prefix: '2T - B - PF_F70_MF70', frameCount: 24 },                  win: { folder: 'BEHIND PINKY_TU',  prefix: 'BehindPink_ TU', frameCount: 48 },                       centerX: 0.5203, bottomY: 0.9167 },
     };
     // Per-type override first (asset.centerX is only ever set when a real

@@ -1301,6 +1301,42 @@ real mouse-driven drag on the yellow dot in the browser pane visually
 confirmed the same.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- side-pinky Win frame gap fixed at the source,
+re-synced
+
+"updated frames in updaed J:\CLAUDE\PROJECTS\DICKOCLICKO\data\FLICK\
+2TONED\SIDE PINKY_TU\FIST"
+
+Follow-up to the immediately-preceding round, which found and honestly
+documented (rather than fabricated around) a real gap in side-pinky's
+own Win/TU source -- frames 028-032 missing, 43 real files across a
+001-048 range. Full 16-folder scan confirmed only SIDE PINKY_TU had
+changed again; the new source is now a complete, gapless 001-048
+sequence (also a minor prefix correction, `DirctPink_TU` ->
+`DirectPink_TU`, fixing what was presumably a typo in the earlier
+upload). Re-synced the assets, updated the prefix, and removed the
+now-stale "known gap" comment from `WIN_LOSE_ASSETS` (and the matching
+note in `PROJECT_PROGRESS.md`) rather than leaving a warning about a
+problem that no longer exists.
+
+Re-computed (not assumed) the anchor against the new/complete frame 1
+-- came back numerically identical to the already-stored shared value.
+
+Verification hit a real environment complication: this session's
+Browser pane tab is apparently being actively used/navigated by
+ANOTHER concurrent session right now (a mid-script "the page navigated
+while this script was running" interruption, and a screenshot
+afterward showing a genuinely different UI state than what was just
+set up) -- confirmed the served file itself was correct first via a
+direct in-page `fetch('/index.html')` content check (unambiguous, not
+dependent on the contested tab's own current state), then opened a
+completely separate, fresh tab to get a clean, uninterrupted end-to-end
+test: placed a side-pinky entity, clicked Win, confirmed frame 028 (the
+specific previously-missing one) now loads with a genuine 200 OK, and
+the entity renders correctly anchored (screenshot-confirmed).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
