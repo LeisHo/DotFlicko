@@ -7,17 +7,17 @@
     "sliderPositionSmoothing": 1,
     "sliderAngleOffset": 180,
     "colorBackground": "#1b1f2a",
-    "sliderBallGravity": 80,
+    "sliderBallGravity": 119,
     "sliderBallRadius": 3,
     "colorBall": "#ff5c5c",
-    "sliderBallBounciness": 1.5,
+    "sliderBallBounciness": 0.5,
     "sliderBallRespawnRate": 0.8,
-    "sliderBallMaxSpeed": 110,
-    "sliderBallDrag": 0.36,
+    "sliderBallMaxSpeed": 160,
+    "sliderBallDrag": 0,
     "sliderBallSpawnSpread": 0,
     "sliderJointThickness": 2,
     "sliderThicknessSmoothing": 0.36,
-    "sliderCollisionIntensity": 0.2,
+    "sliderCollisionIntensity": 0.7,
     "checkboxShowJointCollisionLines": true,
     "checkboxShowCenter": true,
     "checkboxShowAngleDebug": true,
@@ -44,10 +44,10 @@
     "sliderXOffset_behind-pinky": -0.5
   },
   "layout": {
-    "left": 26,
-    "top": 53,
+    "left": 41,
+    "top": 159,
     "width": 344,
-    "height": 299
+    "height": 237
   },
   "devPanelStyle": {
     "titleFontSize": 22,
@@ -250,7 +250,7 @@
     "desktop:Entity": true,
     "desktop:Background": true,
     "desktop:Ball": false,
-    "desktop:Collision": true,
+    "desktop:Collision": false,
     "desktop:Debug": true,
     "mobile:Dev Panel": false,
     "landscape:Dev Panel": false
