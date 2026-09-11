@@ -733,6 +733,128 @@ Air Drag, and Ball Max Speed were each previously verified at), but the
 end-to-end ball-physics amplification itself wasn't separately traced.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- new feature: Win/Lose test buttons + sequence
+state machine
+
+"Add 2 buttons 'Win' and 'Lose'. They will be for me to test the win and
+lose animations. In the J:\CLAUDE\PROJECTS\DICKOCLICKO\data\FLICK\2TONED,
+Ive added 2 folders per animation type. So 16 Total. Each type has MF
+folder and a TU folder. TU is for Win, MF is for Lose. We will be using
+the frames within the FIST subfolders in the TU and MF folders. When
+either button is clicked, every placed entity on screen will transition
+into the appropriate animation sequence. In all sequences, frames will
+be played sequentially until frame _013 is reached. At which point it
+will hold this pose for a predetermined amount of time *D*Win/Lose Fist
+Hold Duration*, afterwhich it will finish the sequence of frames. At
+frame _24, the frame will once again be held for a duration *D*Win/Lose
+Final Hold Duration*. Afterwhich, the entire sequence will be played in
+reverse without any in between frame holding. Implement and push."
+
+Interpreted "J:\...\DICKOCLICKO\..." as an asset SOURCE location, not
+the project to implement in -- the request's own "every placed entity on
+screen" is this project's (DOTFLICKO's) own established terminology, and
+DICKOCLICKO's own architecture (a mouse-follow rope/hand toy, confirmed
+via its own recent ETA History entries) has no "placed entities" concept
+at all. Confirmed by directly listing both projects' own 2TONED folders:
+DOTFLICKO's had no new folders; DICKOCLICKO's had exactly the described
+16 (8 directions x _MF/_TU).
+
+Added:
+- 2 new buttons, Win and Lose, in the always-visible top-left button row
+  (alongside Start/Stop/Delete/Ball) -- deliberately NOT gated by
+  running/stopped and not a toggled "mode" like Delete/Ball, since
+  testing the animation should work regardless of ball-sim state; each
+  click is a one-shot trigger applied immediately to every currently-
+  placed entity.
+- Copied only the `FIST` subfolder (not the sibling `ARCH`/`NOFIST`
+  variants also present, which this feature never uses) of all 16
+  DICKOCLICKO folders into this project's OWN
+  `data/FLICK/2TONED/<FOLDER>_MF|_TU/FIST/` -- 384 PNGs, ~15.2MB. This
+  project is a static single-file app with no cross-project asset
+  serving, so the files had to be physically copied in, not referenced
+  by a DICKOCLICKO-relative path.
+- Independently computed each of the 16 folders' own frame-1 visible-
+  content anchor (centerX/bottomY) via the same offline Node+sharp
+  technique this project's own VISIBLE_BOUNDS_BY_DIRECTION table already
+  uses -- a real, checked difference from the normal flick asset family
+  (1920x912 raster, not 2400x1181), so reusing the OLD anchor values
+  would have been wrong. Win and Lose within the same direction measured
+  out pixel-identical (their own frame 1 is a shared "pre-flick"
+  starting pose before diverging, per the "PF" prefix both share) -- 1
+  shared anchor per direction, not a duplicated pair, with a comment
+  flagging that assumption for a future asset replacement to re-check.
+- `triggerWinLoseSequence(type)` -- resets any in-progress normal flick
+  on every entity first (Win/Lose fully takes over an entity's own
+  rendering; the 2 states are mutually exclusive), then starts a 5-phase
+  state machine per the exact spec: forward1 (frame index 0->12, i.e.
+  _001->_013) -> holdFist (frozen at 12, for
+  cfg.winLoseFistHoldDuration real seconds) -> forward2 (continues 12->23,
+  i.e. _013->_024, NOT reset to 0) -> holdFinal (frozen at 23, for
+  cfg.winLoseFinalHoldDuration) -> reverse (23->0 continuously, no
+  holding at 12 this time -- "without any in between frame holding").
+  Sequence ends and the entity returns to normal idle rendering once
+  reverse reaches 0.
+- 2 new dev-panel sliders, "Win/Lose Fist Hold Duration (s)" and
+  "Win/Lose Final Hold Duration (s)" (both default 1s, 0-5 range) in a
+  new "Win / Lose" group -- per the *D* shorthand, no existing group fit
+  so a new one was created, matching this project's own established §12g
+  convention.
+- Deliberately reuses the existing FLICK_BASE_FPS/cfg.clickAnimSpeed
+  frame-advance rate for the non-hold phases (no separate speed slider
+  was requested).
+- Deliberately does NOT touch ball-collision/joint physics for a Win/Lose-
+  animating entity -- there's no skeleton/annotation data for this new
+  asset family at all, and the request frames this as a visual test
+  feature, not a physics-integrated one; a Win/Lose entity's collision
+  geometry stays whatever its normal idle pose would produce
+  (entityRealFrameNumber() already returns 1 whenever entity.playing is
+  false, which it is throughout a Win/Lose sequence).
+
+Fixed along the way: the new "Win / Lose" dev-panel group's controls
+initially threw ("Cannot read properties of null (reading
+'addEventListener')") because this project's dev-panel groups are
+static HTML `.dev-section` blocks (findGroupContent() does NOT auto-
+create a missing group) -- added the matching markup block alongside
+the existing Ball/Collision/Debug ones.
+
+Verified:
+- Syntax-checked all inline `<script>` blocks after every edit.
+- All 384 copied files present (`find`-counted), matching the 16x24
+  expected total.
+- Live in the browser: placed a real entity (synthetic drag gesture),
+  clicked Win, confirmed all 24 of that entity's resolved direction's
+  win-asset frames loaded with real 200 OK network responses (not 404s).
+- **Verified the state-machine timing/frame-boundary logic EXACTLY
+  correct via an isolated Node simulation of the extracted formula**
+  (not reconstructed from memory -- copied verbatim): forward1 stops at
+  precisely frame index 12 (_013); holdFist lasts exactly
+  cfg.winLoseFistHoldDuration before continuing from 12 (not resetting);
+  forward2 stops at precisely frame index 23 (_024); holdFinal lasts
+  exactly cfg.winLoseFinalHoldDuration; reverse has NO intermediate stop
+  at 12, decrementing straight through to exactly 0, at which point the
+  sequence cleanly completes.
+- Live in the browser (partial/qualitative only -- see limitation
+  below): captured canvas.toDataURL() hashes across a click-and-wait
+  sequence and got 3 distinct, internally-stable plateaus in the
+  expected order (an initial frame, a 2nd different held frame, a 3rd
+  different held frame), each different from the plain pre-trigger idle
+  hash and from each other -- consistent with genuine phase transitions
+  occurring, though NOT usable to verify exact timing (see below).
+
+Explicit, disclosed limitation: this session's Browser pane was
+reporting `document.hidden === true` throughout this task's testing
+(confirmed directly, `tabs_context`/`document.hidden`), which throttles
+this project's own requestAnimationFrame-driven fixed-timestep
+accumulator -- a real, already-documented environment constraint (not
+new to this task), not a code defect. This is why the live-browser test
+above could only confirm qualitative phase-transition behavior, not
+exact real-time hold durations -- the isolated Node simulation is what
+actually proves the timing logic is correct. The user's own click-
+through in a real, focused browser tab is the first genuinely real-time
+test.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

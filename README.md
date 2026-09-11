@@ -61,7 +61,9 @@ DOTFLICKO/
 ├── index.html               <the entire app — markup, styles, and JS inline>
 ├── api/                     <save-settings.js — Vercel serverless function, see above>
 ├── data/
-│   ├── FLICK/2TONED/         <the 8 directions' frame PNG sequences>
+│   ├── FLICK/2TONED/         <the 8 directions' frame PNG sequences, plus
+│   │                          <DIR>_MF/FIST and <DIR>_TU/FIST (Win/Lose
+│   │                          test-sequence frames, copied in from DICKOCLICKO)>
 │   └── processed/            <flick-skeleton.json, and the git-tracked
 │                              settings log Save Settings writes to>
 ├── scripts/active/           <flick-skeleton-annotator.html>

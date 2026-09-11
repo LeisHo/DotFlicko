@@ -244,6 +244,8 @@
     #deleteBtn.active { background: #ff9500; color: #1b1f2a; }
     #ballBtn { border-color: #ff5c5c; }
     #ballBtn.active { background: #ff5c5c; color: #1b1f2a; }
+    #winBtn { border-color: #4dd27a; }
+    #loseBtn { border-color: #ff5c5c; }
 
     .dev-buttons { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
     .dev-save-sync-status { font-size: calc(var(--dev-setting-title-font-size-px, 12) * 1px); white-space: nowrap; flex-shrink: 0; }
@@ -361,6 +363,8 @@
     <button id="stopBtn">Stop</button>
     <button id="deleteBtn">Delete</button>
     <button id="ballBtn">Ball</button>
+    <button id="winBtn">Win</button>
+    <button id="loseBtn">Lose</button>
 </div>
 
 <button class="dev-toggle-btn" id="devToggleBtn" onclick="devPanel.classList.toggle('hidden')">DEV</button>
@@ -417,6 +421,10 @@
             </div>
             <div class="dev-section">
                 <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Debug">▼ Debug</div>
+                <div class="dev-section-content"></div>
+            </div>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Win / Lose">▼ Win / Lose</div>
                 <div class="dev-section-content"></div>
             </div>
         </div>
@@ -1790,6 +1798,12 @@
         // mode stay Stop-only regardless of this checkbox, since neither
         // was part of the request.
         allowPlacementWhileRunning: false,
+        // Win/Lose test sequence hold durations (real seconds, matching
+        // ballRespawnRate's own "(s)" convention — these are a real-time
+        // hold, not a frame count like peakHoldFrames). See
+        // triggerWinLoseSequence()'s own comment for the full sequence
+        // this gates.
+        winLoseFistHoldDuration: 1, winLoseFinalHoldDuration: 1,
     };
 
     // Labels below still reflect the "Hand ..." rename set as default
@@ -1879,10 +1893,18 @@
         { group: 'Debug', id: 'checkboxShowHitbox', type: 'checkbox', label: 'Show Entity Bounding Box' },
         { group: 'Debug', id: 'checkboxAllowPlacementWhileRunning', type: 'checkbox', label: 'Allow Placement While Running' },
     ];
+    // New group per explicit request (bare *D* shorthand, no group given —
+    // neither existing group fits a Win/Lose test-sequence timing control,
+    // so a new one was created, per this project's own §12g convention).
+    const WIN_LOSE_CONTROLS = [
+        { group: 'Win / Lose', id: 'sliderWinLoseFistHoldDuration', type: 'slider', label: 'Win/Lose Fist Hold Duration (s):', min: 0, max: 5, step: 0.1, value: cfg.winLoseFistHoldDuration },
+        { group: 'Win / Lose', id: 'sliderWinLoseFinalHoldDuration', type: 'slider', label: 'Win/Lose Final Hold Duration (s):', min: 0, max: 5, step: 0.1, value: cfg.winLoseFinalHoldDuration },
+    ];
 
     const PROJECT_CONTROL_ARRAYS = [
         ['ENTITY_CONTROLS', ENTITY_CONTROLS], ['MOUSE_CONTROLS', MOUSE_CONTROLS], ['BACKGROUND_CONTROLS', BACKGROUND_CONTROLS],
         ['BALL_CONTROLS', BALL_CONTROLS], ['COLLISION_CONTROLS', COLLISION_CONTROLS], ['DEBUG_CONTROLS', DEBUG_CONTROLS],
+        ['WIN_LOSE_CONTROLS', WIN_LOSE_CONTROLS],
     ];
     function renderProjectControls() {
         PROJECT_CONTROL_ARRAYS.forEach(([name, arr]) => {
@@ -1933,6 +1955,8 @@
         bindSlider('sliderJointThickness', 'jointThickness');
         bindSlider('sliderThicknessSmoothing', 'thicknessSmoothing');
         bindSlider('sliderCollisionIntensity', 'collisionIntensity');
+        bindSlider('sliderWinLoseFistHoldDuration', 'winLoseFistHoldDuration');
+        bindSlider('sliderWinLoseFinalHoldDuration', 'winLoseFinalHoldDuration');
 
         document.getElementById('colorBackground').addEventListener('input', (e) => { cfg.backgroundColor = e.target.value; });
         document.getElementById('colorBall').addEventListener('input', (e) => { cfg.ballColor = e.target.value; });
@@ -1973,6 +1997,67 @@
     const DIRECTION_FRAME_COUNT = 20;
     function directionFrameUrl(dir, n) {
         return `data/FLICK/2TONED/${encodeURIComponent(dir.folder)}/A/${encodeURIComponent(dir.prefix + '_' + String(n).padStart(3, '0') + '.png')}`;
+    }
+
+    // Win/Lose test sequences — per explicit request ("Add 2 buttons 'Win'
+    // and 'Lose'... for me to test the win and lose animations"). A wholly
+    // separate asset family, copied from J:\CLAUDE\PROJECTS\DICKOCLICKO\
+    // data\FLICK\2TONED\<FOLDER>_MF|_TU\FIST (that project added 2 new
+    // per-direction folders — TU = Win, MF = Lose, per explicit
+    // instruction), keeping only the FIST subfolder actually needed (not
+    // the sibling ARCH/NOFIST variants also present there) into this
+    // project's OWN data/FLICK/2TONED/<FOLDER>_MF|_TU/FIST — this project
+    // is a static single-file app with no cross-project asset serving, so
+    // the files have to physically live here, not just be referenced.
+    // 24 frames per sequence (001-024), a different count from the normal
+    // 20-frame DIRECTION_FRAME_COUNT flick sequences above — deliberately
+    // its own separate WIN_LOSE_FRAME_COUNT, not reusing that constant.
+    //
+    // centerX/bottomY were computed the SAME offline Node+sharp way as
+    // VISIBLE_BOUNDS_BY_DIRECTION below (against these NEW frame-1 PNGs
+    // directly, not reused from the normal flick set — a real, checked
+    // difference: this art's own raster is 1920x912, not 2400x1181) — one
+    // shared anchor per direction rather than a separate lose/win pair,
+    // since both were independently measured to be pixel-for-pixel
+    // identical (their own frame 1 is the same shared "pre-flick" starting
+    // pose before the sequence diverges into a fist-close or thumbs-up,
+    // per the "PF" prefix both share) — if a future asset replacement ever
+    // makes them diverge, recompute both and store them separately then.
+    //
+    // TO REGENERATE (e.g. after replacing a direction's own frame 1 art):
+    //   node -e "const sharp=require('sharp'); (async()=>{const img=sharp('data/FLICK/2TONED/<FOLDER>_MF/FIST/<prefix>_001.png'); const {data,info}=await img.raw().ensureAlpha().toBuffer({resolveWithObject:true}); const w=info.width,h=info.height,c=info.channels; let minX=w,maxX=-1,minY=h,maxY=-1; for(let y=0;y<h;y++){for(let x=0;x<w;x++){const a=data[(y*w+x)*c+(c-1)]; if(a>10){if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;}}} console.log({centerX:+(((minX+maxX)/2)/w).toFixed(4), bottomY:+(((maxY+1)/h)).toFixed(4)});})()"
+    const WIN_LOSE_FRAME_COUNT = 24;
+    const WIN_LOSE_ASSETS = {
+        'behind':       { lose: { folder: 'BEHIND_MF',        prefix: '2T -B - PF_F0_180_MF-0_180 FFF' },        win: { folder: 'BEHIND_TU',        prefix: '2T -B - PF_F180_TU-176-90 FFF' },        centerX: 0.5255, bottomY: 0.8914 },
+        'behind-thumb': { lose: { folder: 'BEHIND THUMB_MF',   prefix: '2T -BT - PF_F_-45_180_MF_-45_-180 FFF' }, win: { folder: 'BEHIND THUMB_TU',  prefix: '2T -BT - PF_F_-45_180_TU_130_-90 FFF' }, centerX: 0.4987, bottomY: 0.8925 },
+        'side-thumb':   { lose: { folder: 'SIDE THUMB_MF',     prefix: '2T - DT- PF_F90_MF90' },                  win: { folder: 'SIDE THUMB_TU',    prefix: '2T - DT- PF_F-90_TU90' },                centerX: 0.4794, bottomY: 0.8816 },
+        'front-thumb':  { lose: { folder: 'FRONT THUMB_MF',    prefix: '2T - FT - PF_F135_MF135' },               win: { folder: 'FRONT THUMB_TU',   prefix: '2T - FT - PF_F_TU135' },                 centerX: 0.4745, bottomY: 0.9013 },
+        'front':        { lose: { folder: 'FRONT_MF',          prefix: '2T - ABOVE - PF_F180_MF180' },            win: { folder: 'FRONT_TU',         prefix: '2T - ABOVE - PF_F_TU' },                 centerX: 0.4771, bottomY: 0.9145 },
+        'front-pinky':  { lose: { folder: 'FRONT PINKY_MF',    prefix: '2T - FP - PF_F145_MF145' },               win: { folder: 'FRONT PINKY_TU',   prefix: '2T - FP - PF_F_TU-35' },                 centerX: 0.4943, bottomY: 0.9221 },
+        'side-pinky':   { lose: { folder: 'SIDE PINKY_MF',     prefix: '2T -DP - PF_F90_MF90' },                  win: { folder: 'SIDE PINKY_TU',    prefix: '2T -DP - PF_F_TU90' },                   centerX: 0.5188, bottomY: 0.9265 },
+        'behind-pinky': { lose: { folder: 'BEHIND PINKY_MF',   prefix: '2T -BP - PF_F_60_180_MF_60_180 FFF' },    win: { folder: 'BEHIND PINKY_TU',  prefix: '2T -BP - PF_F-130_180_TU-110_180 FFF' }, centerX: 0.5203, bottomY: 0.9167 },
+    };
+    function winLoseFrameUrl(asset, n) {
+        return `data/FLICK/2TONED/${encodeURIComponent(asset.folder)}/FIST/${encodeURIComponent(asset.prefix + '_' + String(n).padStart(3, '0') + '.png')}`;
+    }
+    // Lazy-loaded per (direction, type) pair, same pattern as
+    // ensureDirectionLoaded() — only actually fetched once a real Win/Lose
+    // click needs that specific direction's own sequence, not eagerly for
+    // all 16 combinations on page load.
+    const winLoseCache = {};
+    function ensureWinLoseLoaded(directionKey, type) {
+        const cacheKey = directionKey + '|' + type;
+        if (winLoseCache[cacheKey]) return winLoseCache[cacheKey];
+        const wl = WIN_LOSE_ASSETS[directionKey];
+        const asset = wl && wl[type];
+        const frames = [];
+        if (asset) {
+            for (let n = 1; n <= WIN_LOSE_FRAME_COUNT; n++) {
+                frames.push(loadImageWithRetry(winLoseFrameUrl(asset, n)));
+            }
+        }
+        winLoseCache[cacheKey] = frames;
+        return frames;
     }
 
     // Hand Rotation Offset is per-direction (8 independent values), but
@@ -3301,6 +3386,42 @@
         entity.playSequenceFrozen = ensureDirectionLoaded(entity.directionKey).playSequence;
     }
 
+    // Win/Lose test sequences — per explicit request. Triggered by the
+    // Win/Lose buttons (wired below), applied to EVERY currently-placed
+    // entity at once ("every placed entity on screen will transition into
+    // the appropriate animation sequence"), each using its own
+    // directionKey's own win/lose asset set. Cancels any in-progress
+    // normal flick on that entity first (winLoseType takes over the
+    // entity's own rendering entirely — see render()'s own draw dispatch —
+    // so the 2 states must never both be active at once).
+    //
+    // The state machine itself (advanced in step(), below) has 5 phases,
+    // per the exact spec: "frames will be played sequentially until frame
+    // _013 is reached[, held,] afterwhich it will finish the sequence of
+    // frames[. At frame _24, held again], afterwhich the entire sequence
+    // will be played in reverse without any in between frame holding":
+    //   forward1  — frame index 0 (=_001) advancing up to 12 (=_013)
+    //   holdFist  — frozen at index 12, for cfg.winLoseFistHoldDuration
+    //   forward2  — continues from 12 up to 23 (=_024), no reset to 0
+    //   holdFinal — frozen at index 23, for cfg.winLoseFinalHoldDuration
+    //   reverse   — 23 back down to 0, continuously, no holding at 12 this
+    //               time ("without any in between frame holding")
+    // Sequence ends (winLoseType cleared, entity returns to its own normal
+    // idle rendering) once reverse reaches index 0.
+    function triggerWinLoseSequence(type) {
+        entities.forEach(entity => {
+            entity.playing = false;
+            entity.playSequenceFrozen = null;
+            entity.playFrameIndex = 0;
+            entity.playFrameAccum = 0;
+            entity.winLoseType = type;
+            entity.winLosePhase = 'forward1';
+            entity.winLoseFrameAccum = 0;
+            entity.winLoseHoldRemaining = 0;
+            ensureWinLoseLoaded(entity.directionKey, type);
+        });
+    }
+
     // Spawns a new entity anchored at (startX,startY) — the FIRST click —
     // pointing along the line toward (endX,endY) — the SECOND click — per
     // explicit spec ("click once, defining the start point, and click
@@ -3341,6 +3462,9 @@
             playing: false, playFrameIndex: 0, playFrameAccum: 0, playSequenceFrozen: null,
             wasInFlickTriggerZone: false, prevJointLocal: null, smoothedJointSpeed: {},
             jointWorld: null, jointSpeed: {},
+            // Win/Lose test-sequence state — see triggerWinLoseSequence()'s
+            // own comment for the full state machine this drives.
+            winLoseType: null, winLosePhase: null, winLoseFrameAccum: 0, winLoseHoldRemaining: 0,
         });
         ensureDirectionLoaded(directionKey);
     }
@@ -3629,6 +3753,12 @@
     deleteBtn.addEventListener('click', () => setDeleteMode(!deleteMode));
     ballBtn.addEventListener('click', () => setBallPlacementMode(!ballPlacementMode));
     setRunning(false);
+    // Win/Lose — deliberately NOT gated by running/stopped (unlike
+    // Delete/Ball) and not a toggled "mode": each click is a one-shot
+    // trigger applied immediately to every currently-placed entity, for
+    // testing the animation regardless of whatever else is going on.
+    document.getElementById('winBtn').addEventListener('click', () => triggerWinLoseSequence('win'));
+    document.getElementById('loseBtn').addEventListener('click', () => triggerWinLoseSequence('lose'));
 
     // Fixed-timestep physics — step() always advances by exactly FIXED_DT
     // (1/60s), never the raw/jittery per-real-frame delta. Previously
@@ -3670,7 +3800,62 @@
                 }
             }
         });
+        advanceWinLoseSequences(dt);
         updateBallAndCollision(dt);
+    }
+
+    // Advances every entity's own Win/Lose state machine, one tick at a
+    // time — see triggerWinLoseSequence()'s own comment for the 5 phases.
+    // Reuses the SAME FLICK_BASE_FPS/cfg.clickAnimSpeed frame-advance rate
+    // the normal flick sequence above uses (no separate speed slider was
+    // requested), but the 2 hold phases advance a real-seconds countdown
+    // (cfg.winLoseFistHoldDuration/winLoseFinalHoldDuration) instead of a
+    // frame count, since the request specifically says "duration", not a
+    // frame hold like the normal flick's own peakHoldFrames.
+    const WIN_LOSE_FIST_INDEX = 12; // frame _013 (0-based)
+    const WIN_LOSE_LAST_INDEX = WIN_LOSE_FRAME_COUNT - 1; // frame _024
+    function advanceWinLoseSequences(dt) {
+        entities.forEach(entity => {
+            if (!entity.winLoseType) return;
+            const phase = entity.winLosePhase;
+            if (phase === 'forward1' || phase === 'forward2') {
+                entity.winLoseFrameAccum += dt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
+                const target = phase === 'forward1' ? WIN_LOSE_FIST_INDEX : WIN_LOSE_LAST_INDEX;
+                if (entity.winLoseFrameAccum >= target) {
+                    entity.winLoseFrameAccum = target; // clamp exactly — never overshoot the hold frame
+                    if (phase === 'forward1') {
+                        entity.winLosePhase = 'holdFist';
+                        entity.winLoseHoldRemaining = cfg.winLoseFistHoldDuration;
+                    } else {
+                        entity.winLosePhase = 'holdFinal';
+                        entity.winLoseHoldRemaining = cfg.winLoseFinalHoldDuration;
+                    }
+                }
+            } else if (phase === 'holdFist' || phase === 'holdFinal') {
+                entity.winLoseHoldRemaining -= dt;
+                if (entity.winLoseHoldRemaining <= 0) {
+                    // frameAccum is left exactly where the hold froze it
+                    // (WIN_LOSE_FIST_INDEX or WIN_LOSE_LAST_INDEX) — the
+                    // next phase continues from there, not from 0.
+                    entity.winLosePhase = phase === 'holdFist' ? 'forward2' : 'reverse';
+                }
+            } else if (phase === 'reverse') {
+                // No hold at WIN_LOSE_FIST_INDEX on the way back down —
+                // "without any in between frame holding", per explicit
+                // instruction — this phase has no target-check branching
+                // at all, just a continuous decrement to 0.
+                entity.winLoseFrameAccum -= dt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
+                if (entity.winLoseFrameAccum <= 0) {
+                    // Sequence complete — entity returns to its own normal
+                    // idle rendering (render()'s draw dispatch falls back
+                    // to the idle branch once winLoseType is null again).
+                    entity.winLoseType = null;
+                    entity.winLosePhase = null;
+                    entity.winLoseFrameAccum = 0;
+                    entity.winLoseHoldRemaining = 0;
+                }
+            }
+        });
     }
 
     function update(now) {
@@ -3798,8 +3983,25 @@
             // the full-resolution source every frame (see
             // getScaledIdleFrame()'s own comment: a real, reported mobile
             // performance issue).
-            let drawSource = null, drawW = size, drawH = size;
-            if (entity.playing && entity.playSequenceFrozen) {
+            let drawSource = null, drawW = size, drawH = size, vb = null;
+            if (entity.winLoseType) {
+                // Win/Lose takes over the entity's own draw entirely,
+                // ahead of both the normal playing/idle branches (the 2
+                // states are mutually exclusive — triggerWinLoseSequence()
+                // already clears entity.playing when this starts) — its
+                // OWN anchor (WIN_LOSE_ASSETS[key].centerX/bottomY), not
+                // visibleBoundsForDirection(), since this is a genuinely
+                // different source image, not reused from the normal set.
+                const frames = ensureWinLoseLoaded(entity.directionKey, entity.winLoseType);
+                const idx = Math.max(0, Math.min(WIN_LOSE_LAST_INDEX, Math.floor(entity.winLoseFrameAccum)));
+                const img = frames[idx];
+                if (img && img.complete && img.naturalWidth > 0) {
+                    drawH = size * (img.naturalHeight / img.naturalWidth);
+                    drawSource = img;
+                }
+                const wl = WIN_LOSE_ASSETS[entity.directionKey];
+                vb = wl ? { centerX: wl.centerX, bottomY: wl.bottomY } : { centerX: 0.5, bottomY: 1 };
+            } else if (entity.playing && entity.playSequenceFrozen) {
                 const hold = Math.round(cfg.peakHoldFrames);
                 const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, hold);
                 const virtualIndex = Math.min(entity.playFrameIndex, totalLen - 1);
@@ -3816,8 +4018,7 @@
                     drawSource = scaled.canvas;
                 }
             }
-
-            const vb = visibleBoundsForDirection(entity.directionKey);
+            if (!vb) vb = visibleBoundsForDirection(entity.directionKey);
             // Animation X Offset (cfg.entityXOffsetByDirection) — added to
             // the local x AFTER vb.centerX, BEFORE rotation, so it shifts
             // the drawn sprite/hitbox sideways relative to the entity's own

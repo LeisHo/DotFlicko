@@ -174,6 +174,29 @@ new session should be aware they're there before touching `data/FLICK/`.
   proven collision-kick line alongside `cfg.collisionIntensity`, but
   didn't separately stage a live ball-hit to observe the resulting kick
   amplitude difference.
+- Win/Lose test buttons — clicking Win or Lose transitions EVERY
+  currently-placed entity into that direction's own Win (TU) or Lose (MF)
+  24-frame sequence: play 1→13, hold (Win/Lose Fist Hold Duration, new
+  dev-panel slider), continue 13→24, hold again (Win/Lose Final Hold
+  Duration), then play the whole thing in reverse with no holding, back
+  to idle. Assets (384 PNGs, 16 direction/type folders' own `FIST`
+  subfolder only) copied in from `DICKOCLICKO`'s own
+  `data/FLICK/2TONED/<FOLDER>_MF|_TU/FIST` — a genuinely different
+  source asset family (1920×912, not 2400×1181), so its own
+  centerX/bottomY anchor was independently computed via the same offline
+  Node+sharp technique, not reused from the normal flick set. **Verified
+  the state-machine timing/frame-boundary logic exactly correct via an
+  isolated Node simulation of the extracted formula** (forward1 stops at
+  exactly frame index 12 = `_013`, forward2 at exactly index 23 = `_024`,
+  each hold lasts exactly its configured duration, reverse has no
+  intermediate hold) — real-browser confirmation only got a partial,
+  qualitative check (3 distinct, internally-stable image plateaus in the
+  right order) because this session's Browser pane was reporting
+  `document.hidden === true` throughout testing, which throttles this
+  project's own `requestAnimationFrame`/fixed-timestep accumulator (a
+  known, previously-documented environment limitation, not a code
+  issue) — the user's own click-through in a real, focused browser is
+  the first real-time-accurate check.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

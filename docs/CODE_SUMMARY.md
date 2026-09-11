@@ -526,3 +526,38 @@ GOTCHAS
   `centerX`/`bottomY`) together via the one Node+`sharp` one-liner in the
   comment directly above the table -- don't hand-guess it, and don't
   regenerate only 2 of the 3 fields from a stale computation.
+- **Win/Lose (`WIN_LOSE_ASSETS`, `triggerWinLoseSequence()`,
+  `advanceWinLoseSequences()`) is a wholly SEPARATE asset family and
+  state machine from the normal flick system -- do not try to unify
+  them.** Different frame count (`WIN_LOSE_FRAME_COUNT = 24`, vs.
+  `DIRECTION_FRAME_COUNT = 20`), different source raster
+  (1920x912, not 2400x1181 -- confirmed via `sharp` metadata, not
+  assumed), its own independently-computed `centerX`/`bottomY` anchor
+  per direction (NOT `visibleBoundsForDirection()` -- reusing that table
+  for this different art would misplace it), and a genuinely different
+  playback shape (2 real-TIME holds via `cfg.winLoseFistHoldDuration`/
+  `winLoseFinalHoldDuration`, not the normal flick's single frame-COUNT
+  hold via `peakHoldFrames`, and an asymmetric forward-holds/reverse-no-
+  holds shape the normal forward+reverse `playSequence` array doesn't
+  have at all). `entity.winLoseType` being non-null takes over that
+  entity's ENTIRE draw dispatch in `render()` ahead of both the
+  `playing`/idle branches (mutually exclusive with a normal flick --
+  `triggerWinLoseSequence()` forces `entity.playing = false` first).
+- **Win/Lose assets were copied in from a SIBLING project**
+  (`J:\CLAUDE\PROJECTS\DICKOCLICKO\data\FLICK\2TONED\<FOLDER>_MF|_TU\`),
+  only the `FIST` subfolder of each (NOT the sibling `ARCH`/`NOFIST`
+  variants also present there, which this feature never uses) --
+  DOTFLICKO is a static single-file app with no cross-project asset
+  serving, so the files had to be physically copied into this project's
+  OWN `data/FLICK/2TONED/<FOLDER>_MF|_TU/FIST/` (384 files, ~15MB), not
+  just referenced by a DICKOCLICKO-relative path. `_MF` = Lose, `_TU` =
+  Win, per explicit instruction -- don't swap these.
+- **`WIN_LOSE_FIST_INDEX = 12` and `WIN_LOSE_LAST_INDEX = 23` are
+  0-based array indices, matching 1-based file suffixes `_013`/`_024`
+  the request itself specified** -- a future change to
+  `WIN_LOSE_FRAME_COUNT` (e.g. a reshot sequence with a different frame
+  count) needs `WIN_LOSE_LAST_INDEX` re-derived from it
+  (`WIN_LOSE_FRAME_COUNT - 1`, already expressed that way, not
+  hardcoded), and `WIN_LOSE_FIST_INDEX` re-confirmed against wherever
+  the NEW sequence's own hold-pose frame actually lands -- it is NOT
+  automatically "13" again just because the old one was.
