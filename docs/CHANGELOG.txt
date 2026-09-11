@@ -1020,6 +1020,62 @@ proximity trigger -- confirmed with real logged tick numbers, not a
 visual-only check.
 
 --------------------------------------------------------------------------------
+2026-09-11
+
+Win/Lose test-sequence per-asset frame count fix, and recovery of 3
+misplaced replacement animation-frame sets.
+
+Fixed:
+- WIN_LOSE_ASSETS' pause frame ("fist hold") was derived from a single
+  GLOBAL frame count/index shared across all 16 direction+win/lose
+  combinations. User replaced BehindThumb_TU's animation art with a
+  48-frame version (previously 24) and reported the pause frame needed
+  to move from frame 13 to frame 25 accordingly; a mid-turn follow-up
+  added BehindPinky_TU as also updated to 48 frames. Generalized
+  frameCount onto each WIN_LOSE_ASSETS win/lose sub-object individually,
+  and made the pause/last frame indices per-entity
+  (entity.winLoseFistIndex/winLoseLastIndex), derived via
+  Math.floor(frameCount/2) at trigger time instead of a hardcoded global
+  constant -- verified this reproduces the original 24->13 relationship
+  exactly, so the other 14 unaffected combinations kept their existing
+  behavior. Commits ce57167 (behind-thumb + the per-asset generalization,
+  mostly captured by a concurrent session's own commit along the way)
+  and 57ca97a (behind-pinky + front-thumb + the real asset files, see
+  below).
+- A follow-up "also updated FrontThumb_TU frames" request surfaced that
+  all 3 of the user's replacement frame sets (BehindThumb_TU,
+  FrontThumb_TU, BehindPinky_TU -- 48 frames each) had actually been
+  saved into the sibling DICKOCLICKO project's data folder by mistake,
+  never into DOTFLICKO itself -- caught via `ls` disk verification
+  against the user's own claim (CLAUDE.md §0c), then confirmed directly
+  by the user ("oh i was saving it the wrong location my bad"). Copied
+  all 144 PNGs into this project's data/FLICK/2TONED/<FOLDER>_TU/FIST/
+  folders (verified byte-identical to source via md5sum, and all 48
+  frames present per set via a real per-filename existence check, not
+  just a total count). The replacement art also uses a different
+  filename convention per direction than the old 24-frame sets (e.g.
+  "BehindThumb _ TU_001.png" vs. the old "2T -BT - PF_F..." prefix
+  pattern) -- WIN_LOSE_ASSETS' win.prefix updated per direction to
+  match. Old 24-frame files for these 3 directions were left in place on
+  disk, unreferenced by the updated prefixes, rather than deleted as an
+  unrequested cleanup.
+
+Gotcha discovered and documented (see this project's own CLAUDE.md):
+a PostToolUse:Edit hook auto-opens the just-edited index.html as a
+`data:` URL preview in the Browser pane, which LOOKS like a normally
+loaded page but can't resolve any relative asset path -- every image
+silently failed to load (naturalWidth stayed 0, no console error) until
+diagnosed via `location.href` and the pane was explicitly navigated to
+the real localhost dev-server tab instead.
+
+Verified via the JS console against the real localhost server (not the
+data: preview): fistIndex/lastIndex correctly derive to 24/47 for all 3
+of the 48-frame directions vs. 12/23 for unaffected control directions;
+frame 1/24/48 all load successfully for all 3 directions; a
+live-triggered win sequence correctly holds in the holdFist phase at
+frameAccum 24 (frame 25) for behind-thumb.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

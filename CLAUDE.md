@@ -39,3 +39,22 @@ or the optional git-tracked settings-log upgrade).>
 <Real bugs already hit and fixed, so a later session doesn't rediscover
 them. One bullet per gotcha, concrete enough to actually prevent the
 mistake.>
+
+- A PostToolUse:Edit hook auto-opens the just-edited `index.html` as a
+  `data:` URL preview in the Browser pane. That preview LOOKS like a
+  normally-loaded page but its origin can't resolve any relative asset
+  path (image `src`/`fetch` calls to `data/...` silently fail —
+  `naturalWidth` stays 0, no console error). Before trusting a
+  browser-pane verification that touches images/assets, confirm
+  `location.href` starts with `http://localhost:<port>`, not `data:` —
+  if it's a stale data: preview, `navigate` to the real
+  `static`/`static-alt`/`static-alt2` server URL (`.claude/launch.json`)
+  first and re-verify there.
+- This project's data assets sometimes get saved into the sibling
+  `DICKOCLICKO` project by mistake (same `data/FLICK/2TONED/<...>/FIST/`
+  folder layout, easy to confuse). If a reported frame-count/asset
+  change doesn't match what's on disk here, check
+  `J:\CLAUDE\PROJECTS\DICKOCLICKO\data\FLICK\2TONED\` for the real files
+  before assuming the user is wrong — confirmed real prior instance:
+  BehindThumb_TU/FrontThumb_TU/BehindPinky_TU's 48-frame replacements
+  (2026-09-11).
