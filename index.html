@@ -1812,6 +1812,18 @@
         // slider's introduction doesn't silently change existing Win/
         // Lose playback speed on first load.
         winLoseAnimSpeed: 11.7,
+        // Per explicit request: when on, an entity's own finger-joint
+        // capsules stop physically colliding with the ball (position
+        // correction, bounce, the Flick Intensity kick) whenever that
+        // entity ISN'T currently mid-flick — default off (unchanged
+        // existing behavior: an idle entity's own geometry still
+        // collides). Deliberately does NOT touch the ball-proximity
+        // auto-trigger check (ballInFlickTriggerZone, a separate,
+        // independent check in the same loop) — that has to keep
+        // working while idle, or an entity could never receive the
+        // proximity trigger that starts its own flick in the first
+        // place.
+        collisionOnlyWhilePlaying: false,
     };
 
     // Labels below still reflect the "Hand ..." rename set as default
@@ -1893,6 +1905,7 @@
         { group: 'Collision', id: 'sliderThicknessSmoothing', type: 'slider', label: 'Collision Speed Smoothing (0-1):', min: 0.02, max: 1, step: 0.01, value: cfg.thicknessSmoothing },
         { group: 'Collision', id: 'sliderCollisionIntensity', type: 'slider', label: 'Collision / Flick Intensity (x):', min: 0, max: 5, step: 0.1, value: cfg.collisionIntensity },
         { group: 'Collision', id: 'checkboxShowJointCollisionLines', type: 'checkbox', label: 'Show Joint Collision Lines' },
+        { group: 'Collision', id: 'checkboxCollisionOnlyWhilePlaying', type: 'checkbox', label: 'Collision Only While Playing' },
     ];
     const DEBUG_CONTROLS = [
         { group: 'Debug', id: 'checkboxShowCenter', type: 'checkbox', label: 'Show Center Point' },
@@ -1934,6 +1947,7 @@
         document.getElementById('checkboxShowHitbox').checked = cfg.showHitbox;
         document.getElementById('checkboxShowJointCollisionLines').checked = cfg.showJointCollisionLines;
         document.getElementById('checkboxAllowPlacementWhileRunning').checked = cfg.allowPlacementWhileRunning;
+        document.getElementById('checkboxCollisionOnlyWhilePlaying').checked = cfg.collisionOnlyWhilePlaying;
     }
 
     function wireProjectControls() {
@@ -1983,6 +1997,7 @@
         bindCheckbox('checkboxShowHitbox', 'showHitbox');
         bindCheckbox('checkboxShowJointCollisionLines', 'showJointCollisionLines');
         bindCheckbox('checkboxAllowPlacementWhileRunning', 'allowPlacementWhileRunning');
+        bindCheckbox('checkboxCollisionOnlyWhilePlaying', 'collisionOnlyWhilePlaying');
     }
 
     // ----------------------------------------------------------------
@@ -2019,9 +2034,23 @@
     // project's OWN data/FLICK/2TONED/<FOLDER>_MF|_TU/FIST — this project
     // is a static single-file app with no cross-project asset serving, so
     // the files have to physically live here, not just be referenced.
-    // 24 frames per sequence (001-024), a different count from the normal
-    // 20-frame DIRECTION_FRAME_COUNT flick sequences above — deliberately
-    // its own separate WIN_LOSE_FRAME_COUNT, not reusing that constant.
+    // 24 frames per sequence (001-024) by default, a different count from
+    // the normal 20-frame DIRECTION_FRAME_COUNT flick sequences above —
+    // deliberately its own per-ASSET frameCount (below), not a single
+    // shared WIN_LOSE_FRAME_COUNT constant. Originally WAS one shared
+    // constant (all 16 sequences at 24 frames) until a direct report
+    // ("i replaced the animation frames for BehindThumb_TU. There are now
+    // 48 frames, so instead of pausing on frame 13, you will pause on
+    // frame 25") proved a single global count can't survive a real asset
+    // replacement — 'behind-thumb'.win now has frameCount:48 while every
+    // other entry (including 'behind-thumb'.lose) stays at 24. The pause
+    // frame itself (entity.winLoseFistIndex, set by triggerWinLoseSequence()
+    // further down) is DERIVED from
+    // frameCount (floor(frameCount/2), 0-based) rather than hardcoded, so
+    // the exact 13->25 relationship the report described falls out
+    // automatically (24/2=12 0-based=frame_013; 48/2=24 0-based=frame_025)
+    // — a future frame-count change to any other entry doesn't need a 2nd
+    // manual fix here.
     //
     // centerX/bottomY were computed the SAME offline Node+sharp way as
     // VISIBLE_BOUNDS_BY_DIRECTION below (against these NEW frame-1 PNGs
@@ -2036,16 +2065,15 @@
     //
     // TO REGENERATE (e.g. after replacing a direction's own frame 1 art):
     //   node -e "const sharp=require('sharp'); (async()=>{const img=sharp('data/FLICK/2TONED/<FOLDER>_MF/FIST/<prefix>_001.png'); const {data,info}=await img.raw().ensureAlpha().toBuffer({resolveWithObject:true}); const w=info.width,h=info.height,c=info.channels; let minX=w,maxX=-1,minY=h,maxY=-1; for(let y=0;y<h;y++){for(let x=0;x<w;x++){const a=data[(y*w+x)*c+(c-1)]; if(a>10){if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;}}} console.log({centerX:+(((minX+maxX)/2)/w).toFixed(4), bottomY:+(((maxY+1)/h)).toFixed(4)});})()"
-    const WIN_LOSE_FRAME_COUNT = 24;
     const WIN_LOSE_ASSETS = {
-        'behind':       { lose: { folder: 'BEHIND_MF',        prefix: '2T - B - PF_F_MF' },                      win: { folder: 'BEHIND_TU',        prefix: '2T -B - PF_F180_TU-176-90 FFF' },        centerX: 0.5255, bottomY: 0.8914 },
-        'behind-thumb': { lose: { folder: 'BEHIND THUMB_MF',   prefix: '2T - BT- PF_F-30_MF30' },                 win: { folder: 'BEHIND THUMB_TU',  prefix: '2T -BT - PF_F_-45_180_TU_130_-90 FFF' }, centerX: 0.4987, bottomY: 0.8925 },
-        'side-thumb':   { lose: { folder: 'SIDE THUMB_MF',     prefix: '2T - DT- PF_F90_MF90' },                  win: { folder: 'SIDE THUMB_TU',    prefix: 'DirectThumb - TU' },                     centerX: 0.4794, bottomY: 0.8816 },
-        'front-thumb':  { lose: { folder: 'FRONT THUMB_MF',    prefix: '2T - FT - PF_F135_MF135' },               win: { folder: 'FRONT THUMB_TU',   prefix: '2T - FT - PF_F_TU135' },                 centerX: 0.4745, bottomY: 0.9013 },
-        'front':        { lose: { folder: 'FRONT_MF',          prefix: '2T - ABOVE - PF_F180_MF180' },            win: { folder: 'FRONT_TU',         prefix: '2T - ABOVE - PF_F_TU' },                 centerX: 0.4771, bottomY: 0.9145 },
-        'front-pinky':  { lose: { folder: 'FRONT PINKY_MF',    prefix: '2T - FP - PF_F145_MF145' },               win: { folder: 'FRONT PINKY_TU',   prefix: '2T - FP - PF_F_TU-35' },                 centerX: 0.4943, bottomY: 0.9221 },
-        'side-pinky':   { lose: { folder: 'SIDE PINKY_MF',     prefix: '2T -DP - PF_F90_MF90' },                  win: { folder: 'SIDE PINKY_TU',    prefix: 'DirectPink - TU' },                      centerX: 0.5188, bottomY: 0.9265 },
-        'behind-pinky': { lose: { folder: 'BEHIND PINKY_MF',   prefix: '2T - B - PF_F70_MF70' },                  win: { folder: 'BEHIND PINKY_TU',  prefix: '2T -BP - PF_F-130_180_TU-110_180 FFF' }, centerX: 0.5203, bottomY: 0.9167 },
+        'behind':       { lose: { folder: 'BEHIND_MF',        prefix: '2T - B - PF_F_MF', frameCount: 24 },                      win: { folder: 'BEHIND_TU',        prefix: '2T -B - PF_F180_TU-176-90 FFF', frameCount: 24 },        centerX: 0.5255, bottomY: 0.8914 },
+        'behind-thumb': { lose: { folder: 'BEHIND THUMB_MF',   prefix: '2T - BT- PF_F-30_MF30', frameCount: 24 },                 win: { folder: 'BEHIND THUMB_TU',  prefix: '2T -BT - PF_F_-45_180_TU_130_-90 FFF', frameCount: 48 }, centerX: 0.4987, bottomY: 0.8925 },
+        'side-thumb':   { lose: { folder: 'SIDE THUMB_MF',     prefix: '2T - DT- PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE THUMB_TU',    prefix: 'DirectThumb - TU', frameCount: 24 },                     centerX: 0.4794, bottomY: 0.8816 },
+        'front-thumb':  { lose: { folder: 'FRONT THUMB_MF',    prefix: '2T - FT - PF_F135_MF135', frameCount: 24 },               win: { folder: 'FRONT THUMB_TU',   prefix: '2T - FT - PF_F_TU135', frameCount: 24 },                 centerX: 0.4745, bottomY: 0.9013 },
+        'front':        { lose: { folder: 'FRONT_MF',          prefix: '2T - ABOVE - PF_F180_MF180', frameCount: 24 },            win: { folder: 'FRONT_TU',         prefix: '2T - ABOVE - PF_F_TU', frameCount: 24 },                 centerX: 0.4771, bottomY: 0.9145 },
+        'front-pinky':  { lose: { folder: 'FRONT PINKY_MF',    prefix: '2T - FP - PF_F145_MF145', frameCount: 24 },               win: { folder: 'FRONT PINKY_TU',   prefix: '2T - FP - PF_F_TU-35', frameCount: 24 },                 centerX: 0.4943, bottomY: 0.9221 },
+        'side-pinky':   { lose: { folder: 'SIDE PINKY_MF',     prefix: '2T -DP - PF_F90_MF90', frameCount: 24 },                  win: { folder: 'SIDE PINKY_TU',    prefix: 'DirectPink - TU', frameCount: 24 },                      centerX: 0.5188, bottomY: 0.9265 },
+        'behind-pinky': { lose: { folder: 'BEHIND PINKY_MF',   prefix: '2T - B - PF_F70_MF70', frameCount: 24 },                  win: { folder: 'BEHIND PINKY_TU',  prefix: '2T -BP - PF_F-130_180_TU-110_180 FFF', frameCount: 24 }, centerX: 0.5203, bottomY: 0.9167 },
     };
     function winLoseFrameUrl(asset, n) {
         return `data/FLICK/2TONED/${encodeURIComponent(asset.folder)}/FIST/${encodeURIComponent(asset.prefix + '_' + String(n).padStart(3, '0') + '.png')}`;
@@ -2062,7 +2090,7 @@
         const asset = wl && wl[type];
         const frames = [];
         if (asset) {
-            for (let n = 1; n <= WIN_LOSE_FRAME_COUNT; n++) {
+            for (let n = 1; n <= asset.frameCount; n++) {
                 frames.push(loadImageWithRetry(winLoseFrameUrl(asset, n)));
             }
         }
@@ -3018,7 +3046,14 @@
             // sequentially, not a rigorous simultaneous solve" scope this
             // collision system already had before this change.
             entities.forEach(entity => {
-                if (entity.jointWorld) {
+                // cfg.collisionOnlyWhilePlaying (per explicit request) gates
+                // ONLY this physical-collision block — the auto-trigger
+                // check below (ballInFlickTriggerZone/anyBallInZone) is a
+                // separate, independent check that must keep running for a
+                // non-playing entity regardless of this checkbox, or an
+                // idle entity could never receive the proximity trigger
+                // that starts its own flick in the first place.
+                if (entity.jointWorld && (!cfg.collisionOnlyWhilePlaying || entity.playing)) {
                     // Computed once per entity per tick (not once per
                     // segment below) — it's the same value for all 3
                     // segments of a given entity this tick, no reason to
@@ -3409,12 +3444,19 @@
     // per the exact spec: "frames will be played sequentially until frame
     // _013 is reached[, held,] afterwhich it will finish the sequence of
     // frames[. At frame _24, held again], afterwhich the entire sequence
-    // will be played in reverse without any in between frame holding":
-    //   forward1  — frame index 0 (=_001) advancing up to 12 (=_013)
-    //   holdFist  — frozen at index 12, for cfg.winLoseFistHoldDuration
-    //   forward2  — continues from 12 up to 23 (=_024), no reset to 0
-    //   holdFinal — frozen at index 23, for cfg.winLoseFinalHoldDuration
-    //   reverse   — 23 back down to 0, continuously, no holding at 12 this
+    // will be played in reverse without any in between frame holding" —
+    // frame numbers below are the ORIGINAL 24-frame default; each entity's
+    // own real pause/end frames (winLoseFistIndex/winLoseLastIndex, set by
+    // triggerWinLoseSequence() from that direction+type's own real
+    // frameCount) are what the code actually uses, so a different-length
+    // asset (e.g. 'behind-thumb'.win at 48 frames — see WIN_LOSE_ASSETS'
+    // own comment) pauses/ends at its own correctly-scaled frame, not
+    // these fixed numbers:
+    //   forward1  — frame index 0 (=_001) advancing up to winLoseFistIndex (12 =_013, at the 24-frame default)
+    //   holdFist  — frozen at winLoseFistIndex, for cfg.winLoseFistHoldDuration
+    //   forward2  — continues from winLoseFistIndex up to winLoseLastIndex (23 =_024, at the 24-frame default), no reset to 0
+    //   holdFinal — frozen at winLoseLastIndex, for cfg.winLoseFinalHoldDuration
+    //   reverse   — winLoseLastIndex back down to 0, continuously, no holding at winLoseFistIndex this
     //               time ("without any in between frame holding")
     // Sequence ends (winLoseType cleared, entity returns to its own normal
     // idle rendering) once reverse reaches index 0.
@@ -3428,6 +3470,15 @@
             entity.winLosePhase = 'forward1';
             entity.winLoseFrameAccum = 0;
             entity.winLoseHoldRemaining = 0;
+            // Per-entity, derived from THIS direction+type's own real
+            // frameCount (see WIN_LOSE_ASSETS' own comment) — not a
+            // shared global, since different assets can now have
+            // genuinely different frame counts (e.g. 'behind-thumb'.win
+            // at 48 vs. the 24-frame default everywhere else).
+            const asset = WIN_LOSE_ASSETS[entity.directionKey] && WIN_LOSE_ASSETS[entity.directionKey][type];
+            const frameCount = asset ? asset.frameCount : 24;
+            entity.winLoseFistIndex = Math.floor(frameCount / 2); // 0-based — 24->12 (frame_013), 48->24 (frame_025)
+            entity.winLoseLastIndex = frameCount - 1;
             ensureWinLoseLoaded(entity.directionKey, type);
         });
     }
@@ -3475,6 +3526,7 @@
             // Win/Lose test-sequence state — see triggerWinLoseSequence()'s
             // own comment for the full state machine this drives.
             winLoseType: null, winLosePhase: null, winLoseFrameAccum: 0, winLoseHoldRemaining: 0,
+            winLoseFistIndex: 0, winLoseLastIndex: 0, // real values set by triggerWinLoseSequence() when a sequence actually starts
         });
         ensureDirectionLoaded(directionKey);
         // Prefetch this direction's own Win/Lose frames right away too —
@@ -3837,15 +3889,18 @@
     // (cfg.winLoseFistHoldDuration/winLoseFinalHoldDuration) instead of a
     // frame count, unaffected by this speed slider — a hold's own
     // duration is real time, not animation playback.
-    const WIN_LOSE_FIST_INDEX = 12; // frame _013 (0-based)
-    const WIN_LOSE_LAST_INDEX = WIN_LOSE_FRAME_COUNT - 1; // frame _024
     function advanceWinLoseSequences(dt) {
         entities.forEach(entity => {
             if (!entity.winLoseType) return;
             const phase = entity.winLosePhase;
             if (phase === 'forward1' || phase === 'forward2') {
                 entity.winLoseFrameAccum += dt * FLICK_BASE_FPS * cfg.winLoseAnimSpeed;
-                const target = phase === 'forward1' ? WIN_LOSE_FIST_INDEX : WIN_LOSE_LAST_INDEX;
+                // Per-entity (set by triggerWinLoseSequence from THIS
+                // direction+type's own real frameCount) — not a shared
+                // global, so a 48-frame asset pauses at its own real
+                // midpoint (24, 0-based) instead of the old fixed 24-frame
+                // assumption's midpoint (12).
+                const target = phase === 'forward1' ? entity.winLoseFistIndex : entity.winLoseLastIndex;
                 if (entity.winLoseFrameAccum >= target) {
                     entity.winLoseFrameAccum = target; // clamp exactly — never overshoot the hold frame
                     if (phase === 'forward1') {
@@ -3860,12 +3915,12 @@
                 entity.winLoseHoldRemaining -= dt;
                 if (entity.winLoseHoldRemaining <= 0) {
                     // frameAccum is left exactly where the hold froze it
-                    // (WIN_LOSE_FIST_INDEX or WIN_LOSE_LAST_INDEX) — the
+                    // (entity.winLoseFistIndex or .winLoseLastIndex) — the
                     // next phase continues from there, not from 0.
                     entity.winLosePhase = phase === 'holdFist' ? 'forward2' : 'reverse';
                 }
             } else if (phase === 'reverse') {
-                // No hold at WIN_LOSE_FIST_INDEX on the way back down —
+                // No hold at winLoseFistIndex on the way back down —
                 // "without any in between frame holding", per explicit
                 // instruction — this phase has no target-check branching
                 // at all, just a continuous decrement to 0.
@@ -4018,7 +4073,7 @@
                 // visibleBoundsForDirection(), since this is a genuinely
                 // different source image, not reused from the normal set.
                 const frames = ensureWinLoseLoaded(entity.directionKey, entity.winLoseType);
-                const idx = Math.max(0, Math.min(WIN_LOSE_LAST_INDEX, Math.floor(entity.winLoseFrameAccum)));
+                const idx = Math.max(0, Math.min(entity.winLoseLastIndex, Math.floor(entity.winLoseFrameAccum)));
                 const img = frames[idx];
                 if (img && img.complete && img.naturalWidth > 0) {
                     drawH = size * (img.naturalHeight / img.naturalWidth);

@@ -980,6 +980,46 @@ confirmed all 48 new-prefix frames loaded with real 200 OK responses
 and both entities rendered correctly anchored (screenshot-confirmed).
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- new feature: "Collision Only While Playing"
+checkbox
+
+"provide me a checkbox. when checked, my flick collision geometry does
+not detect collisions when not playing an aimation sequence"
+
+Added `cfg.collisionOnlyWhilePlaying` (new checkbox in the existing
+"Collision" dev-panel group, default off = unchanged existing
+behavior). When on, an entity's own finger-joint capsules (the 3
+segments used for the ball collision response: position correction,
+velocity reflection, the Flick Intensity kick) stop physically
+colliding with the ball whenever that entity isn't currently playing a
+flick (`!entity.playing`). Implemented as a single added condition on
+the existing collision block's own `if` check
+(`entity.jointWorld && (!cfg.collisionOnlyWhilePlaying || entity.playing)`)
+-- no new state, no new per-tick computation.
+
+Deliberately left the ball-proximity auto-trigger check
+(`ballInFlickTriggerZone`) completely untouched -- it's a separate,
+independent check in the same loop (a sibling statement, not nested
+inside the gated block), so an idle entity keeps detecting the ball
+close enough to start its own flick normally; only the tighter,
+physical capsule collision is what's suppressed while idle.
+
+Verified via manually-driven, fixed-timestep physics ticks rather than
+waiting on the browser pane's own animation loop, which was found to be
+fully suspended (not just throttled) while the pane is hidden --
+temporarily exposed a `window.__testCollision` hook (grep-confirmed
+removed after) exposing `step()`/ball state/cfg directly, then drove
+240 ticks by hand: confirmed a baseline run (checkbox off) produces a
+real deflection kick as the ball passes an idle entity's geometry (vx
+0->108, vy flips from +315 to -440); with the checkbox on, the exact
+same scenario showed ZERO collision response while `entity.playing`
+was false, and the first real kick landed only 3 ticks after
+`entity.playing` had already flipped true via the (unaffected)
+proximity trigger -- confirmed with real logged tick numbers, not a
+visual-only check.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

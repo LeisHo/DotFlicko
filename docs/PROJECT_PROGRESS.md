@@ -215,6 +215,20 @@ new session should be aware they're there before touching `data/FLICK/`.
   visible through a Win click on a fresh page load, and a newly-placed
   entity's own Lose assets were confirmed fetching over the network with
   zero Win/Lose button ever clicked.
+- "Collision Only While Playing" (new Collision-group checkbox, default
+  off/unchanged behavior) — when on, an entity's own finger-joint
+  capsules stop physically colliding with the ball (position
+  correction, bounce, the Flick Intensity kick) whenever that entity
+  isn't currently mid-flick. Deliberately leaves the ball-proximity
+  auto-trigger check untouched (a separate, independent check in the
+  same loop) — an idle entity still needs to detect the ball to ever
+  start playing in the first place. Verified via manually-driven,
+  fixed-timestep physics ticks (bypassing the browser pane's own
+  suspended-while-hidden rAF loop): with the checkbox on, zero collision
+  response occurred while `entity.playing` was false, and the first real
+  collision kick only landed 3 ticks after `entity.playing` had already
+  flipped true via the (unaffected) proximity trigger — confirmed with
+  real logged tick numbers, not just a visual check.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

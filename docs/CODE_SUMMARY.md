@@ -581,3 +581,20 @@ GOTCHAS
   directly-relevant reduction in how often this fallback path is even
   needed -- not a substitute for it, since a fast-enough click after
   placement can still race the network either way.
+- **`cfg.collisionOnlyWhilePlaying` gates ONLY the physical joint-capsule
+  collision block in `updateBallAndCollision()` -- it does NOT touch
+  the ball-proximity auto-trigger (`ballInFlickTriggerZone`).** These
+  are 2 separate checks in the same `entities.forEach` iteration (the
+  trigger check is a sibling statement AFTER the collision block, not
+  nested inside it) -- gating the trigger check too would mean an idle
+  entity could never detect the ball closely enough to ever start
+  playing in the first place, permanently bricking every entity. Real,
+  live-verified behavior (manually-driven fixed-timestep ticks, since
+  the browser pane's own rAF loop is fully suspended while hidden, not
+  just throttled): a ball approaching an idle entity crosses the
+  (unaffected) trigger-zone radius FIRST, flipping `entity.playing`
+  true via the normal auto-trigger, and only several ticks later
+  reaches the tighter physical-capsule collision distance -- so with
+  this checkbox on, an idle entity still starts its own flick normally,
+  it just doesn't get shoved by the ball's geometry until it's actually
+  mid-flick.
