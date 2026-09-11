@@ -929,6 +929,36 @@ Verified:
   fallback.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- re-sync updated Lose (MF) frames for 3
+directions
+
+"i updated the lose frames. update and push"
+
+Compared DICKOCLICKO's own source folders against this project's
+existing copy (diff -rq, all 16 folders checked) rather than assuming
+which ones changed: BEHIND_MF, BEHIND PINKY_MF, and BEHIND THUMB_MF had
+genuinely new content (new filenames/prefixes, not just touched
+timestamps) -- the other 13 folders (5 Lose + all 8 Win) were untouched.
+Still 24 frames each, same prefix-per-direction-differs convention.
+
+Replaced the 3 folders' old-prefix files with the new ones (72 old
+files removed, 72 new files added) and updated WIN_LOSE_ASSETS' own
+`lose.prefix` for behind/behind-pinky/behind-thumb to match. Re-
+computed (not assumed) each of the 3 directions' own visible-content
+anchor against the NEW frame-1 art via the same offline Node+sharp
+technique -- came back numerically identical to the prior values
+(consistent with frame 1 still being the same shared "pre-flick"
+starting pose noted when this asset family was first added; only the
+LATER frames in each sequence were revised).
+
+Verified: syntax-checked; live in the browser (fresh navigation),
+placed a 'behind'-direction entity, clicked Lose, confirmed all 24 new-
+prefix frames load with real 200 OK responses (not the old, now-
+unreferenced prefix) and the entity renders correctly anchored
+(screenshot-confirmed, base dot lines up with the sprite's own foot).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
