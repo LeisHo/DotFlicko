@@ -1,6 +1,6 @@
 {
   "controls": {
-    "sliderEntityScale": 120,
+    "sliderEntityScale": 83,
     "sliderClickAnimSpeed": 11.7,
     "sliderPeakHoldFrames": 30,
     "sliderRotationSmoothing": 1,
@@ -45,9 +45,9 @@
   },
   "layout": {
     "left": 41,
-    "top": 159,
+    "top": 6,
     "width": 344,
-    "height": 237
+    "height": 446
   },
   "devPanelStyle": {
     "titleFontSize": 22,
@@ -247,7 +247,7 @@
   "sectionCollapseState": {
     "desktop:Scenes": true,
     "desktop:Dev Panel": true,
-    "desktop:Entity": true,
+    "desktop:Entity": false,
     "desktop:Background": true,
     "desktop:Ball": false,
     "desktop:Collision": false,
