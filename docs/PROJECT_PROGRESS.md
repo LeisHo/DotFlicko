@@ -157,34 +157,29 @@ new session should be aware they're there before touching `data/FLICK/`.
 - Fixed mobile touch-drag entity placement (missing `touch-action: none`
   on the canvas — see CHANGELOG for the full root cause). Still needs
   the user's own real-hardware retest to confirm.
-- Flick Intensity Multiplier — per explicit request, the placement
-  line's own length (base to aim point) now scales the flick's
-  ball-collision-kick strength: up to 100% of that direction's own idle-
-  frame visible content height (at the current Entity Scale) is 1x,
-  100%-200% ramps linearly to 2x, 200%+ caps at 2x. Recomputed live from
-  each entity's own permanent endX/endY (same pattern as its rotation),
-  so a Stop-mode end-dot drag updates it immediately — confirmed live.
-  The live spawn/drag preview and Stop-mode end-dot adjustment both show
-  a running `intensity X.XXx` readout next to the existing debug status
-  text (gated by the same "Show Angle Debug" checkbox) so the value
-  being set is visible while placing, not just after the fact. **Not
-  independently verified against live ball physics** — confirmed the
-  multiplier's own formula/live-recompute is correct, and confirmed by
-  direct code review that it's multiplied into the existing, already-
-  proven collision-kick line alongside `cfg.collisionIntensity`, but
-  didn't separately stage a live ball-hit to observe the resulting kick
-  amplitude difference.
-- The placement/adjustment line's own VISIBLE length is now also capped
-  at 2 hand-lengths (`MAX_PLACEMENT_LINE_RATIO`), matching the Flick
-  Intensity Multiplier's own saturation point — dragging further just
-  stops the dashed line (and the committed entity's own endX/endY, and
-  a Stop-mode end-dot drag) from extending any further, rather than
-  visually continuing to follow the cursor past where the multiplier
-  had already maxed out. Verified live: the dashed preview line visibly
-  stopped at the capped point on an extreme drag, the committed
-  entity's own end dot landed at that same capped point (not the raw
-  drag target), and the debug intensity readout stayed exactly 2.00x
-  throughout.
+- Flick Speed Multiplier — per explicit request, the placement line's
+  own length (base to aim point) scales each entity's OWN flick
+  animation playback speed, multiplicatively on top of the shared Hand
+  Anim Speed slider: up to 100% of that direction's own idle-frame
+  visible content height (at the current Entity Scale) is 1x, 100%-200%
+  ramps linearly to 2x, 200%+ caps at 2x. (This originally scaled the
+  ball-collision-kick strength instead — "Flick Intensity" — before
+  being explicitly repurposed to animation speed; the collision kick is
+  back to using only the global Collision/Flick Intensity slider, no
+  per-entity variance.) Recomputed live from each entity's own permanent
+  endX/endY (same pattern as its rotation), so a Stop-mode end-dot drag
+  updates it immediately. The live spawn/drag preview and Stop-mode
+  end-dot adjustment both show a running `speed X.XXx` readout next to
+  the existing debug status text. The placement/adjustment line's own
+  VISIBLE length is also capped at 2 hand-lengths
+  (`MAX_PLACEMENT_LINE_RATIO`) — dragging further just stops the dashed
+  line (and the committed entity's own endX/endY, and a Stop-mode
+  end-dot drag) from extending any further. **Verified precisely**: 2
+  entities placed with a short (1x) and a maximally-long (capped 2x)
+  line, both flicks triggered and manually ticked in lockstep — the
+  2x entity's own frame index tracked almost exactly double the 1x
+  entity's at every sampled tick, and it finished its entire play
+  sequence and returned to idle well before the 1x entity did.
 - Win/Lose test buttons — clicking Win or Lose transitions EVERY
   currently-placed entity into that direction's own Win (TU) or Lose (MF)
   24-frame sequence: play 1→13, hold (Win/Lose Fist Hold Duration, new

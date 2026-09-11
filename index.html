@@ -2807,8 +2807,8 @@
     // same source PNGs — NOT a separate scan) is the visible content's own
     // height as a fraction of the full raster height (bottomY - topY,
     // topY being the fractional Y of the first non-transparent row) — this
-    // is what entityFlickIntensityMultiplier() (below) uses as "100% up
-    // the visible image" for the Flick Intensity distance scale, per
+    // is what entityFlickSpeedMultiplier() (below) uses as "100% up
+    // the visible image" for the Flick Speed distance scale, per
     // explicit request. Deliberately the SAME frame-1 art the anchor
     // point already derives from (not the peak/most-extended flick frame),
     // so placing an entity always measures against its own idle silhouette
@@ -2830,7 +2830,7 @@
     // key that isn't in the table above (e.g. a newly-added direction
     // whose bounds haven't been regenerated yet); heightFrac: 1 there
     // means "assume the whole raster is visible" (a safe, no-crash default
-    // for entityFlickIntensityMultiplier(), not a real measurement).
+    // for entityFlickSpeedMultiplier(), not a real measurement).
     function visibleBoundsForDirection(directionKey) {
         return VISIBLE_BOUNDS_BY_DIRECTION[directionKey] || { centerX: 0.5, bottomY: 1, heightFrac: 1 };
     }
@@ -3054,11 +3054,6 @@
                 // idle entity could never receive the proximity trigger
                 // that starts its own flick in the first place.
                 if (entity.jointWorld && (!cfg.collisionOnlyWhilePlaying || entity.playing)) {
-                    // Computed once per entity per tick (not once per
-                    // segment below) — it's the same value for all 3
-                    // segments of a given entity this tick, no reason to
-                    // recompute it 3x.
-                    const flickIntensityMult = entityFlickIntensityMultiplier(entity);
                     const segments = [['knuckle', 'joint1'], ['joint1', 'joint2'], ['joint2', 'tip']];
                     segments.forEach(([aKey, bKey]) => {
                         const a = entity.jointWorld[aKey], b = entity.jointWorld[bKey];
@@ -3117,8 +3112,8 @@
                             ball.vx -= reflectScale * nx;
                             ball.vy -= reflectScale * ny;
                         }
-                        ball.vx += nx * speed * cfg.collisionIntensity * flickIntensityMult;
-                        ball.vy += ny * speed * cfg.collisionIntensity * flickIntensityMult;
+                        ball.vx += nx * speed * cfg.collisionIntensity;
+                        ball.vy += ny * speed * cfg.collisionIntensity;
                     });
                 }
 
@@ -3568,22 +3563,27 @@
         return (lineAngle + (cfg.entityRotationOffsetByDirection[entity.directionKey] || 0)) * Math.PI / 180;
     }
 
-    // Flick Intensity Multiplier — per explicit request: a placement
-    // line's own length (base to aim point) scales the flick's
-    // collision-kick strength. Up to 100% of the direction's own VISIBLE
-    // content height (at the CURRENT Entity Scale) -> 1x, exactly the
-    // baseline/unchanged behavior; 100%-200% of that height -> linear ramp
-    // 1x-2x; 200%+ -> capped at 2x ("the length of the line is capped at
-    // 2X the length of the visible image... at full length, it will be
-    // '2'"). Since the 1x-2x multiplier range maps onto the exact same
-    // 1x-2x distance-ratio range, the mapping is simply the ratio itself,
+    // Flick Speed Multiplier — per explicit request (originally scaled
+    // the flick's own ball-collision-kick strength — "Flick Intensity" —
+    // then explicitly REPURPOSED to scale the flick's own ANIMATION
+    // PLAYBACK SPEED instead: "instead of the intensity, make it control
+    // the hand animation speed"; see step()'s own usage below for where
+    // this actually applies now). A placement line's own length (base to
+    // aim point) still drives it exactly as before — only what it's
+    // multiplied INTO changed, not the formula itself. Up to 100% of the
+    // direction's own VISIBLE content height (at the CURRENT Entity
+    // Scale) -> 1x (baseline, unchanged playback speed); 100%-200% of
+    // that height -> linear ramp 1x-2x; 200%+ -> capped at 2x (also now
+    // the real, visible line-length cap — see clampLineEndpoint() below).
+    // Since the 1x-2x multiplier range maps onto the exact same 1x-2x
+    // distance-ratio range, the mapping is simply the ratio itself,
     // clamped — no separate interpolation formula needed.
     // Takes raw (directionKey, startX, startY, endX, endY) rather than an
     // entity object so the SAME formula can preview a not-yet-placed
     // gesture (render()'s live spawn/drag preview, below) without
-    // fabricating a fake entity — entityFlickIntensityMultiplier() (right
+    // fabricating a fake entity — entityFlickSpeedMultiplier() (right
     // after this) is the thin per-entity wrapper real entities use.
-    // Shared by flickIntensityMultiplierForLine() and clampLineEndpoint()
+    // Shared by flickSpeedMultiplierForLine() and clampLineEndpoint()
     // (below) — one direction's own visible-content height in CURRENT
     // on-screen pixels (tracks Entity Scale live, same as before this was
     // factored out).
@@ -3595,7 +3595,7 @@
         const drawH = size * aspect;
         return drawH * visibleBoundsForDirection(directionKey).heightFrac;
     }
-    function flickIntensityMultiplierForLine(directionKey, startX, startY, endX, endY) {
+    function flickSpeedMultiplierForLine(directionKey, startX, startY, endX, endY) {
         const visibleHeightPx = visibleHeightPxForDirection(directionKey);
         if (visibleHeightPx <= 0) return 1;
         const distPx = Math.hypot(endX - startX, endY - startY);
@@ -3605,7 +3605,7 @@
     // line to 2x the length of the visible part of the animation frame" /
     // "IE 2 hand lengths"): the placement/adjustment line's own real
     // length is capped at MAX_PLACEMENT_LINE_RATIO times the direction's
-    // own visible content height — not just the derived Flick Intensity
+    // own visible content height — not just the derived Flick Speed
     // Multiplier (which already saturated at 2x on its own regardless of
     // raw distance; this is a SEPARATE, additional cap on the actual
     // point itself). Returns a point along the SAME start->end angle,
@@ -3626,8 +3626,8 @@
     // it's needed (same pattern as entityRotationRad() just above), NOT
     // frozen at spawn time, so it also tracks a live Entity Scale change
     // and a Stop-mode end-dot drag, exactly like rotation already does.
-    function entityFlickIntensityMultiplier(entity) {
-        return flickIntensityMultiplierForLine(entity.directionKey, entity.x, entity.y, entity.endX, entity.endY);
+    function entityFlickSpeedMultiplier(entity) {
+        return flickSpeedMultiplierForLine(entity.directionKey, entity.x, entity.y, entity.endX, entity.endY);
     }
 
     // Stop-mode entity-adjustment: hit-tests every entity's own base (x,y)
@@ -3905,7 +3905,16 @@
         // ball/collision/trigger physics.
         entities.forEach(entity => {
             if (entity.playing && entity.playSequenceFrozen) {
-                entity.playFrameAccum += dt * FLICK_BASE_FPS * cfg.clickAnimSpeed;
+                // Flick Speed Multiplier — per explicit request ("instead
+                // of the intensity, make it control the hand animation
+                // speed"): each entity's own placement-line length (1x-2x,
+                // see entityFlickSpeedMultiplier()'s own comment) scales
+                // ITS OWN flick playback rate, multiplicatively on top of
+                // the shared/global Hand Anim Speed slider — not a
+                // replacement for it, the same "additional factor" pattern
+                // the line length used for collision intensity before this
+                // change.
+                entity.playFrameAccum += dt * FLICK_BASE_FPS * cfg.clickAnimSpeed * entityFlickSpeedMultiplier(entity);
                 entity.playFrameIndex = Math.floor(entity.playFrameAccum);
                 const totalLen = playSequenceLength(DIRECTION_FRAME_COUNT, Math.round(cfg.peakHoldFrames));
                 if (entity.playFrameIndex >= totalLen) {
@@ -4324,35 +4333,35 @@
             ctx.font = '14px monospace';
             ctx.textBaseline = 'top';
             const playingCount = entities.filter(en => en.playing).length;
-            // Live Flick Intensity readout while placing/adjusting — lets
-            // the user actually SEE the value this exact gesture is
-            // setting (per the same request that introduced the
-            // multiplier itself), rather than only finding out once a
-            // ball reacts to it later. "placing": recomputes the same
+            // Live Flick Speed readout while placing/adjusting — lets the
+            // user actually SEE the value this exact gesture is setting
+            // (per the same request that introduced the multiplier
+            // itself), rather than only finding out once a placed entity
+            // actually flicks. "placing": recomputes the same
             // angle/direction the live spawn-preview above already draws,
-            // fed to flickIntensityMultiplierForLine() directly (not
+            // fed to flickSpeedMultiplierForLine() directly (not
             // re-deriving a fake entity). "adjusting":
-            // entityFlickIntensityMultiplier() already reads
+            // entityFlickSpeedMultiplier() already reads
             // draggingEntity's own LIVE endX/endY, so no
             // separate live-position handling is needed here.
-            let intensityText = '';
+            let speedText = '';
             if (pendingSpawnStart && hasMouse) {
                 const dist = Math.hypot(mouseX - pendingSpawnStart.x, mouseY - pendingSpawnStart.y);
                 if (dist > 0.0001) {
                     const previewAngle = mouseAngleFromCenter(mouseX, mouseY, pendingSpawnStart.x, pendingSpawnStart.y);
                     const previewDirectionKey = DIRECTIONS[directionIndexForAngle(previewAngle)].key;
-                    const mult = flickIntensityMultiplierForLine(previewDirectionKey, pendingSpawnStart.x, pendingSpawnStart.y, mouseX, mouseY);
-                    intensityText = `  intensity ${mult.toFixed(2)}x`;
+                    const mult = flickSpeedMultiplierForLine(previewDirectionKey, pendingSpawnStart.x, pendingSpawnStart.y, mouseX, mouseY);
+                    speedText = `  speed ${mult.toFixed(2)}x`;
                 }
             } else if (draggingEntity && draggingPoint === 'end') {
-                intensityText = `  intensity ${entityFlickIntensityMultiplier(draggingEntity).toFixed(2)}x`;
+                speedText = `  speed ${entityFlickSpeedMultiplier(draggingEntity).toFixed(2)}x`;
             }
             // y=50, not 12 — the Start/Stop/Delete buttons (.sim-controls)
             // sit at top:10px/left:10px and are tall enough to overlap a
             // y=12 baseline; a real user report ("remove the text behind
             // the start stop delete buttons") confirmed this was actually
             // happening, not just a theoretical overlap.
-            ctx.fillText(`entities: ${entities.length}${playingCount ? `  (${playingCount} playing)` : ''}${pendingSpawnStart ? '  (placing...)' : ''}${draggingEntity ? '  (adjusting...)' : ''}${deleteMode ? '  (delete mode)' : ''}${intensityText}  [${running ? 'running' : 'stopped'}]`, 12, 50);
+            ctx.fillText(`entities: ${entities.length}${playingCount ? `  (${playingCount} playing)` : ''}${pendingSpawnStart ? '  (placing...)' : ''}${draggingEntity ? '  (adjusting...)' : ''}${deleteMode ? '  (delete mode)' : ''}${speedText}  [${running ? 'running' : 'stopped'}]`, 12, 50);
             ctx.restore();
         }
     }

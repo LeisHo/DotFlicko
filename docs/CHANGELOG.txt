@@ -1117,6 +1117,49 @@ pixel-verified due to an imprecise manual dot-grab attempt, but
 structurally identical to the 2 confirmed paths.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- repurpose: placement-line multiplier now
+controls flick animation speed, not ball-collision intensity
+
+"okay instead of the intensity, make it control the hand animation
+speed"
+
+The multiplier a placement line's own length drives (1x at <=1 hand-
+length, ramping to a capped 2x at 2 hand-lengths -- unchanged formula)
+previously scaled the flick's own ball-collision-kick strength ("Flick
+Intensity Multiplier"). Repurposed per explicit request to instead
+scale that SPECIFIC entity's own flick animation PLAYBACK SPEED,
+multiplicatively on top of the existing shared Hand Anim Speed slider
+(not a replacement for it) -- the same "additional factor" pattern the
+line length used for collision intensity before this change.
+
+Renamed throughout for accuracy (logic itself unchanged, purely a
+rename + relocation of where the result gets multiplied in):
+`flickIntensityMultiplierForLine` -> `flickSpeedMultiplierForLine`,
+`entityFlickIntensityMultiplier` -> `entityFlickSpeedMultiplier`. The
+ball-collision-kick site (`ball.vx/vy += nx/ny * speed *
+cfg.collisionIntensity`) is back to using ONLY the global Collision /
+Flick Intensity slider, no per-entity variance. `step()`'s own
+`entity.playFrameAccum` advancement now reads
+`dt * FLICK_BASE_FPS * cfg.clickAnimSpeed * entityFlickSpeedMultiplier(entity)`.
+The debug-text live readout relabeled from `intensity X.XXx` to
+`speed X.XXx`. `clampLineEndpoint()` (the visible-line-length cap added
+last turn) is untouched -- it doesn't reference "intensity" specifically
+and still applies exactly the same way to the same 3 call sites.
+
+Verified precisely via manually-driven, fixed-timestep ticks (same
+approach as the collision-checkbox task, sidestepping the browser
+pane's own suspended-while-hidden rAF loop): placed 2 entities, one
+with a short (1x) line and one with a maximally-long (capped 2x) line,
+triggered both flicks and ticked them in lockstep -- the 2x entity's
+own frame index tracked almost exactly double the 1x entity's at every
+sampled tick (e.g. 23 vs. 11 at tick 5, 46 vs. 23 at tick 10), and the
+2x entity finished its entire play sequence and returned to idle well
+before the 1x entity did. Grep-confirmed zero remaining references to
+the old "flickIntensity"/"FlickIntensity" names anywhere in the file
+after the rename.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
