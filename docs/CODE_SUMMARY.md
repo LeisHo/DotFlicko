@@ -516,6 +516,27 @@ GOTCHAS
   replacement for it -- computed ONCE per entity per tick (before the
   3-segment `forEach`), not once per segment, since it's the same value
   for all 3 of an entity's own capsules that tick.
+- **`clampLineEndpoint(directionKey, startX, startY, rawEndX, rawEndY)` is
+  a SEPARATE, additional cap from the Flick Intensity Multiplier's own
+  saturation -- it constrains the actual point, not just a derived
+  value.** Per explicit request ("cap the actual length of the visible
+  dotted line to 2x the length of the visible part of the animation
+  frame" / "IE 2 hand lengths"), pulls a raw end point in along the SAME
+  angle to at most `MAX_PLACEMENT_LINE_RATIO` (2) times
+  `visibleHeightPxForDirection()` (factored out of
+  `flickIntensityMultiplierForLine()` for this reuse) -- direction/angle
+  is always resolved from the RAW, uncapped point FIRST (bucketing
+  depends only on angle, never distance), and the clamp applied only
+  after, so capping never changes which direction an entity resolves
+  to. Applied at all 3 places an aim/end point is set or displayed, kept
+  in sync deliberately: `spawnEntityFromLine()` (the committed entity's
+  own endX/endY), the Stop-mode end-dot `pointermove` handler
+  (`draggingEntity.endX/endY`), and `render()`'s own live placement
+  preview (the dashed line's drawn endpoint only -- the sprite preview
+  itself was already angle-only, unaffected either way). If a 4th place
+  ever sets an aim/end point, it needs this same clamp too, or that one
+  path would silently let the line exceed the cap while every other path
+  enforces it.
 - **`VISIBLE_BOUNDS_BY_DIRECTION`'s `heightFrac` field measures frame 1's
   (idle) visible content only** -- deliberately the SAME frame the
   `centerX`/`bottomY` anchor fields already derive from, not the

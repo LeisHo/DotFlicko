@@ -1076,6 +1076,47 @@ live-triggered win sequence correctly holds in the holdFist phase at
 frameAccum 24 (frame 25) for behind-thumb.
 
 --------------------------------------------------------------------------------
+
+2026-09-11 (continued) -- cap the placement line's own visible length at
+2 hand-lengths
+
+"okay. also cap the actual length of the visible dotted line to 2x the
+length of the visible part of the animation frame" / "IE 2 hand
+lengths"
+
+The Flick Intensity Multiplier (added earlier this session) already
+saturated its own DERIVED value at 2x regardless of how far the raw
+drag went, but the actual dashed placement line, the committed entity's
+own endX/endY, and a Stop-mode end-dot drag could all still extend
+arbitrarily far past that point. Added a SEPARATE cap on the real point
+itself: `clampLineEndpoint(directionKey, startX, startY, rawEndX,
+rawEndY)` pulls a raw end point in along the same angle to at most
+`MAX_PLACEMENT_LINE_RATIO` (2) times that direction's own visible
+content height (`visibleHeightPxForDirection()`, factored out of the
+existing multiplier formula for this reuse). Direction/angle is always
+resolved from the RAW, uncapped point first (bucketing depends only on
+angle, never distance) -- the clamp never changes which direction an
+entity resolves to, only how far out the stored/drawn point sits.
+
+Applied consistently at all 3 places an aim/end point is set or drawn:
+`spawnEntityFromLine()` (the committed entity's own endX/endY), the
+Stop-mode end-dot `pointermove` handler, and `render()`'s live
+placement preview (the dashed line's own drawn endpoint -- the sprite
+preview itself only ever depended on angle, unaffected either way).
+
+Verified live in the browser: dragged an extreme distance (4000px+)
+during placement and confirmed the dashed preview line visibly stopped
+well short of the cursor rather than following it off-screen; released
+to commit the entity and confirmed its own end dot landed at that exact
+same capped point (not the raw drag target); the debug intensity
+readout stayed exactly 2.00x throughout, confirming the existing
+multiplier's own saturation and the new visual cap agree. The 3rd site
+(Stop-mode end-dot drag) uses the identical shared clampLineEndpoint()
+call already proven correct at the other 2 sites; not separately
+pixel-verified due to an imprecise manual dot-grab attempt, but
+structurally identical to the 2 confirmed paths.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

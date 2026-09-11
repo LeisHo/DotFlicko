@@ -174,6 +174,17 @@ new session should be aware they're there before touching `data/FLICK/`.
   proven collision-kick line alongside `cfg.collisionIntensity`, but
   didn't separately stage a live ball-hit to observe the resulting kick
   amplitude difference.
+- The placement/adjustment line's own VISIBLE length is now also capped
+  at 2 hand-lengths (`MAX_PLACEMENT_LINE_RATIO`), matching the Flick
+  Intensity Multiplier's own saturation point — dragging further just
+  stops the dashed line (and the committed entity's own endX/endY, and
+  a Stop-mode end-dot drag) from extending any further, rather than
+  visually continuing to follow the cursor past where the multiplier
+  had already maxed out. Verified live: the dashed preview line visibly
+  stopped at the capped point on an extreme drag, the committed
+  entity's own end dot landed at that same capped point (not the raw
+  drag target), and the debug intensity readout stayed exactly 2.00x
+  throughout.
 - Win/Lose test buttons — clicking Win or Lose transitions EVERY
   currently-placed entity into that direction's own Win (TU) or Lose (MF)
   24-frame sequence: play 1→13, hold (Win/Lose Fist Hold Duration, new

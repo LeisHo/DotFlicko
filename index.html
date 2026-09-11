@@ -3280,6 +3280,13 @@
                         ensureDirectionLoaded(directionKey);
                     }
                 }
+                // Same MAX_PLACEMENT_LINE_RATIO cap as initial placement,
+                // per explicit request — an already-placed entity's own
+                // end-dot drag shouldn't be able to exceed the same "2
+                // hand lengths" limit a fresh placement can't. Direction
+                // is already resolved above from the RAW mouse position,
+                // so clamping here afterward doesn't affect it.
+                ({ x: draggingEntity.endX, y: draggingEntity.endY } = clampLineEndpoint(draggingEntity.directionKey, draggingEntity.x, draggingEntity.y, draggingEntity.endX, draggingEntity.endY));
             }
         }
     });
@@ -3507,6 +3514,12 @@
         const lineAngle = mouseAngleFromCenter(endX, endY, startX, startY);
         const dirIndex = directionIndexForAngle(lineAngle);
         const directionKey = DIRECTIONS[dirIndex].key;
+        // Cap the actual committed aim point at MAX_PLACEMENT_LINE_RATIO
+        // (2) hand-lengths from the base, per explicit request — angle
+        // (and therefore direction/rotation, already resolved above from
+        // the RAW endX/endY) is unaffected, only how far out the stored
+        // point itself is allowed to sit.
+        ({ x: endX, y: endY } = clampLineEndpoint(directionKey, startX, startY, endX, endY));
         entities.push({
             // endX/endY (the 2nd click that originally set the aim
             // direction) are kept around, not just baked into a frozen
@@ -3570,16 +3583,44 @@
     // gesture (render()'s live spawn/drag preview, below) without
     // fabricating a fake entity — entityFlickIntensityMultiplier() (right
     // after this) is the thin per-entity wrapper real entities use.
-    function flickIntensityMultiplierForLine(directionKey, startX, startY, endX, endY) {
+    // Shared by flickIntensityMultiplierForLine() and clampLineEndpoint()
+    // (below) — one direction's own visible-content height in CURRENT
+    // on-screen pixels (tracks Entity Scale live, same as before this was
+    // factored out).
+    function visibleHeightPxForDirection(directionKey) {
         const vmin = Math.min(window.innerWidth, window.innerHeight);
         const size = vmin * (cfg.entityScale / 100);
         const refImg = ensureDirectionLoaded(directionKey).frames[0];
         const aspect = (refImg && refImg.complete && refImg.naturalWidth > 0) ? (refImg.naturalHeight / refImg.naturalWidth) : 1;
         const drawH = size * aspect;
-        const visibleHeightPx = drawH * visibleBoundsForDirection(directionKey).heightFrac;
+        return drawH * visibleBoundsForDirection(directionKey).heightFrac;
+    }
+    function flickIntensityMultiplierForLine(directionKey, startX, startY, endX, endY) {
+        const visibleHeightPx = visibleHeightPxForDirection(directionKey);
         if (visibleHeightPx <= 0) return 1;
         const distPx = Math.hypot(endX - startX, endY - startY);
         return Math.min(2, Math.max(1, distPx / visibleHeightPx));
+    }
+    // Per explicit request ("cap the actual length of the visible dotted
+    // line to 2x the length of the visible part of the animation frame" /
+    // "IE 2 hand lengths"): the placement/adjustment line's own real
+    // length is capped at MAX_PLACEMENT_LINE_RATIO times the direction's
+    // own visible content height — not just the derived Flick Intensity
+    // Multiplier (which already saturated at 2x on its own regardless of
+    // raw distance; this is a SEPARATE, additional cap on the actual
+    // point itself). Returns a point along the SAME start->end angle,
+    // pulled in to at most that distance — the angle (and therefore
+    // direction bucket/rotation) is never affected, only how far out the
+    // end point is allowed to sit.
+    const MAX_PLACEMENT_LINE_RATIO = 2;
+    function clampLineEndpoint(directionKey, startX, startY, rawEndX, rawEndY) {
+        const maxDist = visibleHeightPxForDirection(directionKey) * MAX_PLACEMENT_LINE_RATIO;
+        if (!(maxDist > 0)) return { x: rawEndX, y: rawEndY };
+        const dx = rawEndX - startX, dy = rawEndY - startY;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= maxDist || dist <= 0.0001) return { x: rawEndX, y: rawEndY };
+        const scale = maxDist / dist;
+        return { x: startX + dx * scale, y: startY + dy * scale };
     }
     // Recomputed live from the entity's own permanent endX/endY every time
     // it's needed (same pattern as entityRotationRad() just above), NOT
@@ -4012,6 +4053,23 @@
         // placed on the 2nd click — translucent (globalAlpha) so it always
         // reads as a preview, never mistaken for an already-placed entity.
         if (pendingSpawnStart && hasMouse) {
+            // Direction/angle resolved from the RAW (uncapped) mouse
+            // position first — bucketing depends only on angle, never on
+            // distance — then lineEnd (below) is pulled in to at most
+            // MAX_PLACEMENT_LINE_RATIO hand-lengths for the actual dashed
+            // line drawn, per explicit request ("cap the actual length of
+            // the visible dotted line... IE 2 hand lengths"). The sprite
+            // preview itself only ever depended on angle/rotation, never
+            // on distance, so it's unaffected either way.
+            const dist = Math.hypot(mouseX - pendingSpawnStart.x, mouseY - pendingSpawnStart.y);
+            let lineEnd = { x: mouseX, y: mouseY };
+            let previewAngle = null, previewDirectionKey = null;
+            if (dist > 0.0001) {
+                previewAngle = mouseAngleFromCenter(mouseX, mouseY, pendingSpawnStart.x, pendingSpawnStart.y);
+                previewDirectionKey = DIRECTIONS[directionIndexForAngle(previewAngle)].key;
+                lineEnd = clampLineEndpoint(previewDirectionKey, pendingSpawnStart.x, pendingSpawnStart.y, mouseX, mouseY);
+            }
+
             ctx.save();
             ctx.strokeStyle = '#ffffff';
             ctx.globalAlpha = 0.5;
@@ -4019,7 +4077,7 @@
             ctx.setLineDash([6, 6]);
             ctx.beginPath();
             ctx.moveTo(pendingSpawnStart.x, pendingSpawnStart.y);
-            ctx.lineTo(mouseX, mouseY);
+            ctx.lineTo(lineEnd.x, lineEnd.y);
             ctx.stroke();
             ctx.restore();
             ctx.save();
@@ -4029,10 +4087,7 @@
             ctx.fill();
             ctx.restore();
 
-            const dist = Math.hypot(mouseX - pendingSpawnStart.x, mouseY - pendingSpawnStart.y);
-            if (dist > 0.0001) {
-                const previewAngle = mouseAngleFromCenter(mouseX, mouseY, pendingSpawnStart.x, pendingSpawnStart.y);
-                const previewDirectionKey = DIRECTIONS[directionIndexForAngle(previewAngle)].key;
+            if (previewDirectionKey) {
                 const previewRotationRad = (previewAngle + (cfg.entityRotationOffsetByDirection[previewDirectionKey] || 0)) * Math.PI / 180;
                 // Live preview is always the idle frame (frame 1) — uses
                 // the same pre-scaled cache the main idle-entity draw uses
