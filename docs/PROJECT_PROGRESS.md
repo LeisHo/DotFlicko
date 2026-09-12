@@ -32,9 +32,11 @@ of DICKOCLICKO's animation-variant sets (Drag, Sciss, Tickle), each
 direction's own first AND last frame (frame numbers verified
 per-category — Sciss actually ends at 045, not 048), multiple points
 per image (click to add, click on a point to remove) — mobile-
-responsive too. Built and verified; **nothing annotated yet**, that's
-the user's own next step (same as flick-skeleton-annotator.html's own
-joint data). "front" originally had no Drag frames at all — fixed at
+responsive too. **Drag category now has real seeded points** (6
+directions x 2 frames, baked into the file as SEED_DRAG_POINTS) —
+Sciss and Tickle still await their own annotation pass, the user's own
+next step (same as flick-skeleton-annotator.html's own joint data).
+"front" originally had no Drag frames at all — fixed at
 the DICKOCLICKO source 2026-09-12. Still open: Drag's `FRONT PINKY
 DRAG`/`FRONT THUMB DRAG` are byte-for-byte identical folders (verified
 via md5sum) — very likely one was copy-pasted as a placeholder and

@@ -1673,6 +1673,20 @@ the documented nested shape; a real 375x812 mobile screenshot plus an
 actual tap confirmed the rebuilt UI still works at that size.
 
 --------------------------------------------------------------------------------
+2026-09-12 (2)
+
+Seeded the Drag Point Annotator with the user's own first real
+annotated points -- baked as SEED_DRAG_POINTS (6 directions x 2 frames,
+Drag category), same SEED-then-localStorage-overrides pattern
+flick-skeleton-annotator.html already uses. Also re-verified (re-copied
+fresh, byte-for-byte identical) Behind Thumb Drag and Behind Pinky
+Drag per a user report -- confirmed no source-file change and no
+mapping/copy error existed on this end.
+
+Verified: a fresh browser with no localStorage loads exactly the
+pasted data; a placed point renders at the expected location.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
