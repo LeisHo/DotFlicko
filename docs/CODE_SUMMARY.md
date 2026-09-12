@@ -664,24 +664,34 @@ GOTCHAS
   true, while the identical setup against a normal (non-Win/Lose)
   entity still triggered correctly at the expected tick -- confirms the
   fix without a regression to the original mechanism.
-- **The ball-vs-finger-capsule collision resolver is SEQUENTIAL, not a
-  simultaneous solve -- a KNOWN, documented scope limitation, not an
-  oversight to "fix" reflexively.** `updateBallAndCollision()` resolves
-  each entity's own 3 segments one at a time within the same tick, each
-  one correcting the ball's position/velocity in place before the next
-  segment's own sweep runs (see that function's own comment: "resolved
-  sequentially, not a rigorous simultaneous solve"). In a normal, sparse
-  placement this is invisible: rarely does the ball touch 2+ capsules in
-  the exact same tick. In a very densely-packed arrangement (e.g. a
-  screenshot showing ~16 entities in a tight ring, reported as "the ball
-  still gets stuck sometimes"), the ball can plausibly be within
-  collision range of SEVERAL capsules simultaneously, and each one's own
-  sequential correction can push it right back toward a neighboring
-  one's own zone -- a real, still-open contributing factor to reported
-  stuck-ball behavior, SEPARATE from and in addition to the
-  `winLoseType`-auto-trigger bug fixed above. Properly solving this
-  would mean a real simultaneous-constraint solve (e.g. iterative
-  impulse resolution across all overlapping capsules in the same tick),
-  a genuinely bigger physics-engine change -- not attempted as part of
-  fixing the auto-trigger bug, since that fix already fully explains and
-  resolves the specific reported mechanism (collision geometry desync).
+- **The ball-vs-finger-capsule collision resolver still resolves
+  VELOCITY sequentially (one capsule at a time, each correcting the
+  ball's velocity in place before the next segment's sweep runs) -- but
+  POSITION is now relaxed iteratively across every capsule hit that
+  tick, fixing a real "ball still gets stuck sometimes" report.**
+  `updateBallAndCollision()` collects every capsule hit that tick into
+  `hitCapsules` as it resolves each one's velocity effect (reflection +
+  the collision kick, applied exactly once per capsule, unchanged).
+  After that loop, a position-only relaxation pass
+  (`POSITION_RELAXATION_ITERATIONS = 4`) re-checks the ball's CURRENT
+  position against every collected capsule each iteration (via a
+  degenerate zero-length "swept" call to `closestPointsBetweenSegments`
+  -- confirmed safe against a zero-length segment via that function's
+  own `a <= EPS` branch) and pushes out remaining overlap, breaking
+  early once clear. This is what a single sequential pass couldn't do:
+  in a densely-packed cluster (e.g. the reported screenshot's ~16
+  entities in a tight ring), correcting the ball's position against one
+  capsule could silently reintroduce overlap with an earlier one that
+  the single pass never rechecked. Mirrors the iterative
+  constraint-relaxation technique this workspace's own DickoClicko
+  project already uses for its Verlet rope-constraint solving. Skipped
+  entirely when `hitCapsules.length <= 1` -- zero cost/risk for the
+  common sparse-placement case. Fixed SEPARATE from and in addition to
+  the `winLoseType`-auto-trigger bug above (both were real, independent
+  contributors to the same reported symptom). Verified via an isolated
+  Node.js simulation reproducing the exact bug (old single-pass
+  approach left the ball at 0.00 distance from -- i.e. fully re-stuck
+  against -- a second capsule after "resolving" the first) and the
+  exact fix (new iterative approach converges to a position clear of
+  both capsules, e.g. distances of 28.28 and 20.00 in one measured run,
+  within 3 iterations). Committed as `32668e4`.

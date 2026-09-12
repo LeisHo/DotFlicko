@@ -68,15 +68,25 @@ actual phone to confirm the real fix**, the same open-verification caveat
 as the mobile-lag item below.
 
 **Note for a new session:** a *different*, concurrent Claude session has
-also been actively developing this same `index.html` (the ball/collision
-physics system and the skeleton-annotation tool) throughout this project's
-history so far — check `git log`/`git status` before assuming this doc, or
-any in-progress understanding of the file, is still current. As of this
-update, that other session also has ~552 uncommitted working-tree changes
-(a rename/re-export of the SCISS/SNAP variant PNG asset sets) sitting
-alongside this session's own commits — untouched by this session's commits
-(verified: staged and committed only this session's own 4 files), but a
-new session should be aware they're there before touching `data/FLICK/`.
+also been actively developing this same `index.html` throughout this
+project's history so far — check `git log`/`git status` before assuming
+this doc, or any in-progress understanding of the file, is still current.
+As of this update, that other session is mid-implementation of a large new
+"Level Maker" feature (dev-mode `?dev=1` level editor: placeable/resizable/
+rotatable wall/floor rectangles, a target piece that triggers Win, ball-
+falls-below-bottom triggering Lose, save/view/rename/delete/overwrite
+levels, a non-dev-mode level dropdown + Play button, a Sandbox mode) —
+its own stated edit regions are `updateBallAndCollision()` (~lines
+2926-3230, for rectangle/ball-to-ball collision and lose-detection),
+`setRunning`/mode-toggle functions and the shared pointer handlers
+(~3260-3946), persistence (~1390-1669) and dev-panel HTML (~340-420) for
+a new `levels` save/load system, and `render()` (~4098-4440). That work is
+uncommitted and interleaved in the same working-tree file; it was left
+completely untouched when this session committed its own isolated
+collision-relaxation fix (`32668e4`), via a scoped `git apply --cached`
+patch rather than a blanket `git add`. A new session should re-check
+`git status`/`git diff` before touching `updateBallAndCollision()` or
+`render()` — the other session may have committed its own work by then.
 
 ## Recently completed
 
@@ -276,14 +286,31 @@ new session should be aware they're there before touching `data/FLICK/`.
   entity's own trigger zone across its entire sequence never flipped
   `entity.playing`, while the same setup against a normal entity still
   triggered correctly — confirms the fix without breaking the original
-  mechanism. **Separately flagged, NOT fixed**: the underlying
-  collision resolver is still sequential (each entity's capsules
-  resolved one at a time per tick, not a simultaneous solve — see
-  `CODE_SUMMARY.md`'s own note on this) — in a very densely-packed
-  arrangement like the reported screenshot, this could still contribute
-  to stuck-feeling behavior independent of the bug just fixed; would
-  need a genuinely bigger physics-engine change to address, not
-  attempted here.
+  mechanism.
+- Fixed the deeper "ball still gets stuck sometimes" cause left open by
+  the fix above: `updateBallAndCollision()`'s capsule-collision loop
+  resolved each hit one at a time, immediately mutating `ball.x/y` — in
+  a densely-packed cluster (the reported screenshot: ~16 entities in a
+  tight ring), correcting against a later capsule could silently
+  reintroduce overlap with an earlier one that the single pass never
+  rechecked. Fixed with an iterative position-only relaxation pass
+  (`POSITION_RELAXATION_ITERATIONS = 4`) that runs after the existing
+  per-capsule loop: it collects every capsule hit that tick
+  (`hitCapsules`), then re-checks the ball's current position against
+  all of them each pass, pushing out remaining overlap and breaking
+  early once clear. Velocity effects (reflection + the collision kick)
+  still apply exactly once per capsule, unchanged — only position gets
+  the extra passes. Mirrors DickoClicko's own iterative Verlet
+  rope-constraint relaxation. Skipped entirely when 0-1 capsules were
+  hit, so the common case is unaffected. **Verified via an isolated
+  Node.js simulation** reproducing the exact bug (old approach left the
+  ball at 0.00 distance from a second capsule after "resolving" the
+  first) and the exact fix (new approach converges to clear of both
+  capsules within 3 iterations). Committed in isolation (`32668e4`) via
+  a scoped `git apply --cached` patch built against HEAD, since another
+  concurrent session's own uncommitted Level Maker feature work was
+  interleaved in the same working-tree `index.html` at the time —
+  confirmed that work was left untouched on disk and unstaged.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

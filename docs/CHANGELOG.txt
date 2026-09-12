@@ -1399,6 +1399,66 @@ same tick), well beyond this fix's scope -- surfaced to the user rather
 than silently left unmentioned or attempted without confirmation.
 
 --------------------------------------------------------------------------------
+2026-09-11 (continued) -- fix: ball getting stuck via iterative
+collision-position relaxation
+
+Follow-up to the auto-trigger fix above, addressing the "separately
+flagged, NOT fixed" open item from that same entry: the underlying
+ball-vs-capsule collision resolver was sequential, resolving each
+capsule hit one at a time within `updateBallAndCollision()`'s
+`entities.forEach` and immediately mutating `ball.x/y` in place before
+the next segment's own sweep ran. In a normal, sparse placement this is
+invisible -- the ball rarely touches 2+ capsules in the same tick. In a
+densely-packed cluster (the same reported screenshot: ~16 entities in a
+tight ring), the ball can be within collision range of several capsules
+at once, and correcting its position against a later one could silently
+reintroduce overlap with an earlier one that the single pass never got
+a chance to recheck.
+
+Fixed with an iterative position-only relaxation pass, run once per
+tick after the existing per-capsule loop: every capsule hit that tick
+is now collected into a `hitCapsules` array as its velocity effect
+(reflection + the collision kick) is applied -- unchanged, still
+exactly once per capsule. A new loop
+(`POSITION_RELAXATION_ITERATIONS = 4`) then re-checks the ball's
+CURRENT position against every collected capsule each pass (a
+degenerate zero-length "swept" call to the existing
+`closestPointsBetweenSegments`, confirmed safe against a zero-length
+segment via that function's own `a <= EPS` branch), pushes out
+whatever overlap remains, and breaks early the moment no overlap is
+left -- most ticks converge in a single pass. Mirrors the iterative
+Verlet rope-constraint relaxation this workspace's own DickoClicko
+project already uses. Skipped entirely when `hitCapsules.length <= 1`,
+so the common sparse case pays zero extra cost.
+
+Verified via an isolated Node.js simulation (extracted the exact
+production collision math verbatim into a standalone script) proving
+both: the exact bug (old single-pass approach left the ball at 0.00
+distance from -- i.e. fully re-stuck against -- a second capsule after
+"resolving" the first) and the exact fix (new iterative approach
+converges within 3 iterations to a position clear of both capsules,
+28.28 and 20.00 units away respectively in the measured run). Syntax-
+checked (`new Function(...)` against the full combined script content)
+both in isolation and against the actual working-tree file once another
+concurrent session's own edits had landed alongside this one.
+
+Isolated and committed via a scoped `git apply --cached` patch rather
+than a blanket `git add index.html`, because another concurrent Claude
+session was simultaneously implementing a large, unrelated "Level
+Maker" feature in the same working-tree `index.html` (confirmed via
+direct coordination -- that session named its own planned edit regions,
+including `updateBallAndCollision()` itself, and asked to be notified
+of any conflicting change first). Built the patch by re-applying this
+fix's exact 3 edits to a clean `git show HEAD:index.html` extraction,
+diffed that against the HEAD extraction to produce an isolated patch,
+verified with `git apply --cached --check` before applying for real,
+and confirmed via `git diff --cached` that only these 3 edits were
+staged -- the actual working-tree file (holding both sessions' changes
+together) was left completely untouched on disk, so the other session's
+own uncommitted work remained intact and unstaged for them to commit
+whenever ready. Pushed as commit 32668e4 (51d9f10..32668e4).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
