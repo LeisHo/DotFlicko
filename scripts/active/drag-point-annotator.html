@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drag Point Annotator</title>
+<!--
+====================================================================
+DRAG POINT ANNOTATOR — internal authoring tool, not part of the
+shipped DOTFLICKO page.
+
+WHAT THIS IS FOR
+DICKOCLICKO gained a new "Drag" animation set (data/FLICK/2TONED/<DIR>
+DRAG/), one folder per direction. This tool shows the LAST frame of
+each direction's Drag sequence and lets you click ONE point on it (a
+single anchor, not a 4-joint skeleton like flick-skeleton-annotator.html
+— there's only 1 still frame per direction here, not a sequence to
+interpolate across). Auto-saves to localStorage; Copy/Download JSON
+export the result.
+
+DATA CAVEATS FOUND WHILE BUILDING THIS (verified via md5sum, not
+assumed) — read before treating this tool's images as final:
+  - "front" has NO Drag frames at all in DICKOCLICKO: both
+    data/FLICK/2TONED/FRONT DRAG/ and .../FRONT DRAG - Copy/ are
+    completely empty (0 files). Only 7 of the 8 directions are
+    annotatable here; "front" shows as disabled below until real
+    frames exist.
+  - FRONT PINKY DRAG and FRONT THUMB DRAG are byte-for-byte IDENTICAL
+    folders in DICKOCLICKO (confirmed across frames 001/024/048, not
+    just the last one) — one was very likely copy-pasted as a
+    placeholder for the other and never replaced with its own real
+    animation. Both are still included here (annotating one doesn't
+    block the other), but their reference images are currently the
+    same picture.
+
+Reference images are LOCAL COPIES (scripts/active/drag-frames/<key>.png),
+copied once from DICKOCLICKO's own data/FLICK/2TONED/<FOLDER> DRAG/
+(last frame, _048.png, of each) — not fetched live from that other
+project, so this tool works standalone and stays correct even if
+DICKOCLICKO's own files change later.
+
+OUTPUT SHAPE
+{
+  "behind": {"x":0.52,"y":0.41},
+  "behind-thumb": {"x":0.49,"y":0.53},
+  ...
+}
+Point coordinates are fractions (0-1) of the image's own width/height,
+same normalized-space convention flick-skeleton-annotator.html uses.
+====================================================================
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+    background: #14161c; color: #e8e8ee; display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    padding: 10px 16px; background: #1c1f28; border-bottom: 1px solid #2c3040;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; color: #7fd4ff; white-space: nowrap; }
+  select, button {
+    background: #232733; color: #e8e8ee; border: 1px solid #3a3f52;
+    border-radius: 4px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  select:hover, button:hover:not(:disabled) { border-color: #7fd4ff; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.primary { background: #2c5a8f; border-color: #3d7ab8; }
+  button.danger { background: #6b2c2c; border-color: #944; }
+  main { flex: 1; display: flex; min-height: 0; }
+  .canvas-pane { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0c0d11; position: relative; }
+  #stage { display: block; border: 1px solid #2c3040; background: #1a1c22; cursor: crosshair; }
+  .side-pane { width: 280px; border-left: 1px solid #2c3040; background: #1c1f28; padding: 12px; overflow-y: auto; }
+  .side-pane h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #8a90a8; margin: 16px 0 8px; }
+  .side-pane h2:first-child { margin-top: 0; }
+  .dir-btns { display: flex; flex-direction: column; gap: 4px; }
+  .dir-btns button { text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .dir-btns button.is-current { outline: 2px solid #ffcf5c; outline-offset: -2px; }
+  .dir-btns button.has-point { background: #2c5a8f; border-color: #7fd4ff; font-weight: bold; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #6bdc7c; flex-shrink: 0; }
+  .warn-box { background: #3a2c1c; border: 1px solid #8a5a2c; border-radius: 4px; padding: 8px; font-size: 11px; color: #e8c890; margin-bottom: 12px; }
+  footer { padding: 10px 16px; background: #1c1f28; border-top: 1px solid #2c3040; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .hint { font-size: 11px; color: #8a90a8; }
+  #status { font-size: 11px; color: #7fd4ff; min-width: 90px; }
+  #copyJsonArea { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DRAG POINT ANNOTATOR</h1>
+  <span class="hint" id="dirLabel">Behind</span>
+</header>
+
+<main>
+  <div class="canvas-pane">
+    <canvas id="stage" width="700" height="700"></canvas>
+  </div>
+  <div class="side-pane">
+    <div class="warn-box">
+      <strong>Data note:</strong> "Front" has no Drag frames in DICKOCLICKO
+      yet (both FRONT DRAG folders are empty) — disabled below.
+      Front Pinky and Front Thumb's own Drag folders are currently
+      byte-identical to each other (verified via md5sum) — likely one
+      was copy-pasted as a placeholder for the other.
+    </div>
+    <h2>Direction (point placed = filled)</h2>
+    <div class="dir-btns" id="dirBtns"></div>
+    <h2>This direction</h2>
+    <button id="clearPointBtn" class="danger" style="width:100%;">Clear Point</button>
+    <p class="hint" style="margin-top:8px;">Click anywhere on the image to place/move this direction's single anchor point.</p>
+  </div>
+</main>
+
+<footer>
+  <button id="copyBtn" class="primary">Copy JSON</button>
+  <button id="downloadBtn" class="primary">Download JSON</button>
+  <label class="hint" style="cursor:pointer;">
+    Load JSON <input id="loadInput" type="file" accept="application/json" style="display:none;">
+  </label>
+  <button id="clearAllBtn" class="danger">Clear All</button>
+  <span id="status"></span>
+  <textarea id="copyJsonArea"></textarea>
+</footer>
+
+<script>
+// ====================================================================
+// Direction -> local reference-image mapping. "front" has no real
+// frame (see the on-page warning + this file's own top comment) --
+// available:false disables it in the UI rather than pointing at a
+// missing/blank image.
+// ====================================================================
+const DIRECTIONS = [
+  { key: 'behind',       label: 'Behind',       file: 'drag-frames/behind.png',       available: true },
+  { key: 'behind-thumb', label: 'Behind Thumb', file: 'drag-frames/behind-thumb.png', available: true },
+  { key: 'side-thumb',   label: 'Side Thumb',   file: 'drag-frames/side-thumb.png',   available: true },
+  { key: 'front-thumb',  label: 'Front Thumb',  file: 'drag-frames/front-thumb.png',  available: true },
+  { key: 'front',        label: 'Front',        file: null,                          available: false },
+  { key: 'front-pinky',  label: 'Front Pinky',  file: 'drag-frames/front-pinky.png',  available: true },
+  { key: 'side-pinky',   label: 'Side Pinky',   file: 'drag-frames/side-pinky.png',   available: true },
+  { key: 'behind-pinky', label: 'Behind Pinky', file: 'drag-frames/behind-pinky.png', available: true },
+];
+
+const LOCALSTORAGE_KEY = 'dragPointAnnotations';
+let data = loadFromStorage() || {};
+let currentDirKey = DIRECTIONS.find(d => d.available).key;
+const imageCache = {};
+
+function loadFromStorage() {
+  try { const raw = localStorage.getItem(LOCALSTORAGE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch (e) { return null; }
+}
+function saveToStorage() {
+  try {
+    localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(data));
+    const status = document.getElementById('status');
+    status.textContent = 'saved';
+    setTimeout(() => { if (status.textContent === 'saved') status.textContent = ''; }, 1000);
+  } catch (e) { /* best effort only */ }
+}
+
+function currentDir() { return DIRECTIONS.find(d => d.key === currentDirKey); }
+function getImage(dirKey) {
+  if (imageCache[dirKey]) return imageCache[dirKey];
+  const dir = DIRECTIONS.find(d => d.key === dirKey);
+  if (!dir.file) return null;
+  const img = new Image();
+  img.src = dir.file;
+  img.onload = () => render();
+  imageCache[dirKey] = img;
+  return img;
+}
+
+// ====================================================================
+// UI setup
+// ====================================================================
+const dirBtnsEl = document.getElementById('dirBtns');
+DIRECTIONS.forEach(d => {
+  const btn = document.createElement('button');
+  btn.textContent = d.label + (d.available ? '' : ' (no frames)');
+  btn.dataset.key = d.key;
+  if (!d.available) btn.disabled = true;
+  btn.addEventListener('click', () => {
+    currentDirKey = d.key;
+    render(); renderDirButtons();
+  });
+  dirBtnsEl.appendChild(btn);
+});
+
+function renderDirButtons() {
+  document.querySelectorAll('#dirBtns button').forEach(btn => {
+    const key = btn.dataset.key;
+    btn.classList.toggle('is-current', key === currentDirKey);
+    btn.classList.toggle('has-point', !!data[key]);
+  });
+  document.getElementById('dirLabel').textContent = currentDir().label;
+}
+
+document.getElementById('clearPointBtn').addEventListener('click', () => {
+  delete data[currentDirKey];
+  saveToStorage(); render(); renderDirButtons();
+});
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (!confirm('Clear ALL placed points across every direction? This cannot be undone.')) return;
+  data = {};
+  saveToStorage(); render(); renderDirButtons();
+});
+
+// ====================================================================
+// Canvas: draw current direction's reference image + its point.
+// ====================================================================
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+const STAGE_SIZE = 700;
+
+let lastDrawGeom = null; // for click hit-mapping
+function render() {
+  const dir = currentDir();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#1a1c22';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!dir.available) {
+    ctx.fillStyle = '#8a90a8';
+    ctx.font = '14px system-ui';
+    ctx.fillText('No Drag frames for "' + dir.label + '" yet — see the warning at right.', 20, 30);
+    lastDrawGeom = null;
+    return;
+  }
+
+  const img = getImage(currentDirKey);
+  if (!img.complete || img.naturalWidth === 0) {
+    ctx.fillStyle = '#8a90a8';
+    ctx.font = '13px system-ui';
+    ctx.fillText('Loading…', 20, 30);
+    lastDrawGeom = null;
+    return;
+  }
+
+  const scale = Math.min(STAGE_SIZE / img.naturalWidth, STAGE_SIZE / img.naturalHeight);
+  const drawW = img.naturalWidth * scale, drawH = img.naturalHeight * scale;
+  const offX = (STAGE_SIZE - drawW) / 2, offY = (STAGE_SIZE - drawH) / 2;
+  ctx.drawImage(img, offX, offY, drawW, drawH);
+  lastDrawGeom = { offX, offY, drawW, drawH };
+
+  const point = data[currentDirKey];
+  if (point) {
+    const x = offX + point.x * drawW, y = offY + point.y * drawH;
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#6bdc7c';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#000';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 14, y); ctx.lineTo(x + 14, y);
+    ctx.moveTo(x, y - 14); ctx.lineTo(x, y + 14);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = point ? '#7fd4ff' : '#8a90a8';
+  ctx.font = 'bold 12px system-ui';
+  ctx.fillText(dir.label + (point ? ' (point placed)' : ' (click to place)'), offX, offY - 8 < 12 ? 14 : offY - 8);
+}
+
+canvas.addEventListener('click', (e) => {
+  if (!lastDrawGeom) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const { offX, offY, drawW, drawH } = lastDrawGeom;
+  if (cx < offX || cx > offX + drawW || cy < offY || cy > offY + drawH) return; // outside image
+  const nx = (cx - offX) / drawW, ny = (cy - offY) / drawH;
+
+  data[currentDirKey] = { x: Math.round(nx * 1000) / 1000, y: Math.round(ny * 1000) / 1000 };
+  saveToStorage();
+  render(); renderDirButtons();
+});
+
+// ====================================================================
+// Export / import
+// ====================================================================
+function exportJson() {
+  const out = {};
+  DIRECTIONS.forEach(d => { if (data[d.key]) out[d.key] = data[d.key]; });
+  return JSON.stringify(out, null, 2);
+}
+document.getElementById('copyBtn').addEventListener('click', () => {
+  const text = exportJson();
+  const status = document.getElementById('status');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      status.textContent = 'copied!'; setTimeout(() => { status.textContent = ''; }, 1500);
+    }).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+});
+function fallbackCopy(text) {
+  const area = document.getElementById('copyJsonArea');
+  area.style.display = 'block';
+  area.value = text;
+  area.select();
+  document.execCommand('copy');
+  area.style.display = 'none';
+}
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const blob = new Blob([exportJson()], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'drag-points.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('loadInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const loaded = JSON.parse(reader.result);
+      DIRECTIONS.forEach(d => { if (loaded[d.key]) data[d.key] = loaded[d.key]; });
+      saveToStorage(); render(); renderDirButtons();
+      document.getElementById('status').textContent = 'loaded';
+    } catch (err) {
+      alert('Could not parse that file as JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ====================================================================
+// Init
+// ====================================================================
+render();
+renderDirButtons();
+</script>
+</body>
+</html>
