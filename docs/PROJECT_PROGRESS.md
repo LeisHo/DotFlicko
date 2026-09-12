@@ -71,22 +71,9 @@ as the mobile-lag item below.
 also been actively developing this same `index.html` throughout this
 project's history so far — check `git log`/`git status` before assuming
 this doc, or any in-progress understanding of the file, is still current.
-As of this update, that other session is mid-implementation of a large new
-"Level Maker" feature (dev-mode `?dev=1` level editor: placeable/resizable/
-rotatable wall/floor rectangles, a target piece that triggers Win, ball-
-falls-below-bottom triggering Lose, save/view/rename/delete/overwrite
-levels, a non-dev-mode level dropdown + Play button, a Sandbox mode) —
-its own stated edit regions are `updateBallAndCollision()` (~lines
-2926-3230, for rectangle/ball-to-ball collision and lose-detection),
-`setRunning`/mode-toggle functions and the shared pointer handlers
-(~3260-3946), persistence (~1390-1669) and dev-panel HTML (~340-420) for
-a new `levels` save/load system, and `render()` (~4098-4440). That work is
-uncommitted and interleaved in the same working-tree file; it was left
-completely untouched when this session committed its own isolated
-collision-relaxation fix (`32668e4`), via a scoped `git apply --cached`
-patch rather than a blanket `git add`. A new session should re-check
-`git status`/`git diff` before touching `updateBallAndCollision()` or
-`render()` — the other session may have committed its own work by then.
+The Level Maker/Sandbox/Play feature mentioned in earlier versions of
+this note is now complete, committed, and pushed (`751f84d`) — see
+"Recently completed" below for what it actually covers.
 
 ## Recently completed
 
@@ -312,6 +299,25 @@ patch rather than a blanket `git add`. A new session should re-check
   interleaved in the same working-tree `index.html` at the time —
   confirmed that work was left untouched on disk and unstaged.
 
+- Level System: Level Maker (dev-only, `?dev=1`-gated — the first
+  feature in this project to gate UI visibility on DEV_MODE, not just
+  the settings-save write path), Sandbox (same placement tools, player-
+  facing, no Target/save UI), and Play (a Levels dropdown + Play button
+  that loads a saved level's geometry read-only). Place/resize/rotate
+  wall-floor and target rectangles via 6 handles (move/4-corner-resize/
+  rotate), same rotation-aware local-space hit-testing `hitTestEntitySprite`
+  already used. New circle-vs-rotated-rect collision reuses the
+  existing finger-capsule reflection formula unchanged. A Target rect
+  is Instant Hit or Settle Duration (per-target choice) and auto-
+  triggers Win; every ball falling off the bottom (no respawn during an
+  active level) auto-triggers Lose once ALL balls are gone. Also added:
+  a Ball-to-Ball Collision toggle (default off) and a per-level Max
+  Hands placement budget with a live "Hands: N/infinity" HUD. Levels
+  persist through the same 3-tier pipeline Scenes already uses. See
+  `CHANGELOG.txt`'s own entry for the full verification list and one
+  real bug caught+fixed during implementation (2 dev-panel labels
+  sharing a row corrupted each other's text).
+
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-
 direction Hand Rotation Offset (the original, non-live version); top-edge
@@ -325,7 +331,12 @@ No specific next action is currently queued by the user. Candidates not
 yet requested: wiring the SCISS/SNAP animation variant sets into direction
 selection (note: another session appears to be actively re-exporting those
 exact assets right now, per the note above — coordinate before starting
-this); touch/mobile input support.
+this); touch/mobile input support; actually authoring real levels with
+the new Level Maker (the system itself is built and verified, but no
+levels have been designed/saved for real players yet); mobile touch
+support specifically for the new rectangle handles (verified via
+synthetic PointerEvents only, same open-verification caveat as the
+mobile items above).
 
 ## Open questions / blockers
 

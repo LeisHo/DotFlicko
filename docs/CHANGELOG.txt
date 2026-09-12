@@ -1459,6 +1459,76 @@ own uncommitted work remained intact and unstaged for them to commit
 whenever ready. Pushed as commit 32668e4 (51d9f10..32668e4).
 
 --------------------------------------------------------------------------------
+2026-09-11 (3)
+
+Added the Level System: Level Maker, Sandbox, and Play mode -- turns
+DOTFLICKO from a free-flick sandbox into an actual puzzle game. Planned
+via EnterPlanMode (2 parallel Explore passes over the existing UI-mode/
+persistence and ball-physics/collision architecture, then a Plan pass),
+approved by the user, then implemented in 6 phases, each independently
+browser-verified before the next.
+
+Added:
+- Level Maker mode (dev-only, gated on DEV_MODE -- the first time
+  DEV_MODE gates UI visibility rather than just the settings-save write
+  path) and a player-facing Sandbox mode, both exposing Rectangle/
+  Target/Ball/Delete/Hand placement tools via the existing setDeleteMode/
+  setBallPlacementMode mutual-exclusion pattern. Target is Level-Maker-
+  only.
+- Rectangle wall/floor/target geometry: place via rubber-band drag,
+  then move/resize (4 corners, opposite corner stays a fixed pivot)/
+  rotate (free, no 8-way bucketing) via 6 handles, hit-tested in the
+  rect's own local unrotated space -- the same rotation-aware transform
+  hitTestEntitySprite already uses.
+- Circle-vs-rotated-rectangle collision (resolveCircleRectCollision),
+  reusing the exact v'=v-(1+e)(v.n)n reflection formula the existing
+  finger-capsule/wall-bounce collision already applies. Added as a
+  separate, clearly-delineated function/call-site specifically
+  coordinated with a concurrent session that was independently
+  restructuring the capsule-collision code in the same function at the
+  same time (their scoped-patch commit 32668e4 and this work coexist
+  without conflict).
+- Win auto-trigger: a Target rect is either Instant Hit (any contact
+  wins immediately) or Settle Duration (must stay in continuous,
+  slow-enough contact for a configured duration) -- a per-target choice,
+  not a global rule.
+- Lose auto-trigger: every spawned ball falling off the bottom, with NO
+  respawn during an active level (levels don't respawn balls, per
+  explicit spec) -- lose fires once ALL balls are gone, not on the
+  first one, so a multi-spawn-point level isn't instantly fatal.
+- Ball-to-ball collision (resolveBallToBallCollision, standard equal-
+  mass elastic collision reusing Ball Bounciness as restitution),
+  toggleable via a new dev-panel checkbox, default OFF.
+- Per-level Max Hands entity-placement budget (a slider + a separate
+  Unlimited Hands checkbox, not a magic slider-value sentinel) with a
+  live "Hands: N" / "Hands: infinity" HUD during player Play, enforced
+  at every entity-spawn completion point.
+- Levels (name -> {rects, ballSpawnPoints, maxHands}) persist through
+  the exact same 3-tier Save Settings pipeline the existing "Scenes"
+  feature already uses -- a new "Levels" dev-panel group (Save/Load/
+  Delete/Rename, modeled directly on renderSceneControls/
+  wireSceneControls) plus a player-facing Levels dropdown + Play button.
+  Entities are deliberately EXCLUDED from a saved level.
+
+Fixed (caught during this feature's own implementation, not a
+pre-existing bug): 2 dev-panel labels sharing one .dev-row silently
+collided onto the same text-override key -- getDevLabelKey() keys a
+label to its row's first [id] control, assuming exactly 1 label per
+row. The Max Hands/Unlimited-Hands row and the Target Mode/Settle-
+Duration row each briefly shared a row with 2 labels, corrupting each
+other's displayed text. Fixed by giving each control its own row,
+matching the established 1-label-per-row convention throughout this
+file's dev panel.
+
+Verified via manually-driven fixed-timestep ticks and synthetic
+PointerEvents dispatched through the real handlers (not direct state
+mutation) for every phase -- see this session's own ETA History entry
+for the full list of specific checks. Regression-checked: plain
+sandbox play with no target keeps today's respawn-forever behavior
+exactly, and the existing finger-capsule collision + position-
+relaxation still fires correctly, both unaffected by this work.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
