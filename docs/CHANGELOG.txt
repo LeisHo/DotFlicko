@@ -1591,6 +1591,30 @@ Infinity Symbol Font Size override; confirmed no test data leaked into
 the committed dev-panel-settings.json.
 
 --------------------------------------------------------------------------------
+2026-09-11 (6)
+
+"UI" dev-panel group follow-up: Browser Padding + global Bold/Capitalize.
+
+Added:
+- 4 new sliders (Browser Top/Bottom/Left/Right Padding) establish a
+  safe-margin inset no sim-controls button group's own outer edge
+  renders closer to that screen edge than, on top of each group's
+  existing fixed 10px margin. Applies to the 4 button groups only --
+  deliberately NOT the Hands HUD (its own Edge Lock system) or the dev
+  panel/DEV button (their own positioning).
+
+Changed:
+- Button Bolding and Capitalization are now global (2 shared
+  checkboxes applying to every button uniformly), not per-button --
+  per explicit correction. The per-button compound dropdown row now
+  holds only Border Color.
+
+Verified: all 4 padding directions produce the exact expected pixel
+shift on each group's own measured outer edge; the 2 global checkboxes
+flip every sampled button (across all 4 groups) identically; the
+per-button row no longer renders Bold/Capitalize sub-rows.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

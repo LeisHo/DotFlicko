@@ -309,9 +309,12 @@ this note is now complete, committed, and pushed (`751f84d`) — see
   positioned live off row 1's own height), Delete/Ball/Rectangle/
   Target/Hand on the top-right, Win/Lose bottom-left — all 4 groups
   share identical styling via a new "UI" dev-panel group (global
-  button font/size/outline/padding/spacing, plus a per-button Border
-  Color/Bold/Capitalize compound row). The DEV button/dev panel and the
-  'd' shortcut are DEV_MODE-gated now; Level Maker's own button
+  button font/size/outline/padding/spacing, global Bold/Capitalize
+  applying to every button uniformly, a per-button Border Color
+  compound row, and 4 Browser Top/Bottom/Left/Right Padding sliders
+  establishing a safe-margin inset for the 4 button groups only — not
+  the Hands HUD or dev panel/DEV button). The DEV button/dev panel and
+  the 'd' shortcut are DEV_MODE-gated now; Level Maker's own button
   deliberately is not. Place/resize/rotate wall-floor and target
   rectangles via 6 handles (move/4-corner-resize/rotate), same
   rotation-aware local-space hit-testing `hitTestEntitySprite` already
