@@ -216,18 +216,23 @@
 
     /* Start/Stop — a regular, always-visible UI control (not part of the
        dev panel), top-left. */
+    /* --browser-pad-top/-bottom/-left/-right (set by applyButtonUiSettings)
+       are a safe-margin inset — no button group's own outer edge renders
+       any closer to that screen edge than this, per explicit request
+       ("no UI can be above this padding"). Added on top of each group's
+       own existing fixed 10px margin, not replacing it. */
     .sim-controls {
         position: fixed;
-        top: 10px;
-        left: 10px;
+        top: calc(10px + var(--browser-pad-top, 0px));
+        left: calc(10px + var(--browser-pad-left, 0px));
         z-index: 100000;
         display: flex;
         gap: var(--btn-gap-h, 6px);
     }
     .sim-controls-right {
         position: fixed;
-        top: 10px;
-        right: 10px;
+        top: calc(10px + var(--browser-pad-top, 0px));
+        right: calc(10px + var(--browser-pad-right, 0px));
         z-index: 100000;
         display: flex;
         gap: var(--btn-gap-h, 6px);
@@ -235,10 +240,13 @@
     .sim-controls-row2 {
         /* top is set live by repositionButtonRow2() (JS), since it
            depends on row 1's own measured height -- this static value is
-           only what renders before that JS runs on first load. */
+           only what renders before that JS runs on first load. Row 1's
+           own top already includes --browser-pad-top (above), so row 2
+           inherits that shift automatically via the live measurement —
+           only left needs the pad-left term repeated here. */
         position: fixed;
         top: 60px;
-        left: 10px;
+        left: calc(10px + var(--browser-pad-left, 0px));
         z-index: 100000;
         display: flex;
         align-items: center;
@@ -246,8 +254,8 @@
     }
     .sim-controls-bottom-left {
         position: fixed;
-        bottom: 10px;
-        left: 10px;
+        bottom: calc(10px + var(--browser-pad-bottom, 0px));
+        left: calc(10px + var(--browser-pad-left, 0px));
         z-index: 100000;
         display: flex;
         gap: var(--btn-gap-h, 6px);
@@ -301,7 +309,8 @@
         padding: var(--btn-padding-v, 6px) var(--btn-padding-h, 14px);
         font-family: var(--btn-font-family, monospace);
         font-size: var(--btn-font-size, 12px);
-        font-weight: bold;
+        font-weight: var(--btn-font-weight, bold);
+        text-transform: var(--btn-text-transform, none);
         cursor: pointer;
         opacity: 0.9;
     }
@@ -1971,11 +1980,26 @@
         // measured height, which itself changes with the padding/font
         // sliders above.
         buttonGapVertical: 8,
-        // Per-button overrides — {borderColor, bold, capitalize} keyed by
-        // DOM id, seeded from BUTTON_DEFAULT_BORDER_COLOR (bold:true/
-        // capitalize:false match this file's pre-existing button
-        // appearance exactly, so nothing changes until actually tuned).
-        buttonStyles: Object.fromEntries(BUTTON_IDS.map(id => [id, { borderColor: BUTTON_DEFAULT_BORDER_COLOR[id], bold: true, capitalize: false }])),
+        // Safe-margin insets — no sim-controls button group's own outer
+        // edge renders any closer to that screen edge than this, per
+        // explicit request ("no UI can be above this padding"). Applied
+        // to the 4 button groups (top-left row 1/row 2, top-right,
+        // bottom-left) — NOT the Hands HUD (its own independent Edge
+        // Lock/offset system) or the dev panel/DEV button (their own
+        // separate positioning), a deliberate scope boundary.
+        browserPadTop: 0,
+        browserPadBottom: 0,
+        browserPadLeft: 0,
+        browserPadRight: 0,
+        // Bold/Capitalize apply to EVERY button uniformly, per explicit
+        // request/correction — only Border Color stays a per-button
+        // override (buttonStyles below). Defaults (bold:true,
+        // capitalize:false) match this file's pre-existing appearance.
+        buttonBold: true,
+        buttonCapitalize: false,
+        // Per-button border-color override, keyed by DOM id, seeded from
+        // BUTTON_DEFAULT_BORDER_COLOR so nothing changes until tuned.
+        buttonStyles: Object.fromEntries(BUTTON_IDS.map(id => [id, { borderColor: BUTTON_DEFAULT_BORDER_COLOR[id] }])),
         // Hands-remaining HUD styling — font-family deliberately always
         // reads --btn-font-family live (per explicit request: "use the
         // same font as the buttons"), not its own separate font setting.
@@ -2151,6 +2175,16 @@
         { group: 'UI', id: 'sliderButtonPaddingHorizontal', type: 'slider', label: 'Button Side Padding (Px):', min: 0, max: 60, step: 1, value: cfg.buttonPaddingHorizontal },
         { group: 'UI', id: 'sliderButtonGapHorizontal', type: 'slider', label: 'Horizontal Spacing Between Buttons (Px):', min: 0, max: 40, step: 1, value: cfg.buttonGapHorizontal },
         { group: 'UI', id: 'sliderButtonGapVertical', type: 'slider', label: 'Vertical Spacing Between Button Rows (Px):', min: 0, max: 60, step: 1, value: cfg.buttonGapVertical },
+        // Bold/Capitalize apply to every button uniformly — see
+        // cfg.buttonBold/buttonCapitalize's own comment.
+        { group: 'UI', id: 'checkboxButtonBold', type: 'checkbox', label: 'Button Bolding', value: cfg.buttonBold },
+        { group: 'UI', id: 'checkboxButtonCapitalize', type: 'checkbox', label: 'Button Capitalization', value: cfg.buttonCapitalize },
+        // Browser safe-margin — no button group renders any closer to
+        // that screen edge than this (see the CSS rules' own comment).
+        { group: 'UI', id: 'sliderBrowserPadTop', type: 'slider', label: 'Browser Top Padding (Px):', min: 0, max: 300, step: 1, value: cfg.browserPadTop },
+        { group: 'UI', id: 'sliderBrowserPadBottom', type: 'slider', label: 'Browser Bottom Padding (Px):', min: 0, max: 300, step: 1, value: cfg.browserPadBottom },
+        { group: 'UI', id: 'sliderBrowserPadLeft', type: 'slider', label: 'Browser Left Padding (Px):', min: 0, max: 300, step: 1, value: cfg.browserPadLeft },
+        { group: 'UI', id: 'sliderBrowserPadRight', type: 'slider', label: 'Browser Right Padding (Px):', min: 0, max: 300, step: 1, value: cfg.browserPadRight },
         // Hands-remaining HUD — font-family is NOT a control here, per
         // explicit request it always tracks Button Font live instead
         // (see applyHandsHudSettings()).
@@ -2260,9 +2294,15 @@
         const bindSliderThenApply = (id, key, applyFn) => { bindSlider(id, key); document.getElementById(id).addEventListener('input', applyFn); };
         const bindCheckboxThenApply = (id, key, applyFn) => { bindCheckbox(id, key); document.getElementById(id).addEventListener('change', applyFn); };
         ['sliderButtonFontSize:buttonFontSize', 'sliderButtonOutlineThickness:buttonOutlineThickness', 'sliderButtonPaddingVertical:buttonPaddingVertical',
-         'sliderButtonPaddingHorizontal:buttonPaddingHorizontal', 'sliderButtonGapHorizontal:buttonGapHorizontal', 'sliderButtonGapVertical:buttonGapVertical'].forEach(pair => {
+         'sliderButtonPaddingHorizontal:buttonPaddingHorizontal', 'sliderButtonGapHorizontal:buttonGapHorizontal', 'sliderButtonGapVertical:buttonGapVertical',
+         'sliderBrowserPadTop:browserPadTop', 'sliderBrowserPadBottom:browserPadBottom',
+         'sliderBrowserPadLeft:browserPadLeft', 'sliderBrowserPadRight:browserPadRight'].forEach(pair => {
             const [id, key] = pair.split(':');
             bindSliderThenApply(id, key, applyButtonUiSettings);
+        });
+        ['checkboxButtonBold:buttonBold', 'checkboxButtonCapitalize:buttonCapitalize'].forEach(pair => {
+            const [id, key] = pair.split(':');
+            bindCheckboxThenApply(id, key, applyButtonUiSettings);
         });
         document.getElementById('selectButtonFontFamily').addEventListener('change', (e) => {
             cfg.buttonFontFamily = e.target.value;
@@ -3056,9 +3096,14 @@
     // button's values are independently persisted via the normal generic
     // capture mechanism (no manual snapshot/restore code needed here,
     // same reasoning as those 2 rows).
+    // Border Color is the only remaining per-button override — Bold and
+    // Capitalize were originally per-button too, but that was explicitly
+    // corrected to apply globally to every button instead (see
+    // cfg.buttonBold/buttonCapitalize and the 2 checkboxes in UI_CONTROLS
+    // below).
     const BUTTON_STYLE_CONTROLS = [
         { id: 'selectButtonStyleTarget' },
-        ...BUTTON_IDS.flatMap(id => [{ id: 'colorBtnBorder_' + id }, { id: 'checkboxBtnBold_' + id }, { id: 'checkboxBtnCapitalize_' + id }]),
+        ...BUTTON_IDS.map(id => ({ id: 'colorBtnBorder_' + id })),
     ];
     const BUTTON_STYLE_DEFAULT_TARGET = 'startBtn';
     function renderButtonStyleRow() {
@@ -3102,44 +3147,6 @@
             colorInput.value = style.borderColor;
             colorRow.appendChild(colorInput);
             content.appendChild(colorRow);
-
-            const boldRow = document.createElement('div');
-            boldRow.className = 'dev-row';
-            boldRow.id = 'rowBtnBold_' + id;
-            if (!isDefaultVisible) boldRow.style.display = 'none';
-            const boldWrap = document.createElement('label');
-            boldWrap.style.cssText = 'display:flex; align-items:center; gap:6px; cursor:pointer;';
-            const boldCheckbox = document.createElement('input');
-            boldCheckbox.type = 'checkbox';
-            boldCheckbox.id = 'checkboxBtnBold_' + id;
-            boldCheckbox.checked = style.bold;
-            boldWrap.appendChild(boldCheckbox);
-            const boldSpan = document.createElement('span');
-            boldSpan.className = 'dev-label';
-            boldSpan.style.minWidth = 'auto';
-            boldSpan.textContent = 'Text Bolding';
-            boldWrap.appendChild(boldSpan);
-            boldRow.appendChild(boldWrap);
-            content.appendChild(boldRow);
-
-            const capRow = document.createElement('div');
-            capRow.className = 'dev-row';
-            capRow.id = 'rowBtnCapitalize_' + id;
-            if (!isDefaultVisible) capRow.style.display = 'none';
-            const capWrap = document.createElement('label');
-            capWrap.style.cssText = 'display:flex; align-items:center; gap:6px; cursor:pointer;';
-            const capCheckbox = document.createElement('input');
-            capCheckbox.type = 'checkbox';
-            capCheckbox.id = 'checkboxBtnCapitalize_' + id;
-            capCheckbox.checked = style.capitalize;
-            capWrap.appendChild(capCheckbox);
-            const capSpan = document.createElement('span');
-            capSpan.className = 'dev-label';
-            capSpan.style.minWidth = 'auto';
-            capSpan.textContent = 'Text Capitalize';
-            capWrap.appendChild(capSpan);
-            capRow.appendChild(capWrap);
-            content.appendChild(capRow);
         });
 
         registerDevControlArray('BUTTON_STYLE_CONTROLS', BUTTON_STYLE_CONTROLS);
@@ -3150,21 +3157,10 @@
                 cfg.buttonStyles[id].borderColor = e.target.value;
                 applyButtonUiSettings();
             });
-            document.getElementById('checkboxBtnBold_' + id).addEventListener('change', (e) => {
-                cfg.buttonStyles[id].bold = e.target.checked;
-                applyButtonUiSettings();
-            });
-            document.getElementById('checkboxBtnCapitalize_' + id).addEventListener('change', (e) => {
-                cfg.buttonStyles[id].capitalize = e.target.checked;
-                applyButtonUiSettings();
-            });
         });
         document.getElementById('selectButtonStyleTarget').addEventListener('change', (e) => {
             BUTTON_IDS.forEach(id => {
-                const isSelected = id === e.target.value;
-                document.getElementById('rowBtnBorder_' + id).style.display = isSelected ? '' : 'none';
-                document.getElementById('rowBtnBold_' + id).style.display = isSelected ? '' : 'none';
-                document.getElementById('rowBtnCapitalize_' + id).style.display = isSelected ? '' : 'none';
+                document.getElementById('rowBtnBorder_' + id).style.display = id === e.target.value ? '' : 'none';
             });
         });
     }
@@ -3183,13 +3179,22 @@
         root.setProperty('--btn-padding-v', cfg.buttonPaddingVertical + 'px');
         root.setProperty('--btn-padding-h', cfg.buttonPaddingHorizontal + 'px');
         root.setProperty('--btn-gap-h', cfg.buttonGapHorizontal + 'px');
+        // Bold/Capitalize are global (every button uniformly) — applied
+        // via CSS vars referenced directly by the shared button rule,
+        // not per-element inline styles (there's nothing per-button left
+        // to vary here, unlike Border Color below).
+        root.setProperty('--btn-font-weight', cfg.buttonBold ? 'bold' : 'normal');
+        root.setProperty('--btn-text-transform', cfg.buttonCapitalize ? 'uppercase' : 'none');
+        // Safe-margin insets — see the CSS rules' own comment.
+        root.setProperty('--browser-pad-top', cfg.browserPadTop + 'px');
+        root.setProperty('--browser-pad-bottom', cfg.browserPadBottom + 'px');
+        root.setProperty('--browser-pad-left', cfg.browserPadLeft + 'px');
+        root.setProperty('--browser-pad-right', cfg.browserPadRight + 'px');
         BUTTON_IDS.forEach(id => {
             const btn = document.getElementById(id);
             const style = cfg.buttonStyles[id];
             if (!btn || !style) return;
             btn.style.borderColor = style.borderColor;
-            btn.style.fontWeight = style.bold ? 'bold' : 'normal';
-            btn.style.textTransform = style.capitalize ? 'uppercase' : 'none';
         });
         repositionButtonRow2();
     }
