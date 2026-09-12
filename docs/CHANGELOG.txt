@@ -1548,6 +1548,49 @@ right edge sits exactly at viewport-width minus the 10px margin) and a
 screenshot at 1280x800 confirming no overlap between the 2 groups.
 
 --------------------------------------------------------------------------------
+2026-09-11 (5)
+
+Level System layout follow-up + a new "UI" dev-panel styling group,
+per explicit request.
+
+Added:
+- Delete/Hand join Ball/Rectangle/Target in the top-right button group;
+  Level Selector+Play moved to a 2nd row under Start/Stop (measured
+  live off row 1's own height); Win/Lose moved to a new bottom-left
+  group. All 4 button groups now share identical computed styling.
+- The DEV button and its 'd' keyboard shortcut are dev-only now
+  (previously neither was gated).
+- Level Maker gets Save (new named level)/Edit (load selected level for
+  editing)/Overwrite (re-save the currently-edited level, no re-prompt)
+  buttons — a top-level-visible entry point into the same levels data
+  the dev-panel Levels group already manages.
+- New "UI" dev-panel group: global button Font/Font Size/Outline
+  Thickness/inner Padding (grows/shrinks the button itself)/button
+  spacing, plus a per-button Border Color/Bold/Capitalize compound row
+  (same architecture as Hand Rotation Offset/Animation X Offset).
+- Hands-remaining HUD now tracks the button font live, plus its own
+  Font Size/Capitalize/Bold/Letter Spacing/Infinity-Symbol-Font-Size,
+  and a full Text Align + Edge Lock system per axis — ported from
+  CLICKO's own applyTextAlignAnchors() mechanism, simplified to px-only
+  offsets and completed with a matching horizontal anchor-transform
+  Clicko's own Start button never needed.
+
+Fixed (caught during implementation): the first pass of UI/Hands-HUD
+sliders and checkboxes had a live re-apply listener but no actual
+cfg-write listener, so every one of them silently no-op'd. Also fixed:
+the boot-time button-row-2 repositioning measured row 1's layout before
+the browser's first paint applied the new CSS custom properties,
+landing on the stale CSS fallback value — fixed with a follow-up
+requestAnimationFrame pass.
+
+Verified end-to-end: getComputedStyle parity across all 4 button
+groups; live-measured row 2 repositioning; per-button style isolation
+(Ball's own changes left Start untouched); the full Save->Overwrite->
+Edit round trip; Hands HUD font-matching; Edge Lock on/off; the
+Infinity Symbol Font Size override; confirmed no test data leaked into
+the committed dev-panel-settings.json.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

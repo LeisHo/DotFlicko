@@ -300,23 +300,33 @@ this note is now complete, committed, and pushed (`751f84d`) — see
   confirmed that work was left untouched on disk and unstaged.
 
 - Level System: Level Maker and Sandbox (same placement tools;
-  Sandbox never shows Target/the save UI), both available to everyone
-  (Level Maker briefly gated its own button on DEV_MODE, reverted per
-  direct request), and Play (a Levels dropdown + Play button that loads
-  a saved level's geometry read-only). Ball/Rectangle/Target live in
-  their own top-right button group, separate from the left-side Start/
-  Stop/Delete/Hand/Sandbox/Level Maker/Win/Lose group (also per direct
-  request). Place/resize/rotate wall-floor and target rectangles via 6
-  handles (move/4-corner-resize/rotate), same rotation-aware local-space
-  hit-testing `hitTestEntitySprite` already used. New circle-vs-rotated-rect
-  collision reuses the
-  existing finger-capsule reflection formula unchanged. A Target rect
-  is Instant Hit or Settle Duration (per-target choice) and auto-
-  triggers Win; every ball falling off the bottom (no respawn during an
-  active level) auto-triggers Lose once ALL balls are gone. Also added:
-  a Ball-to-Ball Collision toggle (default off) and a per-level Max
-  Hands placement budget with a live "Hands: N/infinity" HUD. Levels
-  persist through the same 3-tier pipeline Scenes already uses. See
+  Sandbox never shows Target/the save UI), both available to everyone,
+  and Play (a Levels dropdown + Play button that loads a saved level's
+  geometry read-only). Level Maker also has Save (new named level)/
+  Edit (load selected level)/Overwrite (re-save the current one)
+  buttons. Button layout: Start/Stop/Sandbox/Level Maker on the left
+  (row 1), Level Selector+Play+Save+Edit+Overwrite under them (row 2,
+  positioned live off row 1's own height), Delete/Ball/Rectangle/
+  Target/Hand on the top-right, Win/Lose bottom-left — all 4 groups
+  share identical styling via a new "UI" dev-panel group (global
+  button font/size/outline/padding/spacing, plus a per-button Border
+  Color/Bold/Capitalize compound row). The DEV button/dev panel and the
+  'd' shortcut are DEV_MODE-gated now; Level Maker's own button
+  deliberately is not. Place/resize/rotate wall-floor and target
+  rectangles via 6 handles (move/4-corner-resize/rotate), same
+  rotation-aware local-space hit-testing `hitTestEntitySprite` already
+  used. New circle-vs-rotated-rect collision reuses the existing
+  finger-capsule reflection formula unchanged. A Target rect is
+  Instant Hit or Settle Duration (per-target choice) and auto-triggers
+  Win; every ball falling off the bottom (no respawn during an active
+  level) auto-triggers Lose once ALL balls are gone. Also added: a
+  Ball-to-Ball Collision toggle (default off) and a per-level Max
+  Hands placement budget with a live "Hands: N/infinity" HUD (font
+  always matches the button font; its own Font Size/Bold/Capitalize/
+  Letter Spacing/Infinity-Symbol-Size, plus a full Text Align + Edge
+  Lock system per axis, ported from CLICKO's own text-anchor
+  mechanism). Levels persist through the same 3-tier pipeline Scenes
+  already uses. See
   `CHANGELOG.txt`'s own entry for the full verification list and one
   real bug caught+fixed during implementation (2 dev-panel labels
   sharing a row corrupted each other's text).

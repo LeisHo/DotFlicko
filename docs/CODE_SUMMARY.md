@@ -226,14 +226,27 @@ GOTCHAS
   displayed text with the other's. Give every distinct label its own
   `.dev-row`, even when 2 controls would otherwise fit naturally
   side-by-side.
-- `DEV_MODE` (`?dev=1` or local context) gates ONLY the Tier-2 File
-  System Access write path (`GIT_LOG_WRITABLE`) — never any UI
-  visibility. The Level System's Level Maker button briefly gated its
+- `DEV_MODE` (`?dev=1` or local context) gates the Tier-2 File System
+  Access write path (`GIT_LOG_WRITABLE`) AND the DEV button/dev panel
+  itself (`devToggleBtn.hidden`, the `d` keyboard shortcut) — both
+  per explicit request, added after this same button/panel had
+  historically NOT been DEV_MODE-gated at all. The Level System's
+  Level Maker button is a deliberate EXCEPTION: it briefly gated its
   own visibility on `DEV_MODE` too, but that was explicitly reverted
-  (per direct request: "provide a Level Maker button even for non dev
-  mode") — it's unconditionally visible now, same as every other
-  sim-controls button. Don't reintroduce a `DEV_MODE`-gated UI element
-  without confirming that's actually wanted again.
+  ("provide a Level Maker button even for non dev mode") — it's
+  unconditionally visible, same as every other sim-controls button.
+  Don't assume DEV_MODE's gating scope from one element's behavior;
+  check each one (dev panel = gated, Level Maker = not).
+- Every "UI" and Hands-HUD dev-panel slider/checkbox needs an ACTUAL
+  `bindSlider(id, cfgKey)`/`bindCheckbox(id, cfgKey)` call (or
+  equivalent direct cfg-write) — a real bug hit while building this
+  group wired only a live re-apply listener (e.g. `applyButtonUiSettings`)
+  without ever calling `bindSlider`, so the control's own DOM value
+  changed but `cfg` (and therefore the rendered result) never did.
+  `bindSlider`/`bindCheckbox` write cfg + update the paired readout;
+  they take no re-apply hook by design, so a control needing extra
+  live side-effects wraps them (call `bindSlider(id,key)` THEN add a
+  2nd listener that calls the apply function), never skips them.
 - The dev panel's "Hand Rotation Offset" row is NOT a normal generic
   per-control row -- it's 8 real slider/value DOM element pairs (one per
   direction, `sliderRotOffset_<key>`/`valueRotOffset_<key>`), only the one
