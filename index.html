@@ -224,6 +224,17 @@
         display: flex;
         gap: 6px;
     }
+    .hands-remaining-hud {
+        position: fixed;
+        top: 50px;
+        left: 10px;
+        z-index: 100000;
+        color: #fff;
+        font-family: monospace;
+        font-size: 14px;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        pointer-events: none;
+    }
     .sim-controls button {
         background: #2a3040;
         color: #fff;
@@ -244,6 +255,16 @@
     #deleteBtn.active { background: #ff9500; color: #1b1f2a; }
     #ballBtn { border-color: #ff5c5c; }
     #ballBtn.active { background: #ff5c5c; color: #1b1f2a; }
+    #rectBtn { border-color: #c8c8d2; }
+    #rectBtn.active { background: #c8c8d2; color: #1b1f2a; }
+    #targetBtn { border-color: #ffd64d; }
+    #targetBtn.active { background: #ffd64d; color: #1b1f2a; }
+    #handBtn { border-color: #8ad6ff; }
+    #handBtn.active { background: #8ad6ff; color: #1b1f2a; }
+    #sandboxBtn { border-color: #4dd27a; }
+    #sandboxBtn.active { background: #4dd27a; color: #1b1f2a; }
+    #levelMakerBtn { border-color: #ffd64d; }
+    #levelMakerBtn.active { background: #ffd64d; color: #1b1f2a; }
     #winBtn { border-color: #4dd27a; }
     #loseBtn { border-color: #ff5c5c; }
 
@@ -363,9 +384,17 @@
     <button id="stopBtn">Stop</button>
     <button id="deleteBtn">Delete</button>
     <button id="ballBtn">Ball</button>
+    <button id="rectBtn">Rectangle</button>
+    <button id="targetBtn">Target</button>
+    <button id="handBtn">Hand</button>
+    <button id="sandboxBtn">Sandbox</button>
+    <button id="levelMakerBtn">Level Maker</button>
+    <select id="levelSelect"></select>
+    <button id="playLevelBtn">Play</button>
     <button id="winBtn">Win</button>
     <button id="loseBtn">Lose</button>
 </div>
+<div id="handsRemainingHud" class="hands-remaining-hud" hidden></div>
 
 <button class="dev-toggle-btn" id="devToggleBtn" onclick="devPanel.classList.toggle('hidden')">DEV</button>
 
@@ -405,6 +434,10 @@
             </div>
             <div class="dev-section">
                 <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Scenes">▼ Scenes</div>
+                <div class="dev-section-content"></div>
+            </div>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Levels">▼ Levels</div>
                 <div class="dev-section-content"></div>
             </div>
             <div class="dev-section">
@@ -1395,6 +1428,12 @@
             // scenes already existed in memory, same as it already does
             // for every other piece of state here.
             scenes: JSON.parse(JSON.stringify(scenes)),
+            // Named levels (rects + ball spawn points + Max Hands) — same
+            // "ride the existing pipeline for free" reasoning as scenes
+            // just above. Deliberately does NOT include entities (a level
+            // author's own test-play placements are never part of a saved
+            // level, per explicit spec).
+            levels: JSON.parse(JSON.stringify(levels)),
         };
     }
     function applyFullDevPanelState(state) {
@@ -1417,6 +1456,10 @@
         if (state.scenes) {
             scenes = state.scenes;
             refreshSceneSelectOptions();
+        }
+        if (state.levels) {
+            levels = state.levels;
+            refreshLevelSelectOptions();
         }
     }
     function copyDevPanelSettings() {
@@ -1789,6 +1832,14 @@
         backgroundColor: '#1b1f2a',
         ballGravity: 80, ballRadius: 3, ballColor: '#ff5c5c', ballBounciness: 0.6, ballRespawnRate: 1, ballMaxSpeed: 300,
         ballDrag: 0, ballSpawnSpread: 0,
+        // Off by default — wholly new physics behavior (balls colliding
+        // with each other), so an existing multi-ball setup keeps its
+        // exact current behavior unless explicitly opted in.
+        ballToBallCollisionEnabled: false,
+        // How slow (in %vmin/s, same scale convention as every other
+        // ball-speed quantity) a ball must be moving to count as
+        // "settled" for a Settle-mode target's dwell timer.
+        ballStillnessSpeedThreshold: 3,
         jointThickness: 4, thicknessSmoothing: 0.15, collisionIntensity: 1,
         showCenter: true, showAngleDebug: true, hideCursor: true, showHitbox: false, showJointCollisionLines: false,
         // Debug override — per explicit request ("I can place entities
@@ -1873,6 +1924,11 @@
         // initial vx in [-spread, +spread] instead of always falling
         // perfectly straight down. 0 = off (existing behavior unchanged).
         { group: 'Ball', id: 'sliderBallSpawnSpread', type: 'slider', label: 'Spawn Horizontal Spread (%vmin/s):', min: 0, max: 200, step: 5, value: cfg.ballSpawnSpread },
+        // Off by default — see cfg.ballToBallCollisionEnabled's own
+        // declaration comment (preserves exact current behavior unless
+        // explicitly opted in).
+        { group: 'Ball', id: 'checkboxBallToBallCollision', type: 'checkbox', label: 'Ball-to-Ball Collision', value: cfg.ballToBallCollisionEnabled },
+        { group: 'Ball', id: 'sliderBallStillnessSpeedThreshold', type: 'slider', label: 'Target Settle Stillness Threshold (%vmin/s):', min: 0.1, max: 30, step: 0.1, value: cfg.ballStillnessSpeedThreshold },
     ];
     // Joint collision is capsule-shaped (a thick LINE per segment —
     // knuckle→joint1, joint1→joint2, joint2→tip — not just 4 points),
@@ -1939,6 +1995,7 @@
         renderRotationOffsetRow();
         renderXOffsetRow();
         renderSceneControls();
+        renderLevelControls();
         // Default-checked checkboxes: the row builder never sets .checked,
         // so a true default needs applying explicitly right after render.
         document.getElementById('checkboxShowCenter').checked = cfg.showCenter;
@@ -1968,6 +2025,7 @@
         wireRotationOffsetRow();
         wireXOffsetRow();
         wireSceneControls();
+        wireLevelControls();
         bindSlider('sliderBallGravity', 'ballGravity');
         bindSlider('sliderBallRadius', 'ballRadius');
         bindSlider('sliderBallBounciness', 'ballBounciness');
@@ -1975,6 +2033,7 @@
         bindSlider('sliderBallMaxSpeed', 'ballMaxSpeed');
         bindSlider('sliderBallDrag', 'ballDrag');
         bindSlider('sliderBallSpawnSpread', 'ballSpawnSpread');
+        bindSlider('sliderBallStillnessSpeedThreshold', 'ballStillnessSpeedThreshold');
         bindSlider('sliderJointThickness', 'jointThickness');
         bindSlider('sliderThicknessSmoothing', 'thicknessSmoothing');
         bindSlider('sliderCollisionIntensity', 'collisionIntensity');
@@ -1998,6 +2057,7 @@
         bindCheckbox('checkboxShowJointCollisionLines', 'showJointCollisionLines');
         bindCheckbox('checkboxAllowPlacementWhileRunning', 'allowPlacementWhileRunning');
         bindCheckbox('checkboxCollisionOnlyWhilePlaying', 'collisionOnlyWhilePlaying');
+        bindCheckbox('checkboxBallToBallCollision', 'ballToBallCollisionEnabled');
     }
 
     // ----------------------------------------------------------------
@@ -2414,6 +2474,330 @@
             flashSceneStatus('deleted "' + name + '"');
         });
     }
+    // Levels — the level-author (dev-only) counterpart to Scenes above,
+    // same save/load/delete pattern plus Rename (which Scenes doesn't
+    // have) and the per-level Max Hands budget. A level's saved payload
+    // is {rects, ballSpawnPoints, maxHands} — entities are deliberately
+    // EXCLUDED, per explicit spec ("placed entities in level maker will
+    // not be saved with the levels"), unlike Scenes which saves nothing
+    // BUT entities. Rides the exact same captureFullDevPanelState/
+    // saveDevPanelSettings pipeline as scenes (see those functions).
+    function refreshLevelSelectOptions() {
+        const select = document.getElementById('selectLevelName');
+        if (!select) return;
+        const previousValue = select.value;
+        select.innerHTML = '';
+        const names = Object.keys(levels).sort();
+        if (names.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = ''; opt.textContent = '(no levels saved)';
+            select.appendChild(opt);
+            select.disabled = true;
+        } else {
+            select.disabled = false;
+            names.forEach(name => {
+                const lvl = levels[name];
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name + ' (' + lvl.rects.length + ' rects, ' + lvl.ballSpawnPoints.length + ' balls)';
+                select.appendChild(opt);
+            });
+            if (names.includes(previousValue)) select.value = previousValue;
+        }
+        // The player-facing dropdown (Phase 6) shares this exact same
+        // data — refresh it here too so ONE save/delete keeps both in
+        // sync without a separate notification mechanism.
+        const playerSelect = document.getElementById('levelSelect');
+        if (playerSelect && playerSelect !== select) {
+            const prevPlayerValue = playerSelect.value;
+            playerSelect.innerHTML = '';
+            if (names.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = ''; opt.textContent = '(no levels available)';
+                playerSelect.appendChild(opt);
+                playerSelect.disabled = true;
+            } else {
+                playerSelect.disabled = false;
+                names.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name; opt.textContent = name;
+                    playerSelect.appendChild(opt);
+                });
+                if (names.includes(prevPlayerValue)) playerSelect.value = prevPlayerValue;
+            }
+        }
+    }
+    function renderLevelControls() {
+        const content = findGroupContent('desktop', 'Levels', 'renderLevelControls', 'rowLevels');
+        if (!content) return;
+
+        const saveRow = document.createElement('div');
+        saveRow.className = 'dev-row';
+        const saveLabel = document.createElement('span');
+        saveLabel.className = 'dev-label';
+        saveLabel.textContent = 'Level Name:';
+        saveRow.appendChild(saveLabel);
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'dev-text-input dev-text-input-wide';
+        nameInput.id = 'inputLevelName';
+        nameInput.placeholder = 'e.g. Level 1';
+        saveRow.appendChild(nameInput);
+        const saveBtnWrap = document.createElement('div');
+        saveBtnWrap.className = 'dev-buttons';
+        saveBtnWrap.style.marginBottom = '0';
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'btnSaveLevel';
+        saveBtn.textContent = 'Save Level';
+        saveBtnWrap.appendChild(saveBtn);
+        saveRow.appendChild(saveBtnWrap);
+        content.appendChild(saveRow);
+
+        const loadRow = document.createElement('div');
+        loadRow.className = 'dev-row';
+        const loadLabel = document.createElement('span');
+        loadLabel.className = 'dev-label';
+        loadLabel.textContent = 'Load / Delete:';
+        loadRow.appendChild(loadLabel);
+        const select = document.createElement('select');
+        select.className = 'dev-select';
+        select.id = 'selectLevelName';
+        loadRow.appendChild(select);
+        const loadBtnWrap = document.createElement('div');
+        loadBtnWrap.className = 'dev-buttons';
+        loadBtnWrap.style.marginBottom = '0';
+        const loadBtn = document.createElement('button');
+        loadBtn.id = 'btnLoadLevel';
+        loadBtn.textContent = 'Load Level';
+        loadBtnWrap.appendChild(loadBtn);
+        const deleteBtn2 = document.createElement('button');
+        deleteBtn2.id = 'btnDeleteLevel';
+        deleteBtn2.textContent = 'Delete Level';
+        loadBtnWrap.appendChild(deleteBtn2);
+        loadRow.appendChild(loadBtnWrap);
+        content.appendChild(loadRow);
+
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'dev-value';
+        statusSpan.id = 'levelStatus';
+        statusSpan.style.minWidth = 'auto';
+        loadRow.appendChild(statusSpan);
+
+        // Rename — Scenes doesn't have this, added per explicit spec
+        // ("save, view, rename, delete, and overwrite levels").
+        const renameRow = document.createElement('div');
+        renameRow.className = 'dev-row';
+        const renameLabel = document.createElement('span');
+        renameLabel.className = 'dev-label';
+        renameLabel.textContent = 'Rename Selected To:';
+        renameRow.appendChild(renameLabel);
+        const renameInput = document.createElement('input');
+        renameInput.type = 'text';
+        renameInput.className = 'dev-text-input dev-text-input-wide';
+        renameInput.id = 'inputLevelRename';
+        renameInput.placeholder = 'new name';
+        renameRow.appendChild(renameInput);
+        const renameBtnWrap = document.createElement('div');
+        renameBtnWrap.className = 'dev-buttons';
+        renameBtnWrap.style.marginBottom = '0';
+        const renameBtn = document.createElement('button');
+        renameBtn.id = 'btnRenameLevel';
+        renameBtn.textContent = 'Rename';
+        renameBtnWrap.appendChild(renameBtn);
+        renameRow.appendChild(renameBtnWrap);
+        content.appendChild(renameRow);
+
+        // Max Hands — the per-level entity-placement budget. Unlimited
+        // (its own separate checkbox row, below) nulls currentMaxHands
+        // and disables this slider, rather than overloading a slider
+        // value (e.g. 0) as a magic "no limit" sentinel — a distinct
+        // control per state, per this project's own dev-panel
+        // decomposition convention. Each row here holds exactly ONE
+        // .dev-label, matching this file's own label-override key
+        // convention (getDevLabelKey keys a label to its ROW's first
+        // [id] control — 2 labels sharing a row collide onto the same
+        // key, corrupting each other's text; caught via a real render
+        // check during this feature's own implementation).
+        const maxHandsRow = document.createElement('div');
+        maxHandsRow.className = 'dev-row';
+        const maxHandsLabel = document.createElement('span');
+        maxHandsLabel.className = 'dev-label';
+        maxHandsLabel.textContent = 'Max Hands:';
+        maxHandsRow.appendChild(maxHandsLabel);
+        const maxHandsSlider = document.createElement('input');
+        maxHandsSlider.type = 'range';
+        maxHandsSlider.id = 'sliderMaxHands';
+        maxHandsSlider.min = '1'; maxHandsSlider.max = '20'; maxHandsSlider.step = '1';
+        maxHandsSlider.value = String(currentMaxHands ?? 5);
+        maxHandsRow.appendChild(maxHandsSlider);
+        const maxHandsValue = document.createElement('input');
+        maxHandsValue.type = 'number';
+        maxHandsValue.id = 'inputMaxHandsValue';
+        maxHandsValue.className = 'dev-text-input';
+        maxHandsValue.style.width = '4em';
+        maxHandsValue.value = String(currentMaxHands ?? 5);
+        maxHandsRow.appendChild(maxHandsValue);
+        content.appendChild(maxHandsRow);
+
+        // Unlimited Hands — its own row, built via the exact same
+        // wrapping-<label>+checkbox+span structure buildCheckboxRow()
+        // already uses elsewhere in this file, so it keys/renders
+        // identically to every other checkbox control.
+        const unlimitedRow = document.createElement('div');
+        unlimitedRow.className = 'dev-row';
+        const unlimitedWrap = document.createElement('label');
+        unlimitedWrap.style.cssText = 'display:flex; align-items:center; gap:6px; cursor:pointer;';
+        const unlimitedCheckbox = document.createElement('input');
+        unlimitedCheckbox.type = 'checkbox';
+        unlimitedCheckbox.id = 'checkboxUnlimitedHands';
+        unlimitedCheckbox.checked = currentMaxHands === null;
+        unlimitedWrap.appendChild(unlimitedCheckbox);
+        const unlimitedSpan = document.createElement('span');
+        unlimitedSpan.className = 'dev-label';
+        unlimitedSpan.style.minWidth = 'auto';
+        unlimitedSpan.textContent = 'Unlimited Hands';
+        unlimitedWrap.appendChild(unlimitedSpan);
+        unlimitedRow.appendChild(unlimitedWrap);
+        content.appendChild(unlimitedRow);
+        maxHandsSlider.disabled = unlimitedCheckbox.checked;
+        maxHandsValue.disabled = unlimitedCheckbox.checked;
+
+        // Selected-target editor — only meaningful once a placed Target
+        // rect has been touched by a handle-drag (selectedLevelRect, set
+        // in the pointerdown handler). Directly, live-bound to that
+        // rect's own fields (no separate "apply" step), same convention
+        // every other live dev-panel control in this file already uses.
+        // Mode and Duration get their own separate rows (same 1-label-
+        // per-row reasoning as Max Hands/Unlimited above).
+        const targetModeRow = document.createElement('div');
+        targetModeRow.className = 'dev-row';
+        const targetLabel = document.createElement('span');
+        targetLabel.className = 'dev-label';
+        targetLabel.textContent = 'Selected Target Mode:';
+        targetModeRow.appendChild(targetLabel);
+        const modeSelect = document.createElement('select');
+        modeSelect.className = 'dev-select';
+        modeSelect.id = 'selectTargetMode';
+        ['instant', 'settle'].forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m; opt.textContent = m === 'instant' ? 'Instant Hit' : 'Settle Duration';
+            modeSelect.appendChild(opt);
+        });
+        targetModeRow.appendChild(modeSelect);
+        content.appendChild(targetModeRow);
+
+        const targetDurationRow = document.createElement('div');
+        targetDurationRow.className = 'dev-row';
+        const durationLabel = document.createElement('span');
+        durationLabel.className = 'dev-label';
+        durationLabel.textContent = 'Settle Duration (S):';
+        targetDurationRow.appendChild(durationLabel);
+        const durationInput = document.createElement('input');
+        durationInput.type = 'number';
+        durationInput.id = 'inputTargetSettleDuration';
+        durationInput.className = 'dev-text-input';
+        durationInput.style.width = '4em';
+        durationInput.min = '0.1'; durationInput.step = '0.1';
+        targetDurationRow.appendChild(durationInput);
+        content.appendChild(targetDurationRow);
+
+        refreshLevelSelectOptions();
+    }
+    function wireLevelControls() {
+        const flashLevelStatus = (text) => {
+            const el = document.getElementById('levelStatus');
+            if (!el) return;
+            el.textContent = text;
+            setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 1800);
+        };
+        document.getElementById('btnSaveLevel').addEventListener('click', async () => {
+            const name = document.getElementById('inputLevelName').value.trim();
+            if (!name) { flashLevelStatus('enter a name'); return; }
+            levels[name] = {
+                rects: levelRects.map(r => ({ ...r })),
+                ballSpawnPoints: ballSpawnPoints.map(p => ({ x: p.x, y: p.y })),
+                maxHands: currentMaxHands,
+            };
+            refreshLevelSelectOptions();
+            document.getElementById('selectLevelName').value = name;
+            flashLevelStatus('saving…');
+            await saveDevPanelSettings();
+            flashLevelStatus('saved "' + name + '"');
+        });
+        document.getElementById('btnLoadLevel').addEventListener('click', () => {
+            const name = document.getElementById('selectLevelName').value;
+            if (!name || !levels[name]) return;
+            // Loading REPLACES the current geometry — same "restore
+            // exactly, don't merge" behavior as Scenes' own Load.
+            // Entities are left untouched (a level never contained them).
+            levelRects.length = 0;
+            levelRects.push(...levels[name].rects.map(r => ({ ...r })));
+            ballSpawnPoints.length = 0;
+            ballSpawnPoints.push(...levels[name].ballSpawnPoints.map(p => ({ x: p.x, y: p.y })));
+            currentMaxHands = levels[name].maxHands ?? null;
+            currentLevelName = name;
+            levelAttemptResolved = false;
+            flashLevelStatus('loaded "' + name + '"');
+        });
+        document.getElementById('btnDeleteLevel').addEventListener('click', async () => {
+            const name = document.getElementById('selectLevelName').value;
+            if (!name || !levels[name]) return;
+            delete levels[name];
+            refreshLevelSelectOptions();
+            flashLevelStatus('deleting…');
+            await saveDevPanelSettings();
+            flashLevelStatus('deleted "' + name + '"');
+        });
+        document.getElementById('btnRenameLevel').addEventListener('click', async () => {
+            const oldName = document.getElementById('selectLevelName').value;
+            const newName = document.getElementById('inputLevelRename').value.trim();
+            if (!oldName || !levels[oldName] || !newName) { flashLevelStatus('pick a level + enter a new name'); return; }
+            levels[newName] = levels[oldName];
+            delete levels[oldName];
+            refreshLevelSelectOptions();
+            document.getElementById('selectLevelName').value = newName;
+            document.getElementById('inputLevelRename').value = '';
+            flashLevelStatus('saving…');
+            await saveDevPanelSettings();
+            flashLevelStatus('renamed to "' + newName + '"');
+        });
+        const maxHandsSlider = document.getElementById('sliderMaxHands');
+        const maxHandsValue = document.getElementById('inputMaxHandsValue');
+        const unlimitedCheckbox = document.getElementById('checkboxUnlimitedHands');
+        const syncMaxHandsFromSlider = () => {
+            const v = parseInt(maxHandsSlider.value, 10);
+            maxHandsValue.value = String(v);
+            currentMaxHands = v;
+        };
+        maxHandsSlider.addEventListener('input', syncMaxHandsFromSlider);
+        maxHandsValue.addEventListener('change', () => {
+            // Click-to-type, auto-expanding range — same §12h convention
+            // as every other numeric dev-panel control in this file.
+            let v = parseInt(maxHandsValue.value, 10);
+            if (!Number.isFinite(v)) v = parseInt(maxHandsSlider.value, 10);
+            v = Math.max(1, v);
+            if (v > parseInt(maxHandsSlider.max, 10)) maxHandsSlider.max = String(Math.ceil(v * 1.2));
+            maxHandsSlider.value = String(v);
+            maxHandsValue.value = String(v);
+            currentMaxHands = v;
+        });
+        unlimitedCheckbox.addEventListener('change', () => {
+            maxHandsSlider.disabled = unlimitedCheckbox.checked;
+            maxHandsValue.disabled = unlimitedCheckbox.checked;
+            currentMaxHands = unlimitedCheckbox.checked ? null : parseInt(maxHandsSlider.value, 10);
+        });
+        const modeSelect = document.getElementById('selectTargetMode');
+        const durationInput = document.getElementById('inputTargetSettleDuration');
+        modeSelect.addEventListener('change', () => {
+            if (selectedLevelRect && selectedLevelRect.type === 'target') selectedLevelRect.targetMode = modeSelect.value;
+        });
+        durationInput.addEventListener('change', () => {
+            if (selectedLevelRect && selectedLevelRect.type === 'target') {
+                const v = parseFloat(durationInput.value);
+                if (Number.isFinite(v) && v > 0) selectedLevelRect.settleDuration = v;
+            }
+        });
+    }
 
     // cfg.peakHoldFrames extra frames at the sequence's midpoint (the last
     // A-forward frame, playSequence index N-1, immediately before it
@@ -2637,6 +3021,75 @@
     // i want" is repeated clicks in the SAME activation, not one click
     // per toggle.
     let ballPlacementMode = false;
+    // ----------------------------------------------------------------
+    // Level system — static wall/floor/target rectangles placed by a
+    // level author (Level Maker, dev-only) or freely by a player
+    // (Sandbox), collided against by the ball same as a finger capsule.
+    // levelRects is the CURRENTLY placed/loaded set (edited live);
+    // levels is the persisted name -> {rects, ballSpawnPoints, maxHands}
+    // map, saved/loaded through the exact same pipeline `scenes` already
+    // uses (see captureFullDevPanelState/applyFullDevPanelState).
+    // ----------------------------------------------------------------
+    let levelRects = [];
+    let levels = {};
+    // null | 'sandbox' | 'levelMaker' — which top-level editing context
+    // (if any) is currently active. Delete/Ball/Rectangle/Target/Hand are
+    // only visible/usable while this isn't null (see
+    // refreshSimControlsVisibility()) — a plain player never gets access
+    // to them, only Start/Stop + the Levels dropdown/Play/Sandbox.
+    let levelEditMode = null;
+    let rectPlacementMode = false;
+    let targetPlacementMode = false;
+    // Rect drag state — same shape as draggingEntity/draggingPoint above,
+    // just for levelRects. draggingRectHandle is one of 'move',
+    // 'resize-tl'/'resize-tr'/'resize-bl'/'resize-br', or 'rotate'.
+    let draggingRect = null;
+    let draggingRectHandle = null;
+    // For a resize drag, the WORLD position of the opposite corner is
+    // fixed for the whole gesture (computed once at pointerdown) — stored
+    // here rather than re-derived every pointermove, since the rect's own
+    // w/h/rotation are changing live during the drag.
+    let resizePivotWorld = null;
+    // Rubber-band placement (Rectangle/Target modes) — same role as
+    // pendingSpawnStart, just for the 2nd click-drag-release gesture that
+    // defines a rect's initial bounds.
+    let pendingRectStart = null;
+    // Last rect a handle-drag touched — drives the dev-panel's per-rect
+    // Mode/Settle-Duration editor (only meaningful for a 'target' rect).
+    let selectedLevelRect = null;
+    // Name of the level currently loaded via the player-facing Play
+    // button (or Level Maker's own Load) — null in freeform Sandbox play
+    // with no level loaded.
+    let currentLevelName = null;
+    // Per-level placement budget — null means unlimited (rendered as the
+    // infinity symbol in the Hands-remaining HUD). Set by Max Hands/
+    // Unlimited-Hands dev-panel controls in Level Maker, carried through
+    // Save/Load like any other level field.
+    let currentMaxHands = null;
+    // Guards the win/lose auto-triggers to firing at most once per
+    // Start->result cycle — reset to false every time Start runs
+    // (setRunning(true)), so a fresh attempt re-arms detection.
+    let levelAttemptResolved = false;
+    // Single shared signal for "is a level (not just freeform sandbox
+    // walls) currently active" — reused by BOTH the no-auto-respawn
+    // logic and the lose-once-every-ball-is-gone check, so the 2 stay
+    // consistent by construction rather than by convention. Sandbox play
+    // with only solid rects (no target) is deliberately NOT "a level" —
+    // it keeps today's respawn-forever behavior untouched.
+    function isLevelActive() {
+        return levelRects.some(r => r.type === 'target');
+    }
+    // Max Hands enforcement — a single shared check reused at every
+    // entity-spawn completion point (both the 2-click desktop gesture
+    // and the mobile tap-drag gesture funnel through this). null means
+    // unlimited (see currentMaxHands's own declaration comment above).
+    function canPlaceAnotherHand() {
+        return currentMaxHands === null || entities.length < currentMaxHands;
+    }
+    // Floor on a placed rect's own width/height — prevents a near-zero-
+    // distance rubber-band release from producing a degenerate,
+    // practically-invisible (and unhittable) rectangle.
+    const RECT_MIN_SIZE = 20;
     // wasInFlickTriggerZone (the auto-trigger's rising-edge state) moved
     // onto each entity object itself — see the "Entities" section below —
     // since every spawned entity now needs its own independent trigger
@@ -2668,9 +3121,13 @@
     // exactly 1 generator, the original default behavior; N placed points
     // -> N independent generators, one per point.
     function rebuildBallGenerators() {
+        // exhausted: false always here — every fresh Start is a brand
+        // new attempt, so a level's no-respawn-after-falling rule
+        // (isLevelActive() branch in updateBallAndCollision) starts clear
+        // for every generator regardless of how the previous attempt ended.
         ballGenerators = ballSpawnPoints.length === 0
-            ? [{ spawnX: null, spawnY: null, isDefault: true, ball: null, respawnCountdown: 0 }]
-            : ballSpawnPoints.map(p => ({ spawnX: p.x, spawnY: p.y, isDefault: false, ball: null, respawnCountdown: 0 }));
+            ? [{ spawnX: null, spawnY: null, isDefault: true, ball: null, respawnCountdown: 0, exhausted: false }]
+            : ballSpawnPoints.map(p => ({ spawnX: p.x, spawnY: p.y, isDefault: false, ball: null, respawnCountdown: 0, exhausted: false }));
     }
 
     // Nearest point on segment AB to point P, plus t (0=A, 1=B) — needed
@@ -2923,6 +3380,94 @@
     // which is the only discontinuity a fixed-direction entity can have).
     let prevEntityScale = null;
 
+    // ----------------------------------------------------------------
+    // Level-system collision — circle-vs-rotated-rectangle (wall/floor/
+    // target geometry) and ball-vs-ball. Deliberately kept as 2
+    // standalone functions, called from clearly-delineated blocks inside
+    // updateBallAndCollision() below (not interleaved with the existing
+    // finger-capsule collision code), per explicit coordination with a
+    // concurrent session that was independently restructuring that
+    // capsule-collision block at the same time.
+    // ----------------------------------------------------------------
+
+    // Discrete, per-tick (not swept) — matches this file's existing
+    // canvas-edge-bounce precedent, not the finger capsule's swept-
+    // segment math (which specifically exists for thin MOVING fingers a
+    // fast ball could tunnel through between ticks; a static rect + the
+    // existing ball-speed cap doesn't need that). Returns true if a
+    // collision was resolved (used by the Phase-4 target-contact logic
+    // to know whether this tick counts as "touching").
+    function resolveCircleRectCollision(ball, rect, radiusPx) {
+        const cos = Math.cos(-rect.rotation), sin = Math.sin(-rect.rotation);
+        const dx = ball.x - rect.x, dy = ball.y - rect.y;
+        const localX = dx * cos - dy * sin, localY = dx * sin + dy * cos;
+        const halfW = rect.w / 2, halfH = rect.h / 2;
+        const clampedX = Math.max(-halfW, Math.min(halfW, localX));
+        const clampedY = Math.max(-halfH, Math.min(halfH, localY));
+        let localNX, localNY, overlap;
+        if (clampedX === localX && clampedY === localY) {
+            // Ball center is INSIDE the box (can happen at high speed
+            // combined with a small rect) — push out along whichever
+            // face is nearest, rather than leaving it stuck with no
+            // resolvable normal (the clamped-point branch below would
+            // otherwise divide by a near-zero distance).
+            const distToRight = halfW - localX, distToLeft = localX + halfW;
+            const distToBottom = halfH - localY, distToTop = localY + halfH;
+            const minDist = Math.min(distToRight, distToLeft, distToBottom, distToTop);
+            if (minDist === distToRight) { localNX = 1; localNY = 0; overlap = radiusPx + distToRight; }
+            else if (minDist === distToLeft) { localNX = -1; localNY = 0; overlap = radiusPx + distToLeft; }
+            else if (minDist === distToBottom) { localNX = 0; localNY = 1; overlap = radiusPx + distToBottom; }
+            else { localNX = 0; localNY = -1; overlap = radiusPx + distToTop; }
+        } else {
+            const ldx = localX - clampedX, ldy = localY - clampedY;
+            const distSq = ldx * ldx + ldy * ldy;
+            if (distSq >= radiusPx * radiusPx) return false;
+            const dist = Math.sqrt(distSq);
+            localNX = dist > 0.0001 ? ldx / dist : 0;
+            localNY = dist > 0.0001 ? ldy / dist : -1;
+            overlap = radiusPx - dist;
+        }
+        // Rotate the local-space normal back to world space, then reuse
+        // the EXACT SAME reflection formula the finger-capsule collision
+        // (and the canvas-edge bounce) already apply — v' = v - (1+e)(v·n)n.
+        const wcos = Math.cos(rect.rotation), wsin = Math.sin(rect.rotation);
+        const nx = localNX * wcos - localNY * wsin, ny = localNX * wsin + localNY * wcos;
+        ball.x += nx * overlap;
+        ball.y += ny * overlap;
+        const incomingDotNormal = ball.vx * nx + ball.vy * ny;
+        if (incomingDotNormal < 0) {
+            const reflectScale = (1 + cfg.ballBounciness) * incomingDotNormal;
+            ball.vx -= reflectScale * nx;
+            ball.vy -= reflectScale * ny;
+        }
+        return true;
+    }
+
+    // Standard equal-mass circle-circle elastic collision. Reuses
+    // cfg.ballBounciness as the restitution constant (same "how much of
+    // the ball's own energy survives a bounce" concept the wall/rect/
+    // capsule collisions all already use) rather than inventing a new
+    // slider. Toggled off by default (cfg.ballToBallCollisionEnabled) —
+    // wholly new physics behavior, so existing multi-ball setups keep
+    // their exact current behavior (balls pass through each other)
+    // unless explicitly opted in.
+    function resolveBallToBallCollision(ballA, ballB, radiusPx) {
+        const dx = ballB.x - ballA.x, dy = ballB.y - ballA.y;
+        const dist = Math.hypot(dx, dy);
+        const minDist = radiusPx * 2;
+        if (dist >= minDist || dist < 0.0001) return;
+        const nx = dx / dist, ny = dy / dist;
+        const overlap = minDist - dist;
+        ballA.x -= nx * overlap / 2; ballA.y -= ny * overlap / 2;
+        ballB.x += nx * overlap / 2; ballB.y += ny * overlap / 2;
+        const rvx = ballB.vx - ballA.vx, rvy = ballB.vy - ballA.vy;
+        const velAlongNormal = rvx * nx + rvy * ny;
+        if (velAlongNormal > 0) return; // already separating
+        const impulse = -(1 + cfg.ballBounciness) * velAlongNormal / 2; // equal mass, split the impulse
+        ballA.vx -= impulse * nx; ballA.vy -= impulse * ny;
+        ballB.vx += impulse * nx; ballB.vy += impulse * ny;
+    }
+
     function updateBallAndCollision(dt) {
         const w = window.innerWidth, h = window.innerHeight;
         const vmin = Math.min(w, h);
@@ -2999,7 +3544,13 @@
         // shared timer — each spawn point respawns on its own schedule.
         if (running) {
             ballGenerators.forEach(gen => {
-                if (!gen.ball) {
+                // gen.exhausted (set below, at the bottom-edge-exit check)
+                // permanently skips respawn for the rest of THIS attempt
+                // during a level — a fresh Start (rebuildBallGenerators)
+                // resets it, giving every generator exactly one ball per
+                // attempt, per explicit spec ("in level mode, balls do not
+                // respawn").
+                if (!gen.ball && !gen.exhausted) {
                     gen.respawnCountdown -= dt;
                     if (gen.respawnCountdown <= 0) gen.ball = spawnBallAt(gen.spawnX, gen.spawnY, gen.isDefault);
                 }
@@ -3047,6 +3598,46 @@
             if (ball.x < radiusPx) { ball.x = radiusPx; ball.vx = -ball.vx * cfg.ballBounciness; }
             else if (ball.x > w - radiusPx) { ball.x = w - radiusPx; ball.vx = -ball.vx * cfg.ballBounciness; }
             if (ball.hasEnteredFrame && ball.y < radiusPx) { ball.y = radiusPx; ball.vy = -ball.vy * cfg.ballBounciness; }
+
+            // ------------------------------------------------------------
+            // Level-system rectangles (wall/floor = 'solid', win-condition
+            // = 'target') — a separate, self-contained block, deliberately
+            // NOT interleaved with the finger-capsule collision code right
+            // below (added independently by a concurrent session around
+            // the same time). Both solid and target rects are physically
+            // collidable (a "target floor" is still something the ball
+            // lands ON), so every rect always gets resolveCircleRectCollision
+            // regardless of type; target rects ALSO get win-condition
+            // bookkeeping on top when contact occurs.
+            // ------------------------------------------------------------
+            levelRects.forEach(rect => {
+                const didCollide = resolveCircleRectCollision(ball, rect, radiusPx);
+                if (rect.type !== 'target' || levelAttemptResolved) return;
+                if (didCollide) {
+                    if (rect.targetMode === 'instant') {
+                        triggerLevelWin();
+                    } else {
+                        // 'settle' — win only once the ball has stayed in
+                        // CONTINUOUS contact with this exact target AND
+                        // below the stillness threshold for the
+                        // configured duration; touching-but-still-moving-
+                        // fast doesn't accumulate dwell time.
+                        const speed = Math.hypot(ball.vx, ball.vy);
+                        const stillnessPx = vmin * (cfg.ballStillnessSpeedThreshold / 100);
+                        if (!ball.targetContact || ball.targetContact.rect !== rect) ball.targetContact = { rect, dwell: 0 };
+                        if (speed < stillnessPx) {
+                            ball.targetContact.dwell += dt;
+                            if (ball.targetContact.dwell >= rect.settleDuration) triggerLevelWin();
+                        } else {
+                            ball.targetContact.dwell = 0;
+                        }
+                    }
+                } else if (ball.targetContact && ball.targetContact.rect === rect) {
+                    // Contact broken — dwell resets rather than pausing,
+                    // per "continuous contact" in the settle-mode spec.
+                    ball.targetContact.dwell = 0;
+                }
+            });
 
             // Joint-segment collision (3 capsules per entity) + the
             // proximity auto-trigger, once per spawned entity — this ball
@@ -3252,15 +3843,40 @@
                 ball.vy *= scale;
             }
 
-            // Fully below the bottom edge — gone, start THIS generator's
-            // own respawn timer (it'll spawn again at its own spawnX/Y —
-            // or the shared default spot, if this is the default
-            // generator — once the countdown above elapses).
+            // Fully below the bottom edge — gone. During a level
+            // (isLevelActive() — any target rect placed), this generator
+            // does NOT get a fresh respawn timer: per explicit spec,
+            // balls don't respawn during a level, so "every ball gone"
+            // is reachable and means something. Sandbox/free-flick play
+            // with no target keeps today's respawn-forever behavior
+            // exactly as it was before this feature (gen.exhausted stays
+            // false and is never checked outside isLevelActive()).
             if (ball.y - radiusPx > h) {
                 gen.ball = null;
-                gen.respawnCountdown = cfg.ballRespawnRate;
+                if (isLevelActive()) {
+                    gen.exhausted = true;
+                    if (!levelAttemptResolved && ballGenerators.every(g => !g.ball)) triggerLevelLose();
+                } else {
+                    gen.respawnCountdown = cfg.ballRespawnRate;
+                }
             }
         });
+
+        // Ball-to-ball collision — a separate top-level pass over every
+        // unique pair of currently-active balls (needs pairs ACROSS
+        // generators, so it can't live inside the single-ball forEach
+        // above). Toggleable, default off — see resolveBallToBallCollision's
+        // own comment. Sequential (not simultaneous) resolution, same
+        // approach this file's existing collision code already uses.
+        if (cfg.ballToBallCollisionEnabled) {
+            const radiusPx = vmin * (cfg.ballRadius / 100);
+            const activeBalls = ballGenerators.map(gen => gen.ball).filter(Boolean);
+            for (let i = 0; i < activeBalls.length; i++) {
+                for (let j = i + 1; j < activeBalls.length; j++) {
+                    resolveBallToBallCollision(activeBalls[i], activeBalls[j], radiusPx);
+                }
+            }
+        }
 
         // Rising-edge trigger, once per entity, using the OR across every
         // ball active this tick — same semantics as the original single-
@@ -3417,11 +4033,67 @@
                 if (movingIsBase) { draggingEntity.x = clamped.x; draggingEntity.y = clamped.y; }
                 else { draggingEntity.endX = clamped.x; draggingEntity.endY = clamped.y; }
             }
+        } else if (draggingRect) {
+            const rect = draggingRect;
+            if (draggingRectHandle === 'move') {
+                // Center handle — tracks the cursor 1:1, same feel as the
+                // entity's own yellow mid-dot.
+                rect.x = mouseX;
+                rect.y = mouseY;
+            } else if (draggingRectHandle === 'rotate') {
+                // Free rotation about the rect's own center — no 8-way
+                // bucketing (unlike entity direction), since a wall/
+                // floor/target's tilt is purely geometric.
+                rect.rotation = mouseAngleFromCenter(mouseX, mouseY, rect.x, rect.y) * Math.PI / 180;
+            } else if (draggingRectHandle && draggingRectHandle.startsWith('resize-') && resizePivotWorld) {
+                // Rotation is held fixed during a resize. Transform the
+                // mouse position into the rect's own (unrotated) local
+                // frame relative to the FIXED opposite-corner pivot —
+                // w/h/center all derive from that same local-space
+                // vector regardless of the rect's current tilt.
+                const dx = mouseX - resizePivotWorld.x, dy = mouseY - resizePivotWorld.y;
+                const cos = Math.cos(-rect.rotation), sin = Math.sin(-rect.rotation);
+                const localDx = dx * cos - dy * sin, localDy = dx * sin + dy * cos;
+                const signX = localDx < 0 ? -1 : 1, signY = localDy < 0 ? -1 : 1;
+                rect.w = Math.max(RECT_MIN_SIZE, Math.abs(localDx));
+                rect.h = Math.max(RECT_MIN_SIZE, Math.abs(localDy));
+                // New center is the midpoint between the fixed pivot and
+                // the (now-clamped) dragged corner, in local space
+                // relative to the pivot, rotated back to world space.
+                const localCenterX = signX * rect.w / 2, localCenterY = signY * rect.h / 2;
+                const wcos = Math.cos(rect.rotation), wsin = Math.sin(rect.rotation);
+                rect.x = resizePivotWorld.x + localCenterX * wcos - localCenterY * wsin;
+                rect.y = resizePivotWorld.y + localCenterX * wsin + localCenterY * wcos;
+            }
         }
     });
     window.addEventListener('pointerup', (e) => {
         draggingEntity = null;
         draggingPoint = null;
+        draggingRect = null;
+        draggingRectHandle = null;
+        resizePivotWorld = null;
+
+        // Rectangle/Target rubber-band completion — the release point is
+        // the opposite corner from pendingRectStart (set on pointerdown
+        // above). Center is always the midpoint of the 2 points regardless
+        // of clamping, so a tiny/zero-distance release (a plain click, no
+        // real drag) grows symmetrically to RECT_MIN_SIZE around where the
+        // user actually clicked, rather than producing a degenerate
+        // invisible rect or one that jumps away from the click point.
+        if (pendingRectStart) {
+            const x0 = pendingRectStart.x, y0 = pendingRectStart.y;
+            const x1 = e.clientX, y1 = e.clientY;
+            levelRects.push({
+                x: (x0 + x1) / 2, y: (y0 + y1) / 2,
+                w: Math.max(RECT_MIN_SIZE, Math.abs(x1 - x0)),
+                h: Math.max(RECT_MIN_SIZE, Math.abs(y1 - y0)),
+                rotation: 0,
+                type: rectPlacementMode ? 'solid' : 'target',
+                targetMode: 'instant', settleDuration: 2.0,
+            });
+            pendingRectStart = null;
+        }
 
         // Tap-and-drag placement (mobile) — an alternative to the 2-
         // SEPARATE-taps gesture in the pointerdown handler below, not a
@@ -3439,7 +4111,11 @@
         if (pendingSpawnStart && (!running || cfg.allowPlacementWhileRunning) && e.pointerId === spawnPointerId) {
             const dist = Math.hypot(e.clientX - pendingSpawnStart.x, e.clientY - pendingSpawnStart.y);
             if (dist > MIN_DRAG_PLACEMENT_DISTANCE) {
-                spawnEntityFromLine(pendingSpawnStart.x, pendingSpawnStart.y, e.clientX, e.clientY);
+                // Max Hands budget — see canPlaceAnotherHand(). The
+                // pending gesture is still cleared either way (declining
+                // silently, not leaving a stuck drag state the user can't
+                // escape).
+                if (canPlaceAnotherHand()) spawnEntityFromLine(pendingSpawnStart.x, pendingSpawnStart.y, e.clientX, e.clientY);
                 pendingSpawnStart = null;
                 spawnPointerId = null;
             }
@@ -3617,6 +4293,26 @@
             entity.winLoseLastIndex = frameCount - 1;
             ensureWinLoseLoaded(entity.directionKey, type);
         });
+    }
+    // Level win/lose auto-triggers — thin wrappers around
+    // triggerWinLoseSequence(), guarded by levelAttemptResolved so each
+    // fires at most once per Start->result cycle (setRunning(true) resets
+    // the guard for a fresh attempt). Per explicit spec: the moment
+    // either fires, the sim auto-toggles back to Stop (clearing every
+    // ball) while entities keep playing out their win/lose animation —
+    // advanceWinLoseSequences() already runs regardless of `running`, so
+    // stopping here doesn't interrupt it.
+    function triggerLevelWin() {
+        if (levelAttemptResolved) return;
+        levelAttemptResolved = true;
+        triggerWinLoseSequence('win');
+        setRunning(false);
+    }
+    function triggerLevelLose() {
+        if (levelAttemptResolved) return;
+        levelAttemptResolved = true;
+        triggerWinLoseSequence('lose');
+        setRunning(false);
     }
 
     // Spawns a new entity anchored at (startX,startY) — the FIRST click —
@@ -3802,6 +4498,51 @@
         return -1;
     }
 
+    // Level-rect adjustment handles — same rotation-aware local-space
+    // hit-testing technique hitTestEntitySprite already uses below
+    // (rotate the click point by -rotation around the rect's own
+    // center, same as inverting the render transform). Checked
+    // nearest-drawn-first like hitTestEntityDot. 'move' (center) is
+    // checked first for the same reason mid is checked first there —
+    // it's the most commonly reached-for gesture and its hit circle can
+    // overlap the corner handles on a small rect.
+    const RECT_HANDLE_HIT_RADIUS = 14;
+    const ROTATION_HANDLE_OFFSET = 24;
+    function hitTestRectHandle(x, y) {
+        for (let i = levelRects.length - 1; i >= 0; i--) {
+            const rect = levelRects[i];
+            const dx = x - rect.x, dy = y - rect.y;
+            const cos = Math.cos(-rect.rotation), sin = Math.sin(-rect.rotation);
+            const localX = dx * cos - dy * sin, localY = dx * sin + dy * cos;
+            if (Math.hypot(localX, localY) <= RECT_HANDLE_HIT_RADIUS) return { rect, handle: 'move' };
+            const halfW = rect.w / 2, halfH = rect.h / 2;
+            const corners = [
+                ['resize-tl', -halfW, -halfH], ['resize-tr', halfW, -halfH],
+                ['resize-bl', -halfW, halfH], ['resize-br', halfW, halfH],
+            ];
+            for (const [handle, cxL, cyL] of corners) {
+                if (Math.hypot(localX - cxL, localY - cyL) <= RECT_HANDLE_HIT_RADIUS) return { rect, handle };
+            }
+            const rotY = -halfH - ROTATION_HANDLE_OFFSET;
+            if (Math.hypot(localX, localY - rotY) <= RECT_HANDLE_HIT_RADIUS) return { rect, handle: 'rotate' };
+        }
+        return null;
+    }
+    // Delete-mode hit-test for a placed level rect — a local-space
+    // bounding-box containment check (no per-pixel alpha test needed,
+    // unlike hitTestEntitySprite, since a rect's own drawn shape already
+    // IS its hitbox — no transparent padding to avoid).
+    function hitTestRectBody(x, y) {
+        for (let i = levelRects.length - 1; i >= 0; i--) {
+            const rect = levelRects[i];
+            const dx = x - rect.x, dy = y - rect.y;
+            const cos = Math.cos(-rect.rotation), sin = Math.sin(-rect.rotation);
+            const localX = dx * cos - dy * sin, localY = dx * sin + dy * cos;
+            if (Math.abs(localX) <= rect.w / 2 && Math.abs(localY) <= rect.h / 2) return rect;
+        }
+        return null;
+    }
+
     // Per-direction offscreen canvas holding that direction's idle (frame 1)
     // pixels at full natural resolution — drawn ONCE per direction (cached),
     // used ONLY for delete-mode's per-pixel opacity check below. Safe to
@@ -3907,7 +4648,11 @@
             const hitEntity = hitTestEntitySprite(x, y);
             if (hitEntity) { entities = entities.filter(en => en !== hitEntity); return; }
             const hitPointIndex = hitTestBallSpawnPoint(x, y);
-            if (hitPointIndex !== -1) ballSpawnPoints.splice(hitPointIndex, 1);
+            if (hitPointIndex !== -1) { ballSpawnPoints.splice(hitPointIndex, 1); return; }
+            // Level rects (wall/floor/target) are also deletable here —
+            // same generic Delete tool covers every placeable thing.
+            const hitRect = hitTestRectBody(x, y);
+            if (hitRect) { levelRects = levelRects.filter(r => r !== hitRect); }
             return;
         }
 
@@ -3919,6 +4664,40 @@
         if (ballPlacementMode) {
             if (running) return;
             ballSpawnPoints.push({ x, y });
+            return;
+        }
+
+        // Rectangle/Target placement (Level Maker/Sandbox only) — first
+        // checks for a handle hit on an ALREADY-placed rect (move/resize/
+        // rotate an existing one), falling back to starting a NEW rect's
+        // rubber-band drag only if nothing was hit. Stop-only, same as
+        // every other placement mode above.
+        if (rectPlacementMode || targetPlacementMode) {
+            if (running) return;
+            const hit = hitTestRectHandle(x, y);
+            if (hit) {
+                draggingRect = hit.rect;
+                draggingRectHandle = hit.handle;
+                selectedLevelRect = hit.rect;
+                if (hit.handle.startsWith('resize-')) {
+                    // The OPPOSITE corner is this drag's fixed pivot —
+                    // computed once here in WORLD space (not re-derived
+                    // every pointermove, since w/h/rotation change live
+                    // during the drag itself).
+                    const halfW = hit.rect.w / 2, halfH = hit.rect.h / 2;
+                    const oppositeLocal = {
+                        'resize-tl': [halfW, halfH], 'resize-tr': [-halfW, halfH],
+                        'resize-bl': [halfW, -halfH], 'resize-br': [-halfW, -halfH],
+                    }[hit.handle];
+                    const cos = Math.cos(hit.rect.rotation), sin = Math.sin(hit.rect.rotation);
+                    resizePivotWorld = {
+                        x: hit.rect.x + oppositeLocal[0] * cos - oppositeLocal[1] * sin,
+                        y: hit.rect.y + oppositeLocal[0] * sin + oppositeLocal[1] * cos,
+                    };
+                }
+                return;
+            }
+            pendingRectStart = { x, y };
             return;
         }
 
@@ -3938,7 +4717,10 @@
             pendingSpawnStart = { x, y };
             spawnPointerId = e.pointerId;
         } else if (Math.hypot(x - pendingSpawnStart.x, y - pendingSpawnStart.y) > 0.0001) {
-            spawnEntityFromLine(pendingSpawnStart.x, pendingSpawnStart.y, x, y);
+            // Max Hands budget — see canPlaceAnotherHand(). The pending
+            // gesture is cleared either way, same reasoning as the mobile
+            // tap-drag completion above.
+            if (canPlaceAnotherHand()) spawnEntityFromLine(pendingSpawnStart.x, pendingSpawnStart.y, x, y);
             pendingSpawnStart = null;
             spawnPointerId = null;
         }
@@ -3954,6 +4736,9 @@
     const stopBtn = document.getElementById('stopBtn');
     const deleteBtn = document.getElementById('deleteBtn');
     const ballBtn = document.getElementById('ballBtn');
+    const rectBtn = document.getElementById('rectBtn');
+    const targetBtn = document.getElementById('targetBtn');
+    const handBtn = document.getElementById('handBtn');
     function setRunning(next) {
         running = next;
         if (!running) {
@@ -3964,6 +4749,11 @@
         } else {
             setDeleteMode(false); // starting has nothing to delete/place anyway
             setBallPlacementMode(false); // ditto — nowhere to place a spawn point while running
+            setRectPlacementMode(false);
+            setTargetPlacementMode(false);
+            // Re-arm the level win/lose auto-triggers for a fresh attempt
+            // — see triggerLevelWin/triggerLevelLose, which guard on this.
+            levelAttemptResolved = false;
             // Rebuilt fresh from ballSpawnPoints every Start — spawn
             // points can't change while running (placement is Stop-only),
             // so this is the one moment that matters.
@@ -3973,6 +4763,10 @@
         stopBtn.disabled = !running;
         deleteBtn.disabled = running;
         ballBtn.disabled = running;
+        rectBtn.disabled = running;
+        targetBtn.disabled = running;
+        handBtn.disabled = running;
+        refreshSimControlsVisibility();
     }
     // Delete mode — toggled independently of Start/Stop's own running
     // state, but only meaningful while stopped (deleteBtn is disabled by
@@ -3985,7 +4779,12 @@
             pendingSpawnStart = null;
             draggingEntity = null;
             draggingPoint = null;
+            draggingRect = null;
+            draggingRectHandle = null;
+            pendingRectStart = null;
             setBallPlacementMode(false);
+            setRectPlacementMode(false);
+            setTargetPlacementMode(false);
         }
         deleteBtn.classList.toggle('active', deleteMode);
     }
@@ -3998,15 +4797,130 @@
             pendingSpawnStart = null;
             draggingEntity = null;
             draggingPoint = null;
+            draggingRect = null;
+            draggingRectHandle = null;
+            pendingRectStart = null;
             setDeleteMode(false);
+            setRectPlacementMode(false);
+            setTargetPlacementMode(false);
         }
         ballBtn.classList.toggle('active', ballPlacementMode);
         applyCursorVisibility();
     }
+    // Rectangle (solid wall/floor) placement — same mutual-exclusion
+    // discipline as Delete/Ball above. Level Maker/Sandbox only (gating
+    // wired in Phase 6); harmless to leave reachable before then since
+    // nothing calls it yet except the button below.
+    function setRectPlacementMode(next) {
+        rectPlacementMode = next;
+        if (rectPlacementMode) {
+            pendingSpawnStart = null;
+            draggingEntity = null;
+            draggingPoint = null;
+            draggingRect = null;
+            draggingRectHandle = null;
+            pendingRectStart = null;
+            setDeleteMode(false);
+            setBallPlacementMode(false);
+            setTargetPlacementMode(false);
+        }
+        rectBtn.classList.toggle('active', rectPlacementMode);
+    }
+    // Target placement — identical mechanics to Rectangle (same rubber-
+    // band gesture, same handles), only the resulting rect's `type`
+    // differs (see the pointerdown/pointerup handlers above).
+    function setTargetPlacementMode(next) {
+        targetPlacementMode = next;
+        if (targetPlacementMode) {
+            pendingSpawnStart = null;
+            draggingEntity = null;
+            draggingPoint = null;
+            draggingRect = null;
+            draggingRectHandle = null;
+            pendingRectStart = null;
+            setDeleteMode(false);
+            setBallPlacementMode(false);
+            setRectPlacementMode(false);
+        }
+        targetBtn.classList.toggle('active', targetPlacementMode);
+    }
+    // Hand mode — not a new gesture, just an explicit button for the
+    // PRE-EXISTING default entity-placement flow (the pointerdown
+    // fallback once every other mode above is off), so Level Maker/
+    // Sandbox always show one clearly-active tool rather than an
+    // implicit "nothing else is selected" state.
+    function setLevelHandMode() {
+        setDeleteMode(false);
+        setBallPlacementMode(false);
+        setRectPlacementMode(false);
+        setTargetPlacementMode(false);
+        handBtn.classList.add('active');
+    }
+    function clearHandModeActiveClass() { handBtn.classList.remove('active'); }
     startBtn.addEventListener('click', () => setRunning(true));
     stopBtn.addEventListener('click', () => setRunning(false));
-    deleteBtn.addEventListener('click', () => setDeleteMode(!deleteMode));
-    ballBtn.addEventListener('click', () => setBallPlacementMode(!ballPlacementMode));
+    deleteBtn.addEventListener('click', () => { setDeleteMode(!deleteMode); clearHandModeActiveClass(); });
+    ballBtn.addEventListener('click', () => { setBallPlacementMode(!ballPlacementMode); clearHandModeActiveClass(); });
+    rectBtn.addEventListener('click', () => { setRectPlacementMode(!rectPlacementMode); clearHandModeActiveClass(); });
+    targetBtn.addEventListener('click', () => { setTargetPlacementMode(!targetPlacementMode); clearHandModeActiveClass(); });
+    handBtn.addEventListener('click', () => setLevelHandMode());
+
+    // Top-level editing context — null (plain Play), 'sandbox' (player-
+    // facing freeform wall/ball placement, no Target/save UI), or
+    // 'levelMaker' (dev-only, adds Target + the Levels save/rename/
+    // delete panel on top of Sandbox's same tools). Mutually exclusive
+    // with each other; both disabled while running (nothing to edit).
+    const sandboxBtn = document.getElementById('sandboxBtn');
+    const levelMakerBtn = document.getElementById('levelMakerBtn');
+    const levelSelect = document.getElementById('levelSelect');
+    const playLevelBtn = document.getElementById('playLevelBtn');
+    const handsRemainingHud = document.getElementById('handsRemainingHud');
+    function refreshSimControlsVisibility() {
+        const editing = levelEditMode !== null;
+        [deleteBtn, ballBtn, rectBtn, targetBtn, handBtn].forEach(b => { b.style.display = editing ? '' : 'none'; });
+        targetBtn.style.display = (editing && levelEditMode === 'levelMaker') ? '' : 'none';
+        levelMakerBtn.style.display = DEV_MODE ? '' : 'none';
+        levelSelect.style.display = editing ? 'none' : '';
+        playLevelBtn.style.display = editing ? 'none' : '';
+        sandboxBtn.classList.toggle('active', levelEditMode === 'sandbox');
+        levelMakerBtn.classList.toggle('active', levelEditMode === 'levelMaker');
+        sandboxBtn.disabled = running || levelEditMode === 'levelMaker';
+        levelMakerBtn.disabled = running || levelEditMode === 'sandbox';
+    }
+    function setLevelEditMode(next) {
+        // Leaving an editing context clears whatever in-progress
+        // gesture/mode was active inside it — same discipline as every
+        // other mode transition in this file.
+        setDeleteMode(false);
+        setBallPlacementMode(false);
+        setRectPlacementMode(false);
+        setTargetPlacementMode(false);
+        clearHandModeActiveClass();
+        levelEditMode = next;
+        refreshSimControlsVisibility();
+    }
+    sandboxBtn.addEventListener('click', () => setLevelEditMode(levelEditMode === 'sandbox' ? null : 'sandbox'));
+    levelMakerBtn.addEventListener('click', () => setLevelEditMode(levelEditMode === 'levelMaker' ? null : 'levelMaker'));
+    // Play — the read-only player path. Clears entities (a fresh attempt
+    // shouldn't inherit whatever hands were left over from a previous
+    // level/sandbox session) and replaces the current geometry with the
+    // selected level's own saved rects/ball-spawn-points/Max-Hands.
+    // levelEditMode stays null throughout, so no handles ever render or
+    // hit-test for this loaded geometry — exactly the "players cannot
+    // modify level objects" requirement.
+    playLevelBtn.addEventListener('click', () => {
+        const name = levelSelect.value;
+        if (!name || !levels[name]) return;
+        entities.length = 0;
+        levelRects.length = 0;
+        levelRects.push(...levels[name].rects.map(r => ({ ...r })));
+        ballSpawnPoints.length = 0;
+        ballSpawnPoints.push(...levels[name].ballSpawnPoints.map(p => ({ x: p.x, y: p.y })));
+        currentMaxHands = levels[name].maxHands ?? null;
+        currentLevelName = name;
+        levelAttemptResolved = false;
+    });
+    refreshSimControlsVisibility();
     setRunning(false);
     // Win/Lose — deliberately NOT gated by running/stopped (unlike
     // Delete/Ball) and not a toggled "mode": each click is a one-shot
@@ -4172,6 +5086,18 @@
         ctx.fillStyle = cfg.backgroundColor;
         ctx.fillRect(0, 0, w, h);
 
+        // Hands-remaining HUD — player-facing only (never shown while
+        // editing, where a placement budget isn't the point). Visible
+        // whenever a Max Hands limit OR any loaded level is in play, so
+        // an unlimited-but-still-a-level attempt still shows the ∞
+        // symbol rather than disappearing entirely.
+        if (levelEditMode === null && (currentMaxHands !== null || currentLevelName !== null)) {
+            handsRemainingHud.hidden = false;
+            handsRemainingHud.textContent = 'Hands: ' + (currentMaxHands === null ? '∞' : Math.max(0, currentMaxHands - entities.length));
+        } else {
+            handsRemainingHud.hidden = true;
+        }
+
         const cx = w / 2, cy = h / 2;
         if (cfg.showCenter) {
             ctx.save();
@@ -4182,6 +5108,56 @@
             ctx.moveTo(cx - 10, cy); ctx.lineTo(cx + 10, cy);
             ctx.moveTo(cx, cy - 10); ctx.lineTo(cx, cy + 10);
             ctx.stroke();
+            ctx.restore();
+        }
+
+        // Level-system rectangles (walls/floors = 'solid', win-condition
+        // targets = 'target') — drawn unconditionally (both running and
+        // stopped), before entities, so a level's static geometry always
+        // reads as background the ball/hands interact with, never drawn
+        // over them. Collision against these (Phase 3, not yet wired) will
+        // reuse this exact same rotated-rect shape.
+        if (levelRects.length) {
+            levelRects.forEach(rect => {
+                ctx.save();
+                ctx.translate(rect.x, rect.y);
+                ctx.rotate(rect.rotation);
+                if (rect.type === 'target') {
+                    ctx.fillStyle = 'rgba(255, 214, 77, 0.55)';
+                    ctx.strokeStyle = '#ffd64d';
+                } else {
+                    ctx.fillStyle = 'rgba(150, 150, 160, 0.85)';
+                    ctx.strokeStyle = '#c8c8d2';
+                }
+                ctx.lineWidth = 2;
+                ctx.fillRect(-rect.w / 2, -rect.h / 2, rect.w, rect.h);
+                ctx.strokeRect(-rect.w / 2, -rect.h / 2, rect.w, rect.h);
+                ctx.restore();
+                if (rect.type === 'target') {
+                    ctx.save();
+                    ctx.fillStyle = '#ffd64d';
+                    ctx.font = '11px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    const label = rect.targetMode === 'settle' ? `SETTLE ${rect.settleDuration.toFixed(1)}s` : 'INSTANT';
+                    ctx.fillText(label, rect.x, rect.y - rect.h / 2 - 4);
+                    ctx.restore();
+                }
+            });
+        }
+
+        // Live rubber-band preview while placing a Rectangle/Target
+        // (Stop-only, same gating as the placement gesture itself) — an
+        // unrotated dashed outline from the press point to the current
+        // mouse position, mirroring the entity spawn-line preview below.
+        if (pendingRectStart && hasMouse) {
+            ctx.save();
+            ctx.strokeStyle = targetPlacementMode ? '#ffd64d' : '#c8c8d2';
+            ctx.globalAlpha = 0.6;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 5]);
+            const left = Math.min(pendingRectStart.x, mouseX), top = Math.min(pendingRectStart.y, mouseY);
+            ctx.strokeRect(left, top, Math.abs(mouseX - pendingRectStart.x), Math.abs(mouseY - pendingRectStart.y));
             ctx.restore();
         }
 
@@ -4424,6 +5400,56 @@
                 ctx.fillStyle = '#ffe64d';
                 ctx.beginPath();
                 ctx.arc((entity.x + entity.endX) / 2, (entity.y + entity.endY) / 2, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        // Level-rect adjustment handles (Level Maker/Sandbox only,
+        // stopped-only — same gating as the entity handles above): move
+        // (yellow, center — same color/role as the entity's own mid-dot),
+        // 4 corner resize dots (white), 1 rotate dot (cyan) connected to
+        // the rect's top edge by a thin dashed line.
+        if (!running && levelEditMode) {
+            levelRects.forEach(rect => {
+                const halfW = rect.w / 2, halfH = rect.h / 2;
+                const cos = Math.cos(rect.rotation), sin = Math.sin(rect.rotation);
+                const toWorld = (lx, ly) => ({ x: rect.x + lx * cos - ly * sin, y: rect.y + lx * sin + ly * cos });
+                const corners = [[-halfW, -halfH], [halfW, -halfH], [-halfW, halfH], [halfW, halfH]].map(([lx, ly]) => toWorld(lx, ly));
+                const rotateHandle = toWorld(0, -halfH - ROTATION_HANDLE_OFFSET);
+                const topMid = toWorld(0, -halfH);
+
+                ctx.save();
+                ctx.strokeStyle = '#8ad6ff';
+                ctx.globalAlpha = 0.7;
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(topMid.x, topMid.y);
+                ctx.lineTo(rotateHandle.x, rotateHandle.y);
+                ctx.stroke();
+                ctx.restore();
+
+                corners.forEach(c => {
+                    ctx.save();
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(c.x, c.y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
+
+                ctx.save();
+                ctx.fillStyle = '#8ad6ff';
+                ctx.beginPath();
+                ctx.arc(rotateHandle.x, rotateHandle.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                ctx.save();
+                ctx.fillStyle = '#ffe64d';
+                ctx.beginPath();
+                ctx.arc(rect.x, rect.y, 6, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
             });
