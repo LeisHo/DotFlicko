@@ -222,7 +222,7 @@
         left: 10px;
         z-index: 100000;
         display: flex;
-        gap: 6px;
+        gap: var(--btn-gap-h, 6px);
     }
     .sim-controls-right {
         position: fixed;
@@ -230,33 +230,89 @@
         right: 10px;
         z-index: 100000;
         display: flex;
-        gap: 6px;
+        gap: var(--btn-gap-h, 6px);
     }
-    .hands-remaining-hud {
+    .sim-controls-row2 {
+        /* top is set live by repositionButtonRow2() (JS), since it
+           depends on row 1's own measured height -- this static value is
+           only what renders before that JS runs on first load. */
         position: fixed;
-        top: 50px;
+        top: 60px;
         left: 10px;
         z-index: 100000;
+        display: flex;
+        align-items: center;
+        gap: var(--btn-gap-h, 6px);
+    }
+    .sim-controls-bottom-left {
+        position: fixed;
+        bottom: 10px;
+        left: 10px;
+        z-index: 100000;
+        display: flex;
+        gap: var(--btn-gap-h, 6px);
+    }
+    /* Position/alignment mechanism mirrors CLICKO's own Text Align/Valign
+       + Edge Lock system (index.html's applyTextAlignAnchors()), scaled
+       down to this one element: -x/y-base/-sign pick which point in the
+       viewport the offset is measured from (an edge, via the alignment
+       dropdown, when Edge Lock is checked; always the centerline when
+       unlocked) and -anchor-tx/-ty shift the box so ITS OWN matching edge
+       (not just its center) lands there — a deliberate completion beyond
+       Clicko's own Start-button-specific translate(-50%,...) (which never
+       varied by horizontal align), since a short, single-line label reads
+       more correctly flush against its chosen edge. All offsets are plain
+       px (this project has no vw/vh-scaling text convention to preserve,
+       unlike Clicko's own vw/px duality) — see applyHandsHudSettings().
+    */
+    .hands-remaining-hud {
+        position: fixed;
+        left: calc(var(--hands-x-base, 0%) + var(--hands-x-sign, 1) * var(--hands-x-offset-px, 10px));
+        top: calc(var(--hands-y-base, 0%) + var(--hands-y-sign, 1) * var(--hands-y-offset-px, 104px));
+        transform: translate(var(--hands-anchor-tx, 0%), var(--hands-anchor-ty, 0%));
+        z-index: 100000;
         color: #fff;
-        font-family: monospace;
-        font-size: 14px;
+        font-family: var(--btn-font-family, monospace);
+        font-size: var(--hands-font-size, 14px);
+        font-weight: var(--hands-font-weight, normal);
+        text-transform: var(--hands-text-transform, none);
+        letter-spacing: var(--hands-letter-spacing, 0px);
         text-shadow: 0 1px 3px rgba(0,0,0,0.8);
         pointer-events: none;
+        white-space: nowrap;
     }
-    .sim-controls button {
+    /* The infinity glyph gets its own font size, independent of the rest
+       of the label — per explicit request — since "∞" commonly reads as
+       visually smaller/lighter than digits at an identical font-size. */
+    #handsRemainingHudValue.is-infinity { font-size: var(--hands-infinity-font-size, 14px); }
+    /* Shared button styling across every fixed-position button group
+       (top-left, its 2nd row, top-right, bottom-left) -- a button's
+       container position is purely layout, not a reason for it to look
+       different, per explicit request ("stylize the right side buttons
+       the same as the left buttons"). */
+    .sim-controls button,
+    .sim-controls-row2 button,
+    .sim-controls-right button,
+    .sim-controls-bottom-left button {
         background: #2a3040;
         color: #fff;
-        border: 1px solid #4a5568;
+        border: var(--btn-outline-thickness, 1px) solid #4a5568;
         border-radius: 4px;
-        padding: 6px 14px;
-        font-family: monospace;
-        font-size: 12px;
+        padding: var(--btn-padding-v, 6px) var(--btn-padding-h, 14px);
+        font-family: var(--btn-font-family, monospace);
+        font-size: var(--btn-font-size, 12px);
         font-weight: bold;
         cursor: pointer;
         opacity: 0.9;
     }
-    .sim-controls button:hover:not(:disabled) { opacity: 1; }
-    .sim-controls button:disabled { opacity: 0.35; cursor: default; }
+    .sim-controls button:hover:not(:disabled),
+    .sim-controls-row2 button:hover:not(:disabled),
+    .sim-controls-right button:hover:not(:disabled),
+    .sim-controls-bottom-left button:hover:not(:disabled) { opacity: 1; }
+    .sim-controls button:disabled,
+    .sim-controls-row2 button:disabled,
+    .sim-controls-right button:disabled,
+    .sim-controls-bottom-left button:disabled { opacity: 0.35; cursor: default; }
     #startBtn { border-color: #4dd27a; }
     #stopBtn { border-color: #ff5c5c; }
     #deleteBtn { border-color: #ff9500; }
@@ -275,6 +331,10 @@
     #levelMakerBtn.active { background: #ffd64d; color: #1b1f2a; }
     #winBtn { border-color: #4dd27a; }
     #loseBtn { border-color: #ff5c5c; }
+    #playLevelBtn { border-color: #4dd27a; }
+    #saveLevelBtn { border-color: #8ad6ff; }
+    #editLevelBtn { border-color: #ffd64d; }
+    #overwriteLevelBtn { border-color: #ff9500; }
 
     .dev-buttons { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
     .dev-save-sync-status { font-size: calc(var(--dev-setting-title-font-size-px, 12) * 1px); white-space: nowrap; flex-shrink: 0; }
@@ -390,23 +450,30 @@
 <div class="sim-controls">
     <button id="startBtn">Start</button>
     <button id="stopBtn">Stop</button>
-    <button id="deleteBtn">Delete</button>
-    <button id="handBtn">Hand</button>
     <button id="sandboxBtn">Sandbox</button>
     <button id="levelMakerBtn">Level Maker</button>
+</div>
+<div class="sim-controls-row2">
     <select id="levelSelect"></select>
     <button id="playLevelBtn">Play</button>
-    <button id="winBtn">Win</button>
-    <button id="loseBtn">Lose</button>
+    <button id="saveLevelBtn">Save</button>
+    <button id="editLevelBtn">Edit</button>
+    <button id="overwriteLevelBtn">Overwrite</button>
 </div>
 <div class="sim-controls-right">
+    <button id="deleteBtn">Delete</button>
     <button id="ballBtn">Ball</button>
     <button id="rectBtn">Rectangle</button>
     <button id="targetBtn">Target</button>
+    <button id="handBtn">Hand</button>
 </div>
-<div id="handsRemainingHud" class="hands-remaining-hud" hidden></div>
+<div class="sim-controls-bottom-left">
+    <button id="winBtn">Win</button>
+    <button id="loseBtn">Lose</button>
+</div>
+<div id="handsRemainingHud" class="hands-remaining-hud" hidden><span id="handsRemainingHudLabel"></span><span id="handsRemainingHudValue"></span></div>
 
-<button class="dev-toggle-btn" id="devToggleBtn" onclick="devPanel.classList.toggle('hidden')">DEV</button>
+<button class="dev-toggle-btn" id="devToggleBtn" onclick="devPanel.classList.toggle('hidden')" hidden>DEV</button>
 
 <div class="dev-panel hidden" id="devPanel">
     <div class="dev-panel-scroll-content">
@@ -448,6 +515,10 @@
             </div>
             <div class="dev-section">
                 <div class="dev-section-title" onclick="toggleSection(this)" data-sid="Levels">▼ Levels</div>
+                <div class="dev-section-content"></div>
+            </div>
+            <div class="dev-section">
+                <div class="dev-section-title" onclick="toggleSection(this)" data-sid="UI">▼ UI</div>
                 <div class="dev-section-content"></div>
             </div>
             <div class="dev-section">
@@ -1509,6 +1580,12 @@
     // below), not to hide the whole dev panel (which already defaults
     // hidden via its own `hidden` class regardless of DEV_MODE).
     const DEV_MODE = IS_LOCAL_CONTEXT || location.search.includes('dev=1');
+    // The DEV button (and the dev panel it opens) is dev-only, per
+    // explicit request — default-hidden in the static HTML (same
+    // static-default-then-JS-reveals pattern already used elsewhere in
+    // this file), revealed here only when DEV_MODE is actually true.
+    // The 'd' keyboard shortcut below is gated the same way.
+    document.getElementById('devToggleBtn').hidden = !DEV_MODE;
     // Tier 2 (File System Access API) only makes sense against a real
     // local checkout (localhost/127.0.0.1), never a deployed origin (no
     // locally-tracked repo file for that write to be meaningfully
@@ -1779,6 +1856,7 @@
         window.addEventListener('resize', clampDevPanelPosition);
 
         document.addEventListener('keydown', (e) => {
+            if (!DEV_MODE) return; // dev panel is dev-only, per explicit request
             if (e.key === 'd' || e.key === 'D') {
                 const activeTag = document.activeElement && document.activeElement.tagName;
                 if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
@@ -1815,6 +1893,25 @@
     // using the same value+20% formula the click-to-edit auto-expand
     // already uses elsewhere in this file, since the tuned values exceed
     // the old bounds.
+    // Every sim-controls button, across all 4 fixed-position groups
+    // (top-left row 1, top-left row 2, top-right, bottom-left) — driving
+    // the "UI" dev-panel group's per-button Border Color/Bold/Capitalize
+    // controls below. Default border colors match this file's own
+    // pre-existing per-ID CSS (so the new controls don't change anything
+    // visually until actually touched).
+    const BUTTON_IDS = ['startBtn', 'stopBtn', 'deleteBtn', 'ballBtn', 'rectBtn', 'targetBtn', 'handBtn', 'sandboxBtn', 'levelMakerBtn', 'playLevelBtn', 'saveLevelBtn', 'editLevelBtn', 'overwriteLevelBtn', 'winBtn', 'loseBtn'];
+    const BUTTON_LABELS = {
+        startBtn: 'Start', stopBtn: 'Stop', deleteBtn: 'Delete', ballBtn: 'Ball', rectBtn: 'Rectangle',
+        targetBtn: 'Target', handBtn: 'Hand', sandboxBtn: 'Sandbox', levelMakerBtn: 'Level Maker',
+        playLevelBtn: 'Play', saveLevelBtn: 'Save', editLevelBtn: 'Edit', overwriteLevelBtn: 'Overwrite',
+        winBtn: 'Win', loseBtn: 'Lose',
+    };
+    const BUTTON_DEFAULT_BORDER_COLOR = {
+        startBtn: '#4dd27a', stopBtn: '#ff5c5c', deleteBtn: '#ff9500', ballBtn: '#ff5c5c', rectBtn: '#c8c8d2',
+        targetBtn: '#ffd64d', handBtn: '#8ad6ff', sandboxBtn: '#4dd27a', levelMakerBtn: '#ffd64d',
+        playLevelBtn: '#4dd27a', saveLevelBtn: '#8ad6ff', editLevelBtn: '#ffd64d', overwriteLevelBtn: '#ff9500',
+        winBtn: '#4dd27a', loseBtn: '#ff5c5c',
+    };
     const cfg = {
         entityScale: 100, clickAnimSpeed: 11.7, peakHoldFrames: 30,
         // Per-direction Hand Rotation Offset defaults, baked in from a
@@ -1850,6 +1947,52 @@
         // ball-speed quantity) a ball must be moving to count as
         // "settled" for a Settle-mode target's dwell timer.
         ballStillnessSpeedThreshold: 3,
+        // Global button-appearance settings (the "UI" dev-panel group) —
+        // apply to every sim-controls button across all 4 fixed-position
+        // groups via CSS custom properties (see applyButtonUiSettings()).
+        // Font choice deliberately offers 5 sans-serif options, per
+        // explicit request, not this file's existing monospace theme.
+        buttonFontFamily: 'Arial, sans-serif',
+        buttonFontSize: 12,
+        buttonOutlineThickness: 1,
+        // "Padding" here means INSIDE the button (around its own text),
+        // per explicit clarification — changing these grows/shrinks the
+        // button itself, since padding is inside the CSS box model, not
+        // a change to spacing between buttons (that's buttonGapHorizontal/
+        // Vertical below).
+        buttonPaddingVertical: 6,
+        buttonPaddingHorizontal: 14,
+        buttonGapHorizontal: 6,
+        // Vertical gap specifically between the top-left button group's
+        // row 1 (Start/Stop/Sandbox/Level Maker) and row 2 (Level
+        // Selector/Play/Save/Edit/Overwrite) — the only 2 groups in this
+        // file that stack as actual "rows". Applied live by
+        // repositionButtonRow2() since it depends on row 1's own
+        // measured height, which itself changes with the padding/font
+        // sliders above.
+        buttonGapVertical: 8,
+        // Per-button overrides — {borderColor, bold, capitalize} keyed by
+        // DOM id, seeded from BUTTON_DEFAULT_BORDER_COLOR (bold:true/
+        // capitalize:false match this file's pre-existing button
+        // appearance exactly, so nothing changes until actually tuned).
+        buttonStyles: Object.fromEntries(BUTTON_IDS.map(id => [id, { borderColor: BUTTON_DEFAULT_BORDER_COLOR[id], bold: true, capitalize: false }])),
+        // Hands-remaining HUD styling — font-family deliberately always
+        // reads --btn-font-family live (per explicit request: "use the
+        // same font as the buttons"), not its own separate font setting.
+        // Defaults reproduce this element's own pre-existing appearance
+        // exactly (left:10px/top:104px, plain 14px, not bold, not
+        // capitalized) until actually tuned.
+        handsFontSize: 14,
+        handsCapitalize: false,
+        handsBold: false,
+        handsXOffset: 10,
+        handsYOffset: 104,
+        handsHorizontalAlign: 'left',
+        handsHorizontalEdgeLock: true,
+        handsVerticalAlign: 'top',
+        handsVerticalEdgeLock: true,
+        handsLetterSpacing: 0,
+        handsInfinityFontSize: 14,
         jointThickness: 4, thicknessSmoothing: 0.15, collisionIntensity: 1,
         showCenter: true, showAngleDebug: true, hideCursor: true, showHitbox: false, showJointCollisionLines: false,
         // Debug override — per explicit request ("I can place entities
@@ -1989,10 +2132,48 @@
         { group: 'Win / Lose', id: 'sliderWinLoseAnimSpeed', type: 'slider', label: 'Win/Lose Anim Speed (x):', min: 0.1, max: 14.04, step: 0.1, value: cfg.winLoseAnimSpeed },
     ];
 
+    // Global sim-controls button appearance — same 5 sans-serif font
+    // choices this file's own Dev-Panel-wide font dropdown already uses
+    // (minus Monospace, per explicit request: "provide 5 sans serif
+    // fonts"), so the option strings/labels stay consistent rather than
+    // inventing a 2nd font-stack convention.
+    const UI_CONTROLS = [
+        { group: 'UI', id: 'selectButtonFontFamily', type: 'select', label: 'Button Font:', value: cfg.buttonFontFamily, options: [
+            { value: 'Arial, Helvetica, sans-serif', text: 'Arial' },
+            { value: "'Segoe UI', Arial, sans-serif", text: 'Segoe UI' },
+            { value: 'Verdana, Geneva, sans-serif', text: 'Verdana' },
+            { value: "'Trebuchet MS', Arial, sans-serif", text: 'Trebuchet MS' },
+            { value: 'Calibri, Arial, sans-serif', text: 'Calibri' },
+        ] },
+        { group: 'UI', id: 'sliderButtonFontSize', type: 'slider', label: 'Button Font Size (Px):', min: 6, max: 30, step: 1, value: cfg.buttonFontSize },
+        { group: 'UI', id: 'sliderButtonOutlineThickness', type: 'slider', label: 'Button Outline Thickness (Px):', min: 0, max: 10, step: 0.5, value: cfg.buttonOutlineThickness },
+        { group: 'UI', id: 'sliderButtonPaddingVertical', type: 'slider', label: 'Button Top/Bottom Padding (Px):', min: 0, max: 40, step: 1, value: cfg.buttonPaddingVertical },
+        { group: 'UI', id: 'sliderButtonPaddingHorizontal', type: 'slider', label: 'Button Side Padding (Px):', min: 0, max: 60, step: 1, value: cfg.buttonPaddingHorizontal },
+        { group: 'UI', id: 'sliderButtonGapHorizontal', type: 'slider', label: 'Horizontal Spacing Between Buttons (Px):', min: 0, max: 40, step: 1, value: cfg.buttonGapHorizontal },
+        { group: 'UI', id: 'sliderButtonGapVertical', type: 'slider', label: 'Vertical Spacing Between Button Rows (Px):', min: 0, max: 60, step: 1, value: cfg.buttonGapVertical },
+        // Hands-remaining HUD — font-family is NOT a control here, per
+        // explicit request it always tracks Button Font live instead
+        // (see applyHandsHudSettings()).
+        { group: 'UI', id: 'sliderHandsFontSize', type: 'slider', label: 'Hands Counter Font Size (Px):', min: 6, max: 40, step: 1, value: cfg.handsFontSize },
+        { group: 'UI', id: 'checkboxHandsCapitalize', type: 'checkbox', label: 'Hands Counter Capitalize', value: cfg.handsCapitalize },
+        { group: 'UI', id: 'checkboxHandsBold', type: 'checkbox', label: 'Hands Counter Bolding', value: cfg.handsBold },
+        { group: 'UI', id: 'sliderHandsXOffset', type: 'slider', label: 'Hands Counter X Offset (Px):', min: -400, max: 400, step: 1, value: cfg.handsXOffset },
+        { group: 'UI', id: 'sliderHandsYOffset', type: 'slider', label: 'Hands Counter Y Offset (Px):', min: -400, max: 400, step: 1, value: cfg.handsYOffset },
+        { group: 'UI', id: 'selectHandsHorizontalAlign', type: 'select', label: 'Hands Counter Horizontal Alignment:', value: cfg.handsHorizontalAlign, options: [
+            { value: 'left', text: 'Left' }, { value: 'center', text: 'Center' }, { value: 'right', text: 'Right' },
+        ] },
+        { group: 'UI', id: 'checkboxHandsHorizontalEdgeLock', type: 'checkbox', label: 'Hands Counter Horizontal Edge Lock', value: cfg.handsHorizontalEdgeLock },
+        { group: 'UI', id: 'selectHandsVerticalAlign', type: 'select', label: 'Hands Counter Vertical Alignment:', value: cfg.handsVerticalAlign, options: [
+            { value: 'top', text: 'Top' }, { value: 'center', text: 'Center' }, { value: 'bottom', text: 'Bottom' },
+        ] },
+        { group: 'UI', id: 'checkboxHandsVerticalEdgeLock', type: 'checkbox', label: 'Hands Counter Vertical Edge Lock', value: cfg.handsVerticalEdgeLock },
+        { group: 'UI', id: 'sliderHandsLetterSpacing', type: 'slider', label: 'Hands Counter Letter Spacing (Px):', min: -2, max: 20, step: 0.5, value: cfg.handsLetterSpacing },
+        { group: 'UI', id: 'sliderHandsInfinityFontSize', type: 'slider', label: 'Hands Counter Infinity Symbol Font Size (Px):', min: 6, max: 60, step: 1, value: cfg.handsInfinityFontSize },
+    ];
     const PROJECT_CONTROL_ARRAYS = [
         ['ENTITY_CONTROLS', ENTITY_CONTROLS], ['MOUSE_CONTROLS', MOUSE_CONTROLS], ['BACKGROUND_CONTROLS', BACKGROUND_CONTROLS],
         ['BALL_CONTROLS', BALL_CONTROLS], ['COLLISION_CONTROLS', COLLISION_CONTROLS], ['DEBUG_CONTROLS', DEBUG_CONTROLS],
-        ['WIN_LOSE_CONTROLS', WIN_LOSE_CONTROLS],
+        ['WIN_LOSE_CONTROLS', WIN_LOSE_CONTROLS], ['UI_CONTROLS', UI_CONTROLS],
     ];
     function renderProjectControls() {
         PROJECT_CONTROL_ARRAYS.forEach(([name, arr]) => {
@@ -2006,6 +2187,7 @@
         renderXOffsetRow();
         renderSceneControls();
         renderLevelControls();
+        renderButtonStyleRow();
         // Default-checked checkboxes: the row builder never sets .checked,
         // so a true default needs applying explicitly right after render.
         document.getElementById('checkboxShowCenter').checked = cfg.showCenter;
@@ -2036,6 +2218,7 @@
         wireXOffsetRow();
         wireSceneControls();
         wireLevelControls();
+        wireButtonStyleRow();
         bindSlider('sliderBallGravity', 'ballGravity');
         bindSlider('sliderBallRadius', 'ballRadius');
         bindSlider('sliderBallBounciness', 'ballBounciness');
@@ -2068,6 +2251,63 @@
         bindCheckbox('checkboxAllowPlacementWhileRunning', 'allowPlacementWhileRunning');
         bindCheckbox('checkboxCollisionOnlyWhilePlaying', 'collisionOnlyWhilePlaying');
         bindCheckbox('checkboxBallToBallCollision', 'ballToBallCollisionEnabled');
+
+        // "UI" group — global button appearance. Unlike ballGravity/etc.
+        // above, these need a live RE-APPLY on top of the plain cfg write
+        // bindSlider/bindCheckbox already do (CSS custom properties don't
+        // update themselves) — bindSlider/bindCheckbox intentionally take
+        // no such hook, so this wraps them instead of extending them.
+        const bindSliderThenApply = (id, key, applyFn) => { bindSlider(id, key); document.getElementById(id).addEventListener('input', applyFn); };
+        const bindCheckboxThenApply = (id, key, applyFn) => { bindCheckbox(id, key); document.getElementById(id).addEventListener('change', applyFn); };
+        ['sliderButtonFontSize:buttonFontSize', 'sliderButtonOutlineThickness:buttonOutlineThickness', 'sliderButtonPaddingVertical:buttonPaddingVertical',
+         'sliderButtonPaddingHorizontal:buttonPaddingHorizontal', 'sliderButtonGapHorizontal:buttonGapHorizontal', 'sliderButtonGapVertical:buttonGapVertical'].forEach(pair => {
+            const [id, key] = pair.split(':');
+            bindSliderThenApply(id, key, applyButtonUiSettings);
+        });
+        document.getElementById('selectButtonFontFamily').addEventListener('change', (e) => {
+            cfg.buttonFontFamily = e.target.value;
+            applyButtonUiSettings();
+        });
+        // Hands-remaining HUD controls — same wrap-with-re-apply pairing.
+        ['sliderHandsFontSize:handsFontSize', 'sliderHandsXOffset:handsXOffset', 'sliderHandsYOffset:handsYOffset',
+         'sliderHandsLetterSpacing:handsLetterSpacing', 'sliderHandsInfinityFontSize:handsInfinityFontSize'].forEach(pair => {
+            const [id, key] = pair.split(':');
+            bindSliderThenApply(id, key, applyHandsHudSettings);
+        });
+        ['checkboxHandsCapitalize:handsCapitalize', 'checkboxHandsBold:handsBold',
+         'checkboxHandsHorizontalEdgeLock:handsHorizontalEdgeLock', 'checkboxHandsVerticalEdgeLock:handsVerticalEdgeLock'].forEach(pair => {
+            const [id, key] = pair.split(':');
+            bindCheckboxThenApply(id, key, applyHandsHudSettings);
+        });
+        document.getElementById('selectHandsHorizontalAlign').addEventListener('change', (e) => {
+            cfg.handsHorizontalAlign = e.target.value;
+            applyHandsHudSettings();
+        });
+        document.getElementById('selectHandsVerticalAlign').addEventListener('change', (e) => {
+            cfg.handsVerticalAlign = e.target.value;
+            applyHandsHudSettings();
+        });
+        // Boot-time initial apply — the CSS custom properties referenced
+        // by the shared button rule and the Hands HUD don't exist at all
+        // until JS sets them once, so without this the page would render
+        // with the bare CSS fallback values (e.g. monospace) instead of
+        // cfg's own real defaults (e.g. Arial) until the FIRST slider
+        // touch. Re-runs identically on every later live change AND on a
+        // restored Save Settings snapshot (applyControlValues() dispatches
+        // input/change on every restored control, replaying through the
+        // exact same listeners above).
+        applyButtonUiSettings();
+        applyHandsHudSettings();
+        // repositionButtonRow2() (inside applyButtonUiSettings above)
+        // measures row 1's own getBoundingClientRect() — calling it this
+        // synchronously, this early in the boot sequence, can still catch
+        // a layout that hasn't reflowed with the brand-new CSS custom
+        // properties yet (confirmed via a real measured discrepancy: it
+        // landed on the bare CSS fallback's 60px instead of the correct
+        // computed value here). One extra pass after the browser's first
+        // real paint corrects it; every LIVE slider-driven call afterward
+        // measures an already-stable layout and needs no such delay.
+        requestAnimationFrame(repositionButtonRow2);
     }
 
     // ----------------------------------------------------------------
@@ -2807,6 +3047,188 @@
                 if (Number.isFinite(v) && v > 0) selectedLevelRect.settleDuration = v;
             }
         });
+    }
+
+    // Per-button style overrides (Border Color/Bold/Capitalize) — same
+    // compound dropdown+control architecture as Hand Rotation Offset/
+    // Animation X Offset above: one real DOM trio PER button (45 total),
+    // only the currently-selected button's own trio visible, so each
+    // button's values are independently persisted via the normal generic
+    // capture mechanism (no manual snapshot/restore code needed here,
+    // same reasoning as those 2 rows).
+    const BUTTON_STYLE_CONTROLS = [
+        { id: 'selectButtonStyleTarget' },
+        ...BUTTON_IDS.flatMap(id => [{ id: 'colorBtnBorder_' + id }, { id: 'checkboxBtnBold_' + id }, { id: 'checkboxBtnCapitalize_' + id }]),
+    ];
+    const BUTTON_STYLE_DEFAULT_TARGET = 'startBtn';
+    function renderButtonStyleRow() {
+        const content = findGroupContent('desktop', 'UI', 'renderButtonStyleRow', 'rowButtonStyle');
+        if (!content) return;
+
+        const selectRow = document.createElement('div');
+        selectRow.className = 'dev-row';
+        const selectLabel = document.createElement('span');
+        selectLabel.className = 'dev-label';
+        selectLabel.textContent = 'Button:';
+        selectRow.appendChild(selectLabel);
+        const select = document.createElement('select');
+        select.className = 'dev-select';
+        select.id = 'selectButtonStyleTarget';
+        BUTTON_IDS.forEach(id => {
+            const opt = document.createElement('option');
+            opt.value = id; opt.textContent = BUTTON_LABELS[id];
+            select.appendChild(opt);
+        });
+        select.value = BUTTON_STYLE_DEFAULT_TARGET;
+        selectRow.appendChild(select);
+        content.appendChild(selectRow);
+
+        BUTTON_IDS.forEach(id => {
+            const isDefaultVisible = id === BUTTON_STYLE_DEFAULT_TARGET;
+            const style = cfg.buttonStyles[id];
+
+            const colorRow = document.createElement('div');
+            colorRow.className = 'dev-row';
+            colorRow.id = 'rowBtnBorder_' + id;
+            if (!isDefaultVisible) colorRow.style.display = 'none';
+            const colorLabel = document.createElement('span');
+            colorLabel.className = 'dev-label';
+            colorLabel.textContent = 'Border Color:';
+            colorRow.appendChild(colorLabel);
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.className = 'dev-color-picker';
+            colorInput.id = 'colorBtnBorder_' + id;
+            colorInput.value = style.borderColor;
+            colorRow.appendChild(colorInput);
+            content.appendChild(colorRow);
+
+            const boldRow = document.createElement('div');
+            boldRow.className = 'dev-row';
+            boldRow.id = 'rowBtnBold_' + id;
+            if (!isDefaultVisible) boldRow.style.display = 'none';
+            const boldWrap = document.createElement('label');
+            boldWrap.style.cssText = 'display:flex; align-items:center; gap:6px; cursor:pointer;';
+            const boldCheckbox = document.createElement('input');
+            boldCheckbox.type = 'checkbox';
+            boldCheckbox.id = 'checkboxBtnBold_' + id;
+            boldCheckbox.checked = style.bold;
+            boldWrap.appendChild(boldCheckbox);
+            const boldSpan = document.createElement('span');
+            boldSpan.className = 'dev-label';
+            boldSpan.style.minWidth = 'auto';
+            boldSpan.textContent = 'Text Bolding';
+            boldWrap.appendChild(boldSpan);
+            boldRow.appendChild(boldWrap);
+            content.appendChild(boldRow);
+
+            const capRow = document.createElement('div');
+            capRow.className = 'dev-row';
+            capRow.id = 'rowBtnCapitalize_' + id;
+            if (!isDefaultVisible) capRow.style.display = 'none';
+            const capWrap = document.createElement('label');
+            capWrap.style.cssText = 'display:flex; align-items:center; gap:6px; cursor:pointer;';
+            const capCheckbox = document.createElement('input');
+            capCheckbox.type = 'checkbox';
+            capCheckbox.id = 'checkboxBtnCapitalize_' + id;
+            capCheckbox.checked = style.capitalize;
+            capWrap.appendChild(capCheckbox);
+            const capSpan = document.createElement('span');
+            capSpan.className = 'dev-label';
+            capSpan.style.minWidth = 'auto';
+            capSpan.textContent = 'Text Capitalize';
+            capWrap.appendChild(capSpan);
+            capRow.appendChild(capWrap);
+            content.appendChild(capRow);
+        });
+
+        registerDevControlArray('BUTTON_STYLE_CONTROLS', BUTTON_STYLE_CONTROLS);
+    }
+    function wireButtonStyleRow() {
+        BUTTON_IDS.forEach(id => {
+            document.getElementById('colorBtnBorder_' + id).addEventListener('input', (e) => {
+                cfg.buttonStyles[id].borderColor = e.target.value;
+                applyButtonUiSettings();
+            });
+            document.getElementById('checkboxBtnBold_' + id).addEventListener('change', (e) => {
+                cfg.buttonStyles[id].bold = e.target.checked;
+                applyButtonUiSettings();
+            });
+            document.getElementById('checkboxBtnCapitalize_' + id).addEventListener('change', (e) => {
+                cfg.buttonStyles[id].capitalize = e.target.checked;
+                applyButtonUiSettings();
+            });
+        });
+        document.getElementById('selectButtonStyleTarget').addEventListener('change', (e) => {
+            BUTTON_IDS.forEach(id => {
+                const isSelected = id === e.target.value;
+                document.getElementById('rowBtnBorder_' + id).style.display = isSelected ? '' : 'none';
+                document.getElementById('rowBtnBold_' + id).style.display = isSelected ? '' : 'none';
+                document.getElementById('rowBtnCapitalize_' + id).style.display = isSelected ? '' : 'none';
+            });
+        });
+    }
+    // Applies every "UI" dev-panel setting (global font/size/outline/
+    // padding/gaps via CSS custom properties, plus each button's own
+    // border color/bold/capitalize inline) to the actual DOM — called
+    // once at boot (so the real cfg defaults take effect, not the CSS
+    // fallback values) and again on every live change (including a
+    // restored Save Settings snapshot replaying through the input/change
+    // events applyControlValues() dispatches).
+    function applyButtonUiSettings() {
+        const root = document.documentElement.style;
+        root.setProperty('--btn-font-family', cfg.buttonFontFamily);
+        root.setProperty('--btn-font-size', cfg.buttonFontSize + 'px');
+        root.setProperty('--btn-outline-thickness', cfg.buttonOutlineThickness + 'px');
+        root.setProperty('--btn-padding-v', cfg.buttonPaddingVertical + 'px');
+        root.setProperty('--btn-padding-h', cfg.buttonPaddingHorizontal + 'px');
+        root.setProperty('--btn-gap-h', cfg.buttonGapHorizontal + 'px');
+        BUTTON_IDS.forEach(id => {
+            const btn = document.getElementById(id);
+            const style = cfg.buttonStyles[id];
+            if (!btn || !style) return;
+            btn.style.borderColor = style.borderColor;
+            btn.style.fontWeight = style.bold ? 'bold' : 'normal';
+            btn.style.textTransform = style.capitalize ? 'uppercase' : 'none';
+        });
+        repositionButtonRow2();
+    }
+    // Row 2 (Level Selector/Play/Save/Edit/Overwrite) sits directly below
+    // row 1 (Start/Stop/Sandbox/Level Maker) — its exact top offset is
+    // computed live from row 1's own MEASURED height (not a hardcoded
+    // constant), since the padding/font-size sliders above change that
+    // height directly. Re-run after any of those change, and once at boot.
+    function repositionButtonRow2() {
+        const row1 = document.querySelector('.sim-controls');
+        const row2 = document.querySelector('.sim-controls-row2');
+        if (!row1 || !row2) return;
+        const rect = row1.getBoundingClientRect();
+        row2.style.top = (rect.bottom + cfg.buttonGapVertical) + 'px';
+    }
+    // Same align/edge-lock scheme applyButtonUiSettings' CSS neighbor
+    // comment describes — see the .hands-remaining-hud CSS rule itself
+    // for the full mechanism (mirrors CLICKO's applyTextAlignAnchors(),
+    // scaled to 1 element, offsets always px).
+    const HANDS_EDGE_LOCK_BASE = { left: '0%', top: '0%', center: '50%', right: '100%', bottom: '100%' };
+    const HANDS_EDGE_LOCK_SIGN = { left: 1, top: 1, center: 1, right: -1, bottom: -1 };
+    const HANDS_ANCHOR_T = { left: '0%', top: '0%', center: '-50%', right: '-100%', bottom: '-100%' };
+    function applyHandsHudSettings() {
+        const hud = document.getElementById('handsRemainingHud');
+        if (!hud) return;
+        const hAlign = cfg.handsHorizontalAlign, vAlign = cfg.handsVerticalAlign;
+        hud.style.setProperty('--hands-x-base', cfg.handsHorizontalEdgeLock ? HANDS_EDGE_LOCK_BASE[hAlign] : '50%');
+        hud.style.setProperty('--hands-x-sign', cfg.handsHorizontalEdgeLock ? HANDS_EDGE_LOCK_SIGN[hAlign] : 1);
+        hud.style.setProperty('--hands-anchor-tx', HANDS_ANCHOR_T[hAlign]);
+        hud.style.setProperty('--hands-y-base', cfg.handsVerticalEdgeLock ? HANDS_EDGE_LOCK_BASE[vAlign] : '50%');
+        hud.style.setProperty('--hands-y-sign', cfg.handsVerticalEdgeLock ? HANDS_EDGE_LOCK_SIGN[vAlign] : 1);
+        hud.style.setProperty('--hands-anchor-ty', HANDS_ANCHOR_T[vAlign]);
+        hud.style.setProperty('--hands-x-offset-px', cfg.handsXOffset + 'px');
+        hud.style.setProperty('--hands-y-offset-px', cfg.handsYOffset + 'px');
+        hud.style.setProperty('--hands-font-size', cfg.handsFontSize + 'px');
+        hud.style.setProperty('--hands-font-weight', cfg.handsBold ? 'bold' : 'normal');
+        hud.style.setProperty('--hands-text-transform', cfg.handsCapitalize ? 'uppercase' : 'none');
+        hud.style.setProperty('--hands-letter-spacing', cfg.handsLetterSpacing + 'px');
+        hud.style.setProperty('--hands-infinity-font-size', cfg.handsInfinityFontSize + 'px');
     }
 
     // cfg.peakHoldFrames extra frames at the sequence's midpoint (the last
@@ -4886,6 +5308,9 @@
     const levelMakerBtn = document.getElementById('levelMakerBtn');
     const levelSelect = document.getElementById('levelSelect');
     const playLevelBtn = document.getElementById('playLevelBtn');
+    const saveLevelBtn = document.getElementById('saveLevelBtn');
+    const editLevelBtn = document.getElementById('editLevelBtn');
+    const overwriteLevelBtn = document.getElementById('overwriteLevelBtn');
     const handsRemainingHud = document.getElementById('handsRemainingHud');
     function refreshSimControlsVisibility() {
         const editing = levelEditMode !== null;
@@ -4897,8 +5322,17 @@
         // gotcha — so this doesn't newly expose anything that wasn't
         // already reachable by opening the dev panel directly.)
         levelMakerBtn.style.display = '';
-        levelSelect.style.display = editing ? 'none' : '';
+        // The Level dropdown stays available in both plain Play AND
+        // Level Maker (needed there for Edit/Overwrite to know which
+        // level to act on) — only Sandbox hides it, since Sandbox has no
+        // saved-level concept at all. Play itself is still Play-only
+        // (loading a level for actual play is a different action from
+        // loading it to edit).
+        levelSelect.style.display = levelEditMode === 'sandbox' ? 'none' : '';
         playLevelBtn.style.display = editing ? 'none' : '';
+        saveLevelBtn.style.display = levelEditMode === 'levelMaker' ? '' : 'none';
+        editLevelBtn.style.display = levelEditMode === 'levelMaker' ? '' : 'none';
+        overwriteLevelBtn.style.display = (levelEditMode === 'levelMaker' && currentLevelName !== null) ? '' : 'none';
         sandboxBtn.classList.toggle('active', levelEditMode === 'sandbox');
         levelMakerBtn.classList.toggle('active', levelEditMode === 'levelMaker');
         sandboxBtn.disabled = running || levelEditMode === 'levelMaker';
@@ -4914,6 +5348,12 @@
         setTargetPlacementMode(false);
         clearHandModeActiveClass();
         levelEditMode = next;
+        // Freshly entering an editing context starts with no level
+        // "targeted" for Overwrite — an explicit Edit (or a fresh Save)
+        // is what (re-)establishes that, so Overwrite never silently
+        // targets a level whose content may no longer match what's
+        // actually on screen (e.g. after the canvas was since cleared).
+        if (next !== null) currentLevelName = null;
         refreshSimControlsVisibility();
     }
     sandboxBtn.addEventListener('click', () => setLevelEditMode(levelEditMode === 'sandbox' ? null : 'sandbox'));
@@ -4936,6 +5376,55 @@
         currentMaxHands = levels[name].maxHands ?? null;
         currentLevelName = name;
         levelAttemptResolved = false;
+    });
+    // Save — always saves as a NEW named level (prompts for a name every
+    // time, per explicit request: "the regular Save button should still
+    // exist to save a new level"), independent of whatever's currently
+    // loaded. Sets currentLevelName so Overwrite becomes available for
+    // it immediately afterward, without requiring a separate Edit click.
+    // Same payload shape as the dev-panel Levels group's own Save
+    // (entities deliberately excluded) — this is a 2nd, top-level-visible
+    // entry point into the exact same levels/persistence data, not a
+    // parallel system.
+    saveLevelBtn.addEventListener('click', async () => {
+        const name = prompt('Level name:');
+        if (!name) return;
+        levels[name] = {
+            rects: levelRects.map(r => ({ ...r })),
+            ballSpawnPoints: ballSpawnPoints.map(p => ({ x: p.x, y: p.y })),
+            maxHands: currentMaxHands,
+        };
+        currentLevelName = name;
+        refreshLevelSelectOptions();
+        refreshSimControlsVisibility();
+        await saveDevPanelSettings();
+    });
+    // Edit — loads the dropdown's selected level's geometry for editing
+    // (same replace-not-merge behavior as Play/the dev-panel's own Load),
+    // and marks it as the current Overwrite target.
+    editLevelBtn.addEventListener('click', () => {
+        const name = levelSelect.value;
+        if (!name || !levels[name]) return;
+        levelRects.length = 0;
+        levelRects.push(...levels[name].rects.map(r => ({ ...r })));
+        ballSpawnPoints.length = 0;
+        ballSpawnPoints.push(...levels[name].ballSpawnPoints.map(p => ({ x: p.x, y: p.y })));
+        currentMaxHands = levels[name].maxHands ?? null;
+        currentLevelName = name;
+        refreshSimControlsVisibility();
+    });
+    // Overwrite — saves back to whichever level is currently being
+    // edited (currentLevelName, set by Edit or by a just-completed Save)
+    // WITHOUT re-prompting for a name.
+    overwriteLevelBtn.addEventListener('click', async () => {
+        if (!currentLevelName || !levels[currentLevelName]) return;
+        levels[currentLevelName] = {
+            rects: levelRects.map(r => ({ ...r })),
+            ballSpawnPoints: ballSpawnPoints.map(p => ({ x: p.x, y: p.y })),
+            maxHands: currentMaxHands,
+        };
+        refreshLevelSelectOptions();
+        await saveDevPanelSettings();
     });
     refreshSimControlsVisibility();
     setRunning(false);
@@ -5110,7 +5599,11 @@
         // symbol rather than disappearing entirely.
         if (levelEditMode === null && (currentMaxHands !== null || currentLevelName !== null)) {
             handsRemainingHud.hidden = false;
-            handsRemainingHud.textContent = 'Hands: ' + (currentMaxHands === null ? '∞' : Math.max(0, currentMaxHands - entities.length));
+            const isInfinite = currentMaxHands === null;
+            document.getElementById('handsRemainingHudLabel').textContent = 'Hands: ';
+            const valueEl = document.getElementById('handsRemainingHudValue');
+            valueEl.textContent = isInfinite ? '∞' : String(Math.max(0, currentMaxHands - entities.length));
+            valueEl.classList.toggle('is-infinity', isInfinite);
         } else {
             handsRemainingHud.hidden = true;
         }
