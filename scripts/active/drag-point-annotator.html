@@ -181,8 +181,19 @@ function frameFile(categoryKey, dirKey, frameKey) {
   return `drag-frames/${dirKey}-${categoryKey}-${frameKey}.png`;
 }
 
+// ====================================================================
+// Seed data — the current best-known points, so opening this tool on a
+// fresh browser/machine starts already populated instead of blank. Keep
+// this in sync (re-export via Copy/Download JSON and paste the result
+// back in here) any time this tool is used for real annotation and the
+// result should persist beyond one browser's own localStorage — same
+// SEED_*-then-localStorage-overrides pattern flick-skeleton-annotator.html
+// already established for the joint-skeleton data.
+// ====================================================================
+const SEED_DRAG_POINTS = {"drag":{"behind":{"48":[{"x":0.492,"y":0.474}],"01":[{"x":0.522,"y":0.345}]},"side-thumb":{"48":[{"x":0.385,"y":0.528}],"01":[{"x":0.457,"y":0.357}]},"front-thumb":{"48":[{"x":0.425,"y":0.534}],"01":[{"x":0.455,"y":0.309}]},"front":{"48":[{"x":0.512,"y":0.543}],"01":[{"x":0.481,"y":0.351}]},"front-pinky":{"48":[{"x":0.43,"y":0.546}],"01":[{"x":0.465,"y":0.324}]},"side-pinky":{"48":[{"x":0.619,"y":0.531}],"01":[{"x":0.568,"y":0.345}]}}};
+
 const LOCALSTORAGE_KEY = 'dragPointAnnotations';
-let data = loadFromStorage() || {};
+let data = loadFromStorage() || JSON.parse(JSON.stringify(SEED_DRAG_POINTS));
 let currentCategory = CATEGORIES[0].key;
 let currentDirKey = DIRECTIONS[0].key;
 let currentFrameKey = CATEGORIES[0].frames[0].key;
