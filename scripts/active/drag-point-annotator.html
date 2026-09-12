@@ -10,41 +10,48 @@ DRAG POINT ANNOTATOR — internal authoring tool, not part of the
 shipped DOTFLICKO page.
 
 WHAT THIS IS FOR
-DICKOCLICKO gained a new "Drag" animation set (data/FLICK/2TONED/<DIR>
-DRAG/), one folder per direction. This tool shows the LAST frame of
-each direction's Drag sequence and lets you click ONE point on it (a
-single anchor, not a 4-joint skeleton like flick-skeleton-annotator.html
-— there's only 1 still frame per direction here, not a sequence to
-interpolate across). Auto-saves to localStorage; Copy/Download JSON
-export the result.
+Covers 3 of DICKOCLICKO's animation-variant sets (Drag, Sciss, Tickle),
+each with all 8 directions, each direction showing its own FIRST and
+LAST frame (frame numbers genuinely differ per category — Drag/Tickle
+end at 048, Sciss ends at 045; verified per-folder, not assumed
+uniform). Click to place a point ANYWHERE on the image; click ON an
+existing point (within its own hit radius) to remove it — that's the
+entire add/delete gesture, no separate mode toggle. Multiple points
+per image are supported (an array per category+direction+frame, not a
+single anchor like this tool's original version). Auto-saves to
+localStorage; Copy/Download JSON export the result.
 
 DATA CAVEATS FOUND WHILE BUILDING THIS (verified via md5sum, not
-assumed) — read before treating this tool's images as final:
-  - (RESOLVED 2026-09-12) "front" originally had NO Drag frames at all
+assumed) — read before treating these images as final:
+  - (RESOLVED 2026-09-12) Drag/"front" originally had NO frames at all
     in DICKOCLICKO — real frames were added since; all 8 directions are
-    now annotatable.
-  - FRONT PINKY DRAG and FRONT THUMB DRAG are byte-for-byte IDENTICAL
-    folders in DICKOCLICKO (confirmed across frames 001/024/048, not
-    just the last one) — one was very likely copy-pasted as a
-    placeholder for the other and never replaced with its own real
-    animation. Both are still included here (annotating one doesn't
-    block the other), but their reference images are currently the
-    same picture.
+    now annotatable across all 3 categories.
+  - Drag's FRONT PINKY and FRONT THUMB folders are byte-for-byte
+    IDENTICAL to each other (checked frames 001/024/048) — very likely
+    one was copy-pasted as a placeholder for the other and never
+    replaced with its own real animation. Both still included here.
+  - (Not a bug, noted for context) Every Sciss direction's OWN frame
+    001 and frame 045 are byte-identical to each other (but distinct
+    ACROSS directions) — a full rest-to-rest loop, consistent with a
+    gesture that returns to its starting pose.
 
-Reference images are LOCAL COPIES (scripts/active/drag-frames/<key>.png),
-copied once from DICKOCLICKO's own data/FLICK/2TONED/<FOLDER> DRAG/
-(last frame, _048.png, of each) — not fetched live from that other
-project, so this tool works standalone and stays correct even if
-DICKOCLICKO's own files change later.
+Reference images (scripts/active/drag-frames/<direction>-<category>-
+<frame>.png, e.g. behind-sciss-45.png) are one-time local copies of
+each folder's own actual first/last frame — not fetched live from
+DICKOCLICKO, so this tool works standalone.
 
 OUTPUT SHAPE
 {
-  "behind": {"x":0.52,"y":0.41},
-  "behind-thumb": {"x":0.49,"y":0.53},
-  ...
+  "drag": {
+    "behind": { "01": [{"x":0.5,"y":0.4}], "48": [{"x":0.5,"y":0.4},{"x":0.6,"y":0.5}] },
+    ...
+  },
+  "sciss": { ... },
+  "tickle": { ... }
 }
 Point coordinates are fractions (0-1) of the image's own width/height,
 same normalized-space convention flick-skeleton-annotator.html uses.
+Only categories/directions/frames with at least 1 point are included.
 ====================================================================
 -->
 <style>
@@ -67,6 +74,8 @@ same normalized-space convention flick-skeleton-annotator.html uses.
   button:disabled { opacity: 0.4; cursor: not-allowed; }
   button.primary { background: #2c5a8f; border-color: #3d7ab8; }
   button.danger { background: #6b2c2c; border-color: #944; }
+  .cat-btns { display: flex; gap: 4px; }
+  .cat-btns button.is-current { background: #2c5a8f; border-color: #7fd4ff; font-weight: bold; }
   main { flex: 1; display: flex; min-height: 0; }
   .canvas-pane { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0c0d11; position: relative; }
   /* max-width/height:auto lets the canvas shrink to fit a narrow mobile
@@ -77,6 +86,20 @@ same normalized-space convention flick-skeleton-annotator.html uses.
      triggering the browser's own double-tap-zoom/scroll gesture. */
   #stage { display: block; max-width: 100%; height: auto; border: 1px solid #2c3040; background: #1a1c22; cursor: crosshair; touch-action: manipulation; }
   .side-pane { width: 280px; border-left: 1px solid #2c3040; background: #1c1f28; padding: 12px; overflow-y: auto; }
+  .side-pane h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #8a90a8; margin: 16px 0 8px; }
+  .side-pane h2:first-child { margin-top: 0; }
+  .dir-btns, .frame-btns { display: flex; flex-direction: column; gap: 4px; }
+  .frame-btns { flex-direction: row; }
+  .frame-btns button { flex: 1; }
+  .dir-btns button { text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .dir-btns button.is-current, .frame-btns button.is-current { outline: 2px solid #ffcf5c; outline-offset: -2px; }
+  .dir-btns button.has-point, .frame-btns button.has-point { background: #2c5a8f; border-color: #7fd4ff; font-weight: bold; }
+  .warn-box { background: #3a2c1c; border: 1px solid #8a5a2c; border-radius: 4px; padding: 8px; font-size: 11px; color: #e8c890; margin-bottom: 12px; }
+  #pointCount { font-size: 11px; color: #8a90a8; margin: 4px 0 8px; }
+  footer { padding: 10px 16px; background: #1c1f28; border-top: 1px solid #2c3040; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .hint { font-size: 11px; color: #8a90a8; }
+  #status { font-size: 11px; color: #7fd4ff; min-width: 90px; }
+  #copyJsonArea { display: none; }
   /* Mobile: stack the canvas above the side panel (a fixed 280px side
      rail has no room on a phone-width screen) and let the whole page
      scroll instead of clipping the side panel to a fixed-height column,
@@ -88,24 +111,13 @@ same normalized-space convention flick-skeleton-annotator.html uses.
     .canvas-pane { padding: 10px; }
     .side-pane { width: auto; border-left: none; border-top: 1px solid #2c3040; max-height: none; overflow-y: visible; }
   }
-  .side-pane h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #8a90a8; margin: 16px 0 8px; }
-  .side-pane h2:first-child { margin-top: 0; }
-  .dir-btns { display: flex; flex-direction: column; gap: 4px; }
-  .dir-btns button { text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .dir-btns button.is-current { outline: 2px solid #ffcf5c; outline-offset: -2px; }
-  .dir-btns button.has-point { background: #2c5a8f; border-color: #7fd4ff; font-weight: bold; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #6bdc7c; flex-shrink: 0; }
-  .warn-box { background: #3a2c1c; border: 1px solid #8a5a2c; border-radius: 4px; padding: 8px; font-size: 11px; color: #e8c890; margin-bottom: 12px; }
-  footer { padding: 10px 16px; background: #1c1f28; border-top: 1px solid #2c3040; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .hint { font-size: 11px; color: #8a90a8; }
-  #status { font-size: 11px; color: #7fd4ff; min-width: 90px; }
-  #copyJsonArea { display: none; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>DRAG POINT ANNOTATOR</h1>
+  <div class="cat-btns" id="catBtns"></div>
   <span class="hint" id="dirLabel">Behind</span>
 </header>
 
@@ -115,18 +127,19 @@ same normalized-space convention flick-skeleton-annotator.html uses.
   </div>
   <div class="side-pane">
     <div class="warn-box">
-      <strong>Data note:</strong> Front Pinky and Front Thumb's own Drag
-      folders in DICKOCLICKO are currently byte-identical to each other
-      (verified via md5sum) — likely one was copy-pasted as a placeholder
-      for the other and not yet replaced with its own real animation.
-      ("Front" itself got its real frames added 2026-09-12 — no longer
-      an open issue.)
+      <strong>Data note:</strong> Drag's Front Pinky and Front Thumb
+      folders are byte-identical to each other in DICKOCLICKO (verified
+      via md5sum) — likely one was copy-pasted as a placeholder for the
+      other and not yet replaced with its own real animation.
     </div>
-    <h2>Direction (point placed = filled)</h2>
+    <h2>Direction (point count = filled)</h2>
     <div class="dir-btns" id="dirBtns"></div>
-    <h2>This direction</h2>
-    <button id="clearPointBtn" class="danger" style="width:100%;">Clear Point</button>
-    <p class="hint" style="margin-top:8px;">Click anywhere on the image to place/move this direction's single anchor point.</p>
+    <h2>Frame</h2>
+    <div class="frame-btns" id="frameBtns"></div>
+    <h2>This image</h2>
+    <div id="pointCount"></div>
+    <button id="clearImageBtn" class="danger" style="width:100%;">Clear This Image</button>
+    <p class="hint" style="margin-top:8px;">Click anywhere on the image to add a point. Click ON an existing point to remove it.</p>
   </div>
 </main>
 
@@ -143,25 +156,36 @@ same normalized-space convention flick-skeleton-annotator.html uses.
 
 <script>
 // ====================================================================
-// Direction -> local reference-image mapping. "front" has no real
-// frame (see the on-page warning + this file's own top comment) --
-// available:false disables it in the UI rather than pointing at a
-// missing/blank image.
+// Categories (each with its own real first/last frame numbers — verified
+// per-folder in DICKOCLICKO, NOT assumed uniform: Sciss genuinely ends
+// at 045, not 048) and directions. File naming:
+// drag-frames/<direction key>-<category key>-<frame key>.png
 // ====================================================================
-const DIRECTIONS = [
-  { key: 'behind',       label: 'Behind',       file: 'drag-frames/behind.png',       available: true },
-  { key: 'behind-thumb', label: 'Behind Thumb', file: 'drag-frames/behind-thumb.png', available: true },
-  { key: 'side-thumb',   label: 'Side Thumb',   file: 'drag-frames/side-thumb.png',   available: true },
-  { key: 'front-thumb',  label: 'Front Thumb',  file: 'drag-frames/front-thumb.png',  available: true },
-  { key: 'front',        label: 'Front',        file: 'drag-frames/front.png',       available: true },
-  { key: 'front-pinky',  label: 'Front Pinky',  file: 'drag-frames/front-pinky.png',  available: true },
-  { key: 'side-pinky',   label: 'Side Pinky',   file: 'drag-frames/side-pinky.png',   available: true },
-  { key: 'behind-pinky', label: 'Behind Pinky', file: 'drag-frames/behind-pinky.png', available: true },
+const CATEGORIES = [
+  { key: 'drag',   label: 'Drag',   frames: [{ key: '01', label: 'Frame 01' }, { key: '48', label: 'Frame 48' }] },
+  { key: 'sciss',  label: 'Sciss',  frames: [{ key: '01', label: 'Frame 01' }, { key: '45', label: 'Frame 45' }] },
+  { key: 'tickle', label: 'Tickle', frames: [{ key: '01', label: 'Frame 01' }, { key: '48', label: 'Frame 48' }] },
 ];
+const DIRECTIONS = [
+  { key: 'behind',       label: 'Behind' },
+  { key: 'behind-thumb', label: 'Behind Thumb' },
+  { key: 'side-thumb',   label: 'Side Thumb' },
+  { key: 'front-thumb',  label: 'Front Thumb' },
+  { key: 'front',        label: 'Front' },
+  { key: 'front-pinky',  label: 'Front Pinky' },
+  { key: 'side-pinky',   label: 'Side Pinky' },
+  { key: 'behind-pinky', label: 'Behind Pinky' },
+];
+function currentCategoryDef() { return CATEGORIES.find(c => c.key === currentCategory); }
+function frameFile(categoryKey, dirKey, frameKey) {
+  return `drag-frames/${dirKey}-${categoryKey}-${frameKey}.png`;
+}
 
 const LOCALSTORAGE_KEY = 'dragPointAnnotations';
 let data = loadFromStorage() || {};
-let currentDirKey = DIRECTIONS.find(d => d.available).key;
+let currentCategory = CATEGORIES[0].key;
+let currentDirKey = DIRECTIONS[0].key;
+let currentFrameKey = CATEGORIES[0].frames[0].key;
 const imageCache = {};
 
 function loadFromStorage() {
@@ -177,76 +201,115 @@ function saveToStorage() {
   } catch (e) { /* best effort only */ }
 }
 
+// Points for the CURRENT category+direction+frame — creates the nested
+// path on first access (so a fresh image starts as a real empty array,
+// not undefined) rather than requiring every caller to null-check.
+function currentPoints() {
+  if (!data[currentCategory]) data[currentCategory] = {};
+  if (!data[currentCategory][currentDirKey]) data[currentCategory][currentDirKey] = {};
+  if (!data[currentCategory][currentDirKey][currentFrameKey]) data[currentCategory][currentDirKey][currentFrameKey] = [];
+  return data[currentCategory][currentDirKey][currentFrameKey];
+}
+function pointsFor(catKey, dirKey, frameKey) {
+  return (data[catKey] && data[catKey][dirKey] && data[catKey][dirKey][frameKey]) || [];
+}
+
 function currentDir() { return DIRECTIONS.find(d => d.key === currentDirKey); }
-function getImage(dirKey) {
-  if (imageCache[dirKey]) return imageCache[dirKey];
-  const dir = DIRECTIONS.find(d => d.key === dirKey);
-  if (!dir.file) return null;
+function getImage(catKey, dirKey, frameKey) {
+  const cacheKey = catKey + ':' + dirKey + ':' + frameKey;
+  if (imageCache[cacheKey]) return imageCache[cacheKey];
   const img = new Image();
-  img.src = dir.file;
+  img.src = frameFile(catKey, dirKey, frameKey);
   img.onload = () => render();
-  imageCache[dirKey] = img;
+  imageCache[cacheKey] = img;
   return img;
 }
 
 // ====================================================================
 // UI setup
 // ====================================================================
+const catBtnsEl = document.getElementById('catBtns');
+CATEGORIES.forEach(cat => {
+  const btn = document.createElement('button');
+  btn.textContent = cat.label;
+  btn.dataset.key = cat.key;
+  btn.addEventListener('click', () => {
+    currentCategory = cat.key;
+    currentFrameKey = cat.frames[0].key; // reset to this category's own first frame option
+    render(); renderDirButtons(); renderFrameButtons(); renderCatButtons();
+  });
+  catBtnsEl.appendChild(btn);
+});
+function renderCatButtons() {
+  document.querySelectorAll('#catBtns button').forEach(btn => {
+    btn.classList.toggle('is-current', btn.dataset.key === currentCategory);
+  });
+}
+
 const dirBtnsEl = document.getElementById('dirBtns');
 DIRECTIONS.forEach(d => {
   const btn = document.createElement('button');
-  btn.textContent = d.label + (d.available ? '' : ' (no frames)');
   btn.dataset.key = d.key;
-  if (!d.available) btn.disabled = true;
   btn.addEventListener('click', () => {
     currentDirKey = d.key;
     render(); renderDirButtons();
   });
   dirBtnsEl.appendChild(btn);
 });
-
 function renderDirButtons() {
   document.querySelectorAll('#dirBtns button').forEach(btn => {
     const key = btn.dataset.key;
+    const dir = DIRECTIONS.find(d => d.key === key);
+    const count = pointsFor(currentCategory, key, currentFrameKey).length;
+    btn.textContent = dir.label + (count ? ' (' + count + ')' : '');
     btn.classList.toggle('is-current', key === currentDirKey);
-    btn.classList.toggle('has-point', !!data[key]);
+    btn.classList.toggle('has-point', count > 0);
   });
-  document.getElementById('dirLabel').textContent = currentDir().label;
+  document.getElementById('dirLabel').textContent = currentDir().label + ' — ' + currentCategoryDef().label;
 }
 
-document.getElementById('clearPointBtn').addEventListener('click', () => {
-  delete data[currentDirKey];
-  saveToStorage(); render(); renderDirButtons();
+const frameBtnsEl = document.getElementById('frameBtns');
+function renderFrameButtons() {
+  frameBtnsEl.innerHTML = '';
+  currentCategoryDef().frames.forEach(fr => {
+    const btn = document.createElement('button');
+    btn.textContent = fr.label;
+    const count = pointsFor(currentCategory, currentDirKey, fr.key).length;
+    btn.classList.toggle('is-current', fr.key === currentFrameKey);
+    btn.classList.toggle('has-point', count > 0);
+    btn.addEventListener('click', () => {
+      currentFrameKey = fr.key;
+      render(); renderDirButtons(); renderFrameButtons();
+    });
+    frameBtnsEl.appendChild(btn);
+  });
+}
+
+document.getElementById('clearImageBtn').addEventListener('click', () => {
+  data[currentCategory][currentDirKey][currentFrameKey] = [];
+  saveToStorage(); render(); renderDirButtons(); renderFrameButtons();
 });
 document.getElementById('clearAllBtn').addEventListener('click', () => {
-  if (!confirm('Clear ALL placed points across every direction? This cannot be undone.')) return;
+  if (!confirm('Clear ALL placed points across every category/direction/frame? This cannot be undone.')) return;
   data = {};
-  saveToStorage(); render(); renderDirButtons();
+  saveToStorage(); render(); renderDirButtons(); renderFrameButtons();
 });
 
 // ====================================================================
-// Canvas: draw current direction's reference image + its point.
+// Canvas: draw current image + every point placed on it.
 // ====================================================================
 const canvas = document.getElementById('stage');
 const ctx = canvas.getContext('2d');
 const STAGE_SIZE = 700;
+const POINT_HIT_RADIUS = 14; // canvas backing-pixel px — same tap-target sizing as the rest of this file's own conventions
 
 let lastDrawGeom = null; // for click hit-mapping
 function render() {
-  const dir = currentDir();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#1a1c22';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  if (!dir.available) {
-    ctx.fillStyle = '#8a90a8';
-    ctx.font = '14px system-ui';
-    ctx.fillText('No Drag frames for "' + dir.label + '" yet — see the warning at right.', 20, 30);
-    lastDrawGeom = null;
-    return;
-  }
-
-  const img = getImage(currentDirKey);
+  const img = getImage(currentCategory, currentDirKey, currentFrameKey);
   if (!img.complete || img.naturalWidth === 0) {
     ctx.fillStyle = '#8a90a8';
     ctx.font = '13px system-ui';
@@ -261,8 +324,8 @@ function render() {
   ctx.drawImage(img, offX, offY, drawW, drawH);
   lastDrawGeom = { offX, offY, drawW, drawH };
 
-  const point = data[currentDirKey];
-  if (point) {
+  const points = currentPoints();
+  points.forEach(point => {
     const x = offX + point.x * drawW, y = offY + point.y * drawH;
     ctx.beginPath();
     ctx.arc(x, y, 8, 0, Math.PI * 2);
@@ -277,11 +340,14 @@ function render() {
     ctx.strokeStyle = 'rgba(255,255,255,0.6)';
     ctx.lineWidth = 1;
     ctx.stroke();
-  }
+  });
 
-  ctx.fillStyle = point ? '#7fd4ff' : '#8a90a8';
+  ctx.fillStyle = points.length ? '#7fd4ff' : '#8a90a8';
   ctx.font = 'bold 12px system-ui';
-  ctx.fillText(dir.label + (point ? ' (point placed)' : ' (click to place)'), offX, offY - 8 < 12 ? 14 : offY - 8);
+  const dir = currentDir();
+  ctx.fillText(dir.label + ' — ' + currentCategoryDef().label + ' — frame ' + currentFrameKey + ' (' + points.length + ' point' + (points.length === 1 ? '' : 's') + ')', offX, offY - 8 < 12 ? 14 : offY - 8);
+
+  document.getElementById('pointCount').textContent = points.length + ' point' + (points.length === 1 ? '' : 's') + ' placed';
 }
 
 canvas.addEventListener('click', (e) => {
@@ -291,11 +357,25 @@ canvas.addEventListener('click', (e) => {
   const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
   const { offX, offY, drawW, drawH } = lastDrawGeom;
   if (cx < offX || cx > offX + drawW || cy < offY || cy > offY + drawH) return; // outside image
-  const nx = (cx - offX) / drawW, ny = (cy - offY) / drawH;
 
-  data[currentDirKey] = { x: Math.round(nx * 1000) / 1000, y: Math.round(ny * 1000) / 1000 };
+  const points = currentPoints();
+  // Click ON an existing point (within its own hit radius, nearest-drawn
+  // first) removes it — this IS the entire add/delete gesture, no
+  // separate mode toggle, per explicit request ("I can add or delete").
+  let hitIndex = -1, hitDist = Infinity;
+  points.forEach((p, i) => {
+    const px = offX + p.x * drawW, py = offY + p.y * drawH;
+    const d = Math.hypot(cx - px, cy - py);
+    if (d <= POINT_HIT_RADIUS && d < hitDist) { hitDist = d; hitIndex = i; }
+  });
+  if (hitIndex !== -1) {
+    points.splice(hitIndex, 1);
+  } else {
+    const nx = (cx - offX) / drawW, ny = (cy - offY) / drawH;
+    points.push({ x: Math.round(nx * 1000) / 1000, y: Math.round(ny * 1000) / 1000 });
+  }
   saveToStorage();
-  render(); renderDirButtons();
+  render(); renderDirButtons(); renderFrameButtons();
 });
 
 // ====================================================================
@@ -303,7 +383,18 @@ canvas.addEventListener('click', (e) => {
 // ====================================================================
 function exportJson() {
   const out = {};
-  DIRECTIONS.forEach(d => { if (data[d.key]) out[d.key] = data[d.key]; });
+  CATEGORIES.forEach(cat => {
+    DIRECTIONS.forEach(dir => {
+      cat.frames.forEach(fr => {
+        const pts = pointsFor(cat.key, dir.key, fr.key);
+        if (pts.length) {
+          out[cat.key] = out[cat.key] || {};
+          out[cat.key][dir.key] = out[cat.key][dir.key] || {};
+          out[cat.key][dir.key][fr.key] = pts;
+        }
+      });
+    });
+  });
   return JSON.stringify(out, null, 2);
 }
 document.getElementById('copyBtn').addEventListener('click', () => {
@@ -340,8 +431,8 @@ document.getElementById('loadInput').addEventListener('change', (e) => {
   reader.onload = () => {
     try {
       const loaded = JSON.parse(reader.result);
-      DIRECTIONS.forEach(d => { if (loaded[d.key]) data[d.key] = loaded[d.key]; });
-      saveToStorage(); render(); renderDirButtons();
+      CATEGORIES.forEach(cat => { if (loaded[cat.key]) data[cat.key] = loaded[cat.key]; });
+      saveToStorage(); render(); renderDirButtons(); renderFrameButtons();
       document.getElementById('status').textContent = 'loaded';
     } catch (err) {
       alert('Could not parse that file as JSON: ' + err.message);
@@ -356,6 +447,8 @@ document.getElementById('loadInput').addEventListener('change', (e) => {
 // ====================================================================
 render();
 renderDirButtons();
+renderFrameButtons();
+renderCatButtons();
 </script>
 </body>
 </html>
