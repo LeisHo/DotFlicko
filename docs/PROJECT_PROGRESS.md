@@ -27,6 +27,18 @@ deployed Vercel site committed `data/processed/dev-panel-settings.json`
 straight to GitHub multiple times, pulled into this repo via several
 merges.
 
+**Open item:** `scripts/active/drag-point-annotator.html` (new) lets a
+single anchor point be placed on the last frame of each direction's new
+"Drag" animation set from DICKOCLICKO — built, verified, nothing
+annotated yet (that's the user's own next step, same as
+flick-skeleton-annotator.html's own joint data). 2 real DICKOCLICKO data
+gaps found while building it (verified via md5sum): "front" has NO Drag
+frames at all (both `FRONT DRAG` folders are empty); `FRONT PINKY DRAG`
+and `FRONT THUMB DRAG` are byte-for-byte identical folders (very likely
+one was copy-pasted as a placeholder and never replaced) — both need
+fixing at the DICKOCLICKO source before this direction's own Drag
+animation is real.
+
 **Open item:** a real mobile-lag report ("placing, rotating, moving...
 very very laggy") was addressed with 2 well-established canvas
 performance fixes (DPR capped at 2; idle-frame sprites now drawn from a

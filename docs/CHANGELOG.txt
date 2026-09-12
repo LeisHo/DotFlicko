@@ -1615,6 +1615,33 @@ flip every sampled button (across all 4 groups) identically; the
 per-button row no longer renders Bold/Capitalize sub-rows.
 
 --------------------------------------------------------------------------------
+2026-09-11 (7)
+
+Added scripts/active/drag-point-annotator.html: a simpler sibling of
+flick-skeleton-annotator.html for annotating DICKOCLICKO's new "Drag"
+animation set -- 1 clickable anchor point per direction on that
+direction's own last frame (a single still image, not an interpolated
+sequence), same localStorage-autosave + Copy/Download JSON export
+conventions. Reference images (scripts/active/drag-frames/<key>.png)
+are one-time local copies of each folder's own last frame, copied from
+DICKOCLICKO rather than fetched live.
+
+2 real data issues found via md5sum (not assumed) while building this,
+surfaced in the tool's own on-page warning:
+- "front" has NO Drag frames in DICKOCLICKO at all -- both
+  data/FLICK/2TONED/FRONT DRAG/ and .../FRONT DRAG - Copy/ are
+  completely empty. Disabled in the tool's direction list.
+- FRONT PINKY DRAG and FRONT THUMB DRAG are byte-for-byte IDENTICAL
+  folders in DICKOCLICKO (checked frames 001/024/048) -- very likely
+  one was copy-pasted as a placeholder for the other and never
+  replaced with its own real animation.
+
+Verified in-browser: all 7 available directions load their own
+distinct reference image; a placed point persists across direction
+switches and a full page reload; exported JSON matches the documented
+{key: {x,y}} shape.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
