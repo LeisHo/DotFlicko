@@ -1529,6 +1529,25 @@ exactly, and the existing finger-capsule collision + position-
 relaxation still fires correctly, both unaffected by this work.
 
 --------------------------------------------------------------------------------
+2026-09-11 (4)
+
+Level System UI follow-up, per explicit request.
+
+Changed:
+- Ball, Rectangle, and Target buttons moved to a new top-right button
+  group (`.sim-controls-right`), separate from the existing top-left
+  group.
+- Level Maker's own button is no longer DEV_MODE-gated -- it's now
+  available to everyone, still on the left. Doesn't newly expose the
+  Levels save/rename/delete dev-panel group beyond what was already
+  reachable (the dev panel itself was never DEV_MODE-gated to begin
+  with).
+
+Verified via getBoundingClientRect() checks (right-anchored group's
+right edge sits exactly at viewport-width minus the 10px margin) and a
+screenshot at 1280x800 confirming no overlap between the 2 groups.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

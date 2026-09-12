@@ -299,14 +299,17 @@ this note is now complete, committed, and pushed (`751f84d`) — see
   interleaved in the same working-tree `index.html` at the time —
   confirmed that work was left untouched on disk and unstaged.
 
-- Level System: Level Maker (dev-only, `?dev=1`-gated — the first
-  feature in this project to gate UI visibility on DEV_MODE, not just
-  the settings-save write path), Sandbox (same placement tools, player-
-  facing, no Target/save UI), and Play (a Levels dropdown + Play button
-  that loads a saved level's geometry read-only). Place/resize/rotate
-  wall-floor and target rectangles via 6 handles (move/4-corner-resize/
-  rotate), same rotation-aware local-space hit-testing `hitTestEntitySprite`
-  already used. New circle-vs-rotated-rect collision reuses the
+- Level System: Level Maker and Sandbox (same placement tools;
+  Sandbox never shows Target/the save UI), both available to everyone
+  (Level Maker briefly gated its own button on DEV_MODE, reverted per
+  direct request), and Play (a Levels dropdown + Play button that loads
+  a saved level's geometry read-only). Ball/Rectangle/Target live in
+  their own top-right button group, separate from the left-side Start/
+  Stop/Delete/Hand/Sandbox/Level Maker/Win/Lose group (also per direct
+  request). Place/resize/rotate wall-floor and target rectangles via 6
+  handles (move/4-corner-resize/rotate), same rotation-aware local-space
+  hit-testing `hitTestEntitySprite` already used. New circle-vs-rotated-rect
+  collision reuses the
   existing finger-capsule reflection formula unchanged. A Target rect
   is Instant Hit or Settle Duration (per-target choice) and auto-
   triggers Win; every ball falling off the bottom (no respawn during an

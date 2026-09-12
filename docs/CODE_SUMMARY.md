@@ -226,11 +226,14 @@ GOTCHAS
   displayed text with the other's. Give every distinct label its own
   `.dev-row`, even when 2 controls would otherwise fit naturally
   side-by-side.
-- `DEV_MODE` (`?dev=1` or local context) historically gated ONLY the
-  Tier-2 File System Access write path (`GIT_LOG_WRITABLE`), never any
-  UI visibility. The Level System's Level Maker button is the first
-  place in this project that gates a whole UI element on `DEV_MODE` —
-  don't assume `DEV_MODE` is purely a persistence concern going forward.
+- `DEV_MODE` (`?dev=1` or local context) gates ONLY the Tier-2 File
+  System Access write path (`GIT_LOG_WRITABLE`) — never any UI
+  visibility. The Level System's Level Maker button briefly gated its
+  own visibility on `DEV_MODE` too, but that was explicitly reverted
+  (per direct request: "provide a Level Maker button even for non dev
+  mode") — it's unconditionally visible now, same as every other
+  sim-controls button. Don't reintroduce a `DEV_MODE`-gated UI element
+  without confirming that's actually wanted again.
 - The dev panel's "Hand Rotation Offset" row is NOT a normal generic
   per-control row -- it's 8 real slider/value DOM element pairs (one per
   direction, `sliderRotOffset_<key>`/`valueRotOffset_<key>`), only the one
