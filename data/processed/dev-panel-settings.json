@@ -92,7 +92,7 @@
   "layout": {
     "left": 924,
     "top": 75,
-    "width": 524,
+    "width": 350,
     "height": 622
   },
   "devPanelStyle": {
@@ -381,5 +381,57 @@
   },
   "textEditModeEnabled": false,
   "scenes": {},
-  "levels": {}
+  "levels": {
+    "1": {
+      "rects": [
+        {
+          "x": 84.64750671386719,
+          "y": 660.4001159667969,
+          "w": 83.88578796386719,
+          "h": 20,
+          "rotation": 0,
+          "type": "target",
+          "targetMode": "instant",
+          "settleDuration": 2
+        },
+        {
+          "x": 99.46652221679688,
+          "y": 190.3619842529297,
+          "w": 175.3523178100586,
+          "h": 20,
+          "rotation": 5.6483441406202965,
+          "type": "solid",
+          "targetMode": "instant",
+          "settleDuration": 2
+        },
+        {
+          "x": 266.01898193359375,
+          "y": 596.3046875,
+          "w": 190.24774169921875,
+          "h": 20,
+          "rotation": 0.48943060495966734,
+          "type": "solid",
+          "targetMode": "instant",
+          "settleDuration": 2
+        },
+        {
+          "x": 371.90476989746094,
+          "y": 671.2001647949219,
+          "w": 51.085540771484375,
+          "h": 20,
+          "rotation": 0,
+          "type": "solid",
+          "targetMode": "instant",
+          "settleDuration": 2
+        }
+      ],
+      "ballSpawnPoints": [
+        {
+          "x": 362.66668701171875,
+          "y": 127.84747314453125
+        }
+      ],
+      "maxHands": null
+    }
+  }
 }
