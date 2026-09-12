@@ -35,7 +35,7 @@
     "sliderButtonOutlineThickness": 1,
     "sliderButtonPaddingVertical": 10,
     "sliderButtonPaddingHorizontal": 14,
-    "sliderButtonGapHorizontal": 15,
+    "sliderButtonGapHorizontal": 10,
     "sliderButtonGapVertical": 28,
     "checkboxButtonBold": true,
     "checkboxButtonCapitalize": true,
