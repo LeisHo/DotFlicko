@@ -3063,9 +3063,21 @@
             // animation is not fast enough to flick the ball"). Each
             // resolved hit updates ball.x/y in place, so a later segment's
             // own sweep this same tick starts from prevBallX/Y (unchanged)
-            // through the ball's now-updated position — same "resolved
-            // sequentially, not a rigorous simultaneous solve" scope this
-            // collision system already had before this change.
+            // through the ball's now-updated position. This positional
+            // "each hit corrects, one at a time" resolution is refined
+            // further below (POSITION_RELAXATION_ITERATIONS, after this
+            // forEach) once every capsule's own swept hit has been
+            // collected — real, reported "the ball still gets stuck
+            // sometimes" behavior in a densely-packed entity cluster
+            // traced to exactly this loop's own single-pass-only
+            // resolution: segment B's own correction can reintroduce
+            // overlap with segment A (or a DIFFERENT entity's own nearby
+            // capsule) that a single pass never gets a chance to notice
+            // or fix. Velocity effects (reflection + the collision kick,
+            // right below) are NOT relaxed the same way — they still
+            // apply once per capsule per tick, exactly as before; only
+            // the ball's final POSITION gets the extra passes.
+            const hitCapsules = [];
             entities.forEach(entity => {
                 // cfg.collisionOnlyWhilePlaying (per explicit request) gates
                 // ONLY this physical-collision block — the auto-trigger
@@ -3135,6 +3147,13 @@
                         }
                         ball.vx += nx * speed * cfg.collisionIntensity;
                         ball.vy += ny * speed * cfg.collisionIntensity;
+                        // Recorded for the position-only relaxation pass
+                        // below — deliberately just {a, b, minDist}, not
+                        // this hit's own now-stale cp/nx/ny (the ball's
+                        // position has already moved since this was
+                        // computed; relaxation re-measures fresh each
+                        // pass against the capsule's own fixed endpoints).
+                        hitCapsules.push({ a, b, minDist });
                     });
                 }
 
@@ -3150,6 +3169,59 @@
                     anyBallInZone.set(entity, true);
                 }
             });
+
+            // Position-only relaxation — the actual fix for "the ball
+            // still gets stuck sometimes" in a dense entity cluster (a
+            // real, reported screenshot: ~16 entities in a tight ring).
+            // The forEach above resolves each capsule's own hit ONE AT A
+            // TIME, immediately mutating ball.x/y — when the ball is
+            // simultaneously within range of 2+ capsules (routine in a
+            // dense cluster, rare with only a few scattered entities),
+            // segment B's own correction can silently reintroduce overlap
+            // with segment A (or a different entity's own nearby
+            // capsule), which that single pass has no way to notice or
+            // fix, since it moves on rather than re-checking earlier
+            // segments. This runs a few more passes over the SAME
+            // capsules hitCapsules already collected — each pass
+            // re-measures the ball's CURRENT position (a degenerate,
+            // zero-length "swept" call to the existing
+            // closestPointsBetweenSegments, i.e. a plain point-vs-segment
+            // distance check — safe against a zero-length p1/q1 segment,
+            // confirmed via that function's own a<=EPS branch) against
+            // every capsule's own fixed endpoints, and pushes out along
+            // whatever overlap remains. This is the same iterative-
+            // relaxation technique this workspace's own DickoClicko
+            // project already uses for its Verlet rope-constraint
+            // solving — several cheap passes let the ball's final
+            // position converge toward one that satisfies every nearby
+            // capsule at once, instead of trusting whichever single
+            // capsule happened to be resolved last. Position-only,
+            // deliberately: velocity (reflection + the collision kick)
+            // already applied once per capsule above, in the same forEach
+            // — re-applying velocity effects per relaxation pass would
+            // multiply the kick/reflection impulse unrealistically for a
+            // ball genuinely resting in a multi-capsule pocket, which is
+            // exactly the scenario this fix targets. Skipped entirely
+            // when 0-1 capsules were hit (denser exactly where it's
+            // needed, free everywhere else).
+            const POSITION_RELAXATION_ITERATIONS = 4;
+            if (hitCapsules.length > 1) {
+                for (let iter = 0; iter < POSITION_RELAXATION_ITERATIONS; iter++) {
+                    let anyOverlap = false;
+                    hitCapsules.forEach(({ a, b, minDist }) => {
+                        const cp = closestPointsBetweenSegments(ball.x, ball.y, ball.x, ball.y, a.x, a.y, b.x, b.y);
+                        if (cp.distSq >= minDist * minDist) return;
+                        anyOverlap = true;
+                        const dist = Math.sqrt(cp.distSq);
+                        const dx = cp.c1x - cp.c2x, dy = cp.c1y - cp.c2y;
+                        const nx = dist > 0.0001 ? dx / dist : 0, ny = dist > 0.0001 ? dy / dist : -1;
+                        const overlap = minDist - dist;
+                        ball.x = cp.c1x + nx * overlap;
+                        ball.y = cp.c1y + ny * overlap;
+                    });
+                    if (!anyOverlap) break; // converged early — most ticks resolve in 1 pass
+                }
+            }
 
             // Air Drag — exponential velocity decay, applied ONCE per
             // tick after every velocity change above (same "apply once,
