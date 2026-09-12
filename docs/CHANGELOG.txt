@@ -1687,6 +1687,18 @@ Verified: a fresh browser with no localStorage loads exactly the
 pasted data; a placed point renders at the expected location.
 
 --------------------------------------------------------------------------------
+2026-09-12 (3)
+
+Re-synced Behind Thumb/Pinky Drag frame 48 (drag-frames/behind-thumb-
+drag-48.png, behind-pinky-drag-48.png) after the user updated those 2
+directions' source art in DICKOCLICKO. Frame 01 unchanged for both
+(confirmed via md5sum). Found (not assumed) that BEHHIND PINK DRAG is
+missing frames 045-047 in DICKOCLICKO (jumps 044 straight to 048) --
+048 itself exists and is what this tool needs, so not currently
+blocking, but the gap suggests that direction's own update may be
+incomplete. BEHHIND THUMB DRAG has no such gap.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
