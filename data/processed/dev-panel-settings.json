@@ -15,10 +15,13 @@
     "sliderBallMaxSpeed": 160,
     "sliderBallDrag": 0,
     "sliderBallSpawnSpread": 0,
+    "checkboxBallToBallCollision": false,
+    "sliderBallStillnessSpeedThreshold": 3,
     "sliderJointThickness": 2,
     "sliderThicknessSmoothing": 0.36,
     "sliderCollisionIntensity": 0.7,
     "checkboxShowJointCollisionLines": false,
+    "checkboxCollisionOnlyWhilePlaying": false,
     "checkboxShowCenter": false,
     "checkboxShowAngleDebug": false,
     "checkboxHideCursor": false,
@@ -26,6 +29,25 @@
     "checkboxAllowPlacementWhileRunning": true,
     "sliderWinLoseFistHoldDuration": 1,
     "sliderWinLoseFinalHoldDuration": 4.9,
+    "sliderWinLoseAnimSpeed": 11.7,
+    "selectButtonFontFamily": "Arial, Helvetica, sans-serif",
+    "sliderButtonFontSize": 12,
+    "sliderButtonOutlineThickness": 1,
+    "sliderButtonPaddingVertical": 10,
+    "sliderButtonPaddingHorizontal": 14,
+    "sliderButtonGapHorizontal": 15,
+    "sliderButtonGapVertical": 18,
+    "sliderHandsFontSize": 14,
+    "checkboxHandsCapitalize": false,
+    "checkboxHandsBold": false,
+    "sliderHandsXOffset": 10,
+    "sliderHandsYOffset": 104,
+    "selectHandsHorizontalAlign": "left",
+    "checkboxHandsHorizontalEdgeLock": false,
+    "selectHandsVerticalAlign": "top",
+    "checkboxHandsVerticalEdgeLock": false,
+    "sliderHandsLetterSpacing": 0,
+    "sliderHandsInfinityFontSize": 14,
     "selectRotationOffsetDirection": "front-pinky",
     "sliderRotOffset_behind": 1,
     "sliderRotOffset_behind-thumb": 0,
@@ -43,16 +65,62 @@
     "sliderXOffset_front": 0,
     "sliderXOffset_front-pinky": 0,
     "sliderXOffset_side-pinky": 0,
-    "sliderXOffset_behind-pinky": -0.5
+    "sliderXOffset_behind-pinky": -0.5,
+    "selectButtonStyleTarget": "startBtn",
+    "colorBtnBorder_startBtn": "#4dd27a",
+    "checkboxBtnBold_startBtn": true,
+    "checkboxBtnCapitalize_startBtn": true,
+    "colorBtnBorder_stopBtn": "#ff5c5c",
+    "checkboxBtnBold_stopBtn": true,
+    "checkboxBtnCapitalize_stopBtn": false,
+    "colorBtnBorder_deleteBtn": "#ff9500",
+    "checkboxBtnBold_deleteBtn": true,
+    "checkboxBtnCapitalize_deleteBtn": false,
+    "colorBtnBorder_ballBtn": "#ff5c5c",
+    "checkboxBtnBold_ballBtn": true,
+    "checkboxBtnCapitalize_ballBtn": false,
+    "colorBtnBorder_rectBtn": "#c8c8d2",
+    "checkboxBtnBold_rectBtn": true,
+    "checkboxBtnCapitalize_rectBtn": false,
+    "colorBtnBorder_targetBtn": "#ffd64d",
+    "checkboxBtnBold_targetBtn": true,
+    "checkboxBtnCapitalize_targetBtn": false,
+    "colorBtnBorder_handBtn": "#8ad6ff",
+    "checkboxBtnBold_handBtn": true,
+    "checkboxBtnCapitalize_handBtn": false,
+    "colorBtnBorder_sandboxBtn": "#4dd27a",
+    "checkboxBtnBold_sandboxBtn": true,
+    "checkboxBtnCapitalize_sandboxBtn": false,
+    "colorBtnBorder_levelMakerBtn": "#ffd64d",
+    "checkboxBtnBold_levelMakerBtn": true,
+    "checkboxBtnCapitalize_levelMakerBtn": false,
+    "colorBtnBorder_playLevelBtn": "#4dd27a",
+    "checkboxBtnBold_playLevelBtn": true,
+    "checkboxBtnCapitalize_playLevelBtn": false,
+    "colorBtnBorder_saveLevelBtn": "#8ad6ff",
+    "checkboxBtnBold_saveLevelBtn": true,
+    "checkboxBtnCapitalize_saveLevelBtn": false,
+    "colorBtnBorder_editLevelBtn": "#ffd64d",
+    "checkboxBtnBold_editLevelBtn": true,
+    "checkboxBtnCapitalize_editLevelBtn": false,
+    "colorBtnBorder_overwriteLevelBtn": "#ff9500",
+    "checkboxBtnBold_overwriteLevelBtn": true,
+    "checkboxBtnCapitalize_overwriteLevelBtn": false,
+    "colorBtnBorder_winBtn": "#4dd27a",
+    "checkboxBtnBold_winBtn": true,
+    "checkboxBtnCapitalize_winBtn": false,
+    "colorBtnBorder_loseBtn": "#ff5c5c",
+    "checkboxBtnBold_loseBtn": true,
+    "checkboxBtnCapitalize_loseBtn": false
   },
   "layout": {
-    "left": 30,
-    "top": 112,
-    "width": 264,
-    "height": 446
+    "left": 924,
+    "top": 75,
+    "width": 524,
+    "height": 622
   },
   "devPanelStyle": {
-    "titleFontSize": 22,
+    "titleFontSize": 15,
     "tabFontSize": 12,
     "groupTitleFontSize": 11,
     "settingTitleFontSize": 12,
@@ -126,22 +194,6 @@
   "sectionOrder": {
     "desktopTabContent": [
       {
-        "key": "desktop:Win / Lose",
-        "rowKeys": [
-          "sliderWinLoseFistHoldDuration",
-          "sliderWinLoseFinalHoldDuration"
-        ],
-        "subgroups": []
-      },
-      {
-        "key": "desktop:Scenes",
-        "rowKeys": [
-          "inputSceneName",
-          "selectSceneName"
-        ],
-        "subgroups": []
-      },
-      {
         "key": "desktop:Dev Panel",
         "rowKeys": [
           "sliderDevPanelTitleFontSize",
@@ -163,6 +215,106 @@
           "checkboxDevCapsGroupNames",
           "checkboxDevCapsSettingsText",
           "checkboxDevTextEditMode"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "desktop:UI",
+        "rowKeys": [
+          "selectButtonFontFamily",
+          "sliderButtonFontSize",
+          "sliderButtonOutlineThickness",
+          "sliderButtonPaddingVertical",
+          "sliderButtonPaddingHorizontal",
+          "sliderButtonGapHorizontal",
+          "sliderButtonGapVertical",
+          "sliderHandsFontSize",
+          "checkboxHandsCapitalize",
+          "checkboxHandsBold",
+          "sliderHandsXOffset",
+          "sliderHandsYOffset",
+          "selectHandsHorizontalAlign",
+          "checkboxHandsHorizontalEdgeLock",
+          "selectHandsVerticalAlign",
+          "checkboxHandsVerticalEdgeLock",
+          "sliderHandsLetterSpacing",
+          "sliderHandsInfinityFontSize",
+          "selectButtonStyleTarget",
+          "colorBtnBorder_startBtn",
+          "checkboxBtnBold_startBtn",
+          "checkboxBtnCapitalize_startBtn",
+          "colorBtnBorder_stopBtn",
+          "checkboxBtnBold_stopBtn",
+          "checkboxBtnCapitalize_stopBtn",
+          "colorBtnBorder_deleteBtn",
+          "checkboxBtnBold_deleteBtn",
+          "checkboxBtnCapitalize_deleteBtn",
+          "colorBtnBorder_ballBtn",
+          "checkboxBtnBold_ballBtn",
+          "checkboxBtnCapitalize_ballBtn",
+          "colorBtnBorder_rectBtn",
+          "checkboxBtnBold_rectBtn",
+          "checkboxBtnCapitalize_rectBtn",
+          "colorBtnBorder_targetBtn",
+          "checkboxBtnBold_targetBtn",
+          "checkboxBtnCapitalize_targetBtn",
+          "colorBtnBorder_handBtn",
+          "checkboxBtnBold_handBtn",
+          "checkboxBtnCapitalize_handBtn",
+          "colorBtnBorder_sandboxBtn",
+          "checkboxBtnBold_sandboxBtn",
+          "checkboxBtnCapitalize_sandboxBtn",
+          "colorBtnBorder_levelMakerBtn",
+          "checkboxBtnBold_levelMakerBtn",
+          "checkboxBtnCapitalize_levelMakerBtn",
+          "colorBtnBorder_playLevelBtn",
+          "checkboxBtnBold_playLevelBtn",
+          "checkboxBtnCapitalize_playLevelBtn",
+          "colorBtnBorder_saveLevelBtn",
+          "checkboxBtnBold_saveLevelBtn",
+          "checkboxBtnCapitalize_saveLevelBtn",
+          "colorBtnBorder_editLevelBtn",
+          "checkboxBtnBold_editLevelBtn",
+          "checkboxBtnCapitalize_editLevelBtn",
+          "colorBtnBorder_overwriteLevelBtn",
+          "checkboxBtnBold_overwriteLevelBtn",
+          "checkboxBtnCapitalize_overwriteLevelBtn",
+          "colorBtnBorder_winBtn",
+          "checkboxBtnBold_winBtn",
+          "checkboxBtnCapitalize_winBtn",
+          "colorBtnBorder_loseBtn",
+          "checkboxBtnBold_loseBtn",
+          "checkboxBtnCapitalize_loseBtn"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "desktop:Levels",
+        "rowKeys": [
+          "inputLevelName",
+          "selectLevelName",
+          "inputLevelRename",
+          "sliderMaxHands",
+          "checkboxUnlimitedHands",
+          "selectTargetMode",
+          "inputTargetSettleDuration"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "desktop:Win / Lose",
+        "rowKeys": [
+          "sliderWinLoseAnimSpeed",
+          "sliderWinLoseFistHoldDuration",
+          "sliderWinLoseFinalHoldDuration"
+        ],
+        "subgroups": []
+      },
+      {
+        "key": "desktop:Scenes",
+        "rowKeys": [
+          "inputSceneName",
+          "selectSceneName"
         ],
         "subgroups": []
       },
@@ -190,6 +342,8 @@
       {
         "key": "desktop:Ball",
         "rowKeys": [
+          "checkboxBallToBallCollision",
+          "sliderBallStillnessSpeedThreshold",
           "sliderBallDrag",
           "sliderBallSpawnSpread",
           "sliderBallMaxSpeed",
@@ -204,6 +358,7 @@
       {
         "key": "desktop:Collision",
         "rowKeys": [
+          "checkboxCollisionOnlyWhilePlaying",
           "sliderJointThickness",
           "sliderThicknessSmoothing",
           "sliderCollisionIntensity",
@@ -255,9 +410,11 @@
     ]
   },
   "sectionCollapseState": {
-    "desktop:Win / Lose": false,
-    "desktop:Scenes": true,
     "desktop:Dev Panel": true,
+    "desktop:UI": false,
+    "desktop:Levels": true,
+    "desktop:Win / Lose": true,
+    "desktop:Scenes": false,
     "desktop:Entity": true,
     "desktop:Background": true,
     "desktop:Ball": true,
@@ -271,5 +428,6 @@
     "desktop:Entity": "HAND"
   },
   "textEditModeEnabled": false,
-  "scenes": {}
+  "scenes": {},
+  "levels": {}
 }
