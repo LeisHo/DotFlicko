@@ -20,11 +20,9 @@ export the result.
 
 DATA CAVEATS FOUND WHILE BUILDING THIS (verified via md5sum, not
 assumed) — read before treating this tool's images as final:
-  - "front" has NO Drag frames at all in DICKOCLICKO: both
-    data/FLICK/2TONED/FRONT DRAG/ and .../FRONT DRAG - Copy/ are
-    completely empty (0 files). Only 7 of the 8 directions are
-    annotatable here; "front" shows as disabled below until real
-    frames exist.
+  - (RESOLVED 2026-09-12) "front" originally had NO Drag frames at all
+    in DICKOCLICKO — real frames were added since; all 8 directions are
+    now annotatable.
   - FRONT PINKY DRAG and FRONT THUMB DRAG are byte-for-byte IDENTICAL
     folders in DICKOCLICKO (confirmed across frames 001/024/048, not
     just the last one) — one was very likely copy-pasted as a
@@ -71,8 +69,25 @@ same normalized-space convention flick-skeleton-annotator.html uses.
   button.danger { background: #6b2c2c; border-color: #944; }
   main { flex: 1; display: flex; min-height: 0; }
   .canvas-pane { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0c0d11; position: relative; }
-  #stage { display: block; border: 1px solid #2c3040; background: #1a1c22; cursor: crosshair; }
+  /* max-width/height:auto lets the canvas shrink to fit a narrow mobile
+     viewport instead of overflowing it — the click handler already maps
+     a click/tap through `canvas.width / rect.getBoundingClientRect().width`,
+     so this is purely a display-size change; the coordinate math needs
+     no adjustment. touch-action:manipulation stops a tap from also
+     triggering the browser's own double-tap-zoom/scroll gesture. */
+  #stage { display: block; max-width: 100%; height: auto; border: 1px solid #2c3040; background: #1a1c22; cursor: crosshair; touch-action: manipulation; }
   .side-pane { width: 280px; border-left: 1px solid #2c3040; background: #1c1f28; padding: 12px; overflow-y: auto; }
+  /* Mobile: stack the canvas above the side panel (a fixed 280px side
+     rail has no room on a phone-width screen) and let the whole page
+     scroll instead of clipping the side panel to a fixed-height column,
+     per this workspace's own "desktop and mobile both first-class"
+     convention. */
+  @media (max-width: 700px) {
+    body { height: auto; min-height: 100vh; }
+    main { flex-direction: column; }
+    .canvas-pane { padding: 10px; }
+    .side-pane { width: auto; border-left: none; border-top: 1px solid #2c3040; max-height: none; overflow-y: visible; }
+  }
   .side-pane h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #8a90a8; margin: 16px 0 8px; }
   .side-pane h2:first-child { margin-top: 0; }
   .dir-btns { display: flex; flex-direction: column; gap: 4px; }
@@ -100,11 +115,12 @@ same normalized-space convention flick-skeleton-annotator.html uses.
   </div>
   <div class="side-pane">
     <div class="warn-box">
-      <strong>Data note:</strong> "Front" has no Drag frames in DICKOCLICKO
-      yet (both FRONT DRAG folders are empty) — disabled below.
-      Front Pinky and Front Thumb's own Drag folders are currently
-      byte-identical to each other (verified via md5sum) — likely one
-      was copy-pasted as a placeholder for the other.
+      <strong>Data note:</strong> Front Pinky and Front Thumb's own Drag
+      folders in DICKOCLICKO are currently byte-identical to each other
+      (verified via md5sum) — likely one was copy-pasted as a placeholder
+      for the other and not yet replaced with its own real animation.
+      ("Front" itself got its real frames added 2026-09-12 — no longer
+      an open issue.)
     </div>
     <h2>Direction (point placed = filled)</h2>
     <div class="dir-btns" id="dirBtns"></div>
@@ -137,7 +153,7 @@ const DIRECTIONS = [
   { key: 'behind-thumb', label: 'Behind Thumb', file: 'drag-frames/behind-thumb.png', available: true },
   { key: 'side-thumb',   label: 'Side Thumb',   file: 'drag-frames/side-thumb.png',   available: true },
   { key: 'front-thumb',  label: 'Front Thumb',  file: 'drag-frames/front-thumb.png',  available: true },
-  { key: 'front',        label: 'Front',        file: null,                          available: false },
+  { key: 'front',        label: 'Front',        file: 'drag-frames/front.png',       available: true },
   { key: 'front-pinky',  label: 'Front Pinky',  file: 'drag-frames/front-pinky.png',  available: true },
   { key: 'side-pinky',   label: 'Side Pinky',   file: 'drag-frames/side-pinky.png',   available: true },
   { key: 'behind-pinky', label: 'Behind Pinky', file: 'drag-frames/behind-pinky.png', available: true },
