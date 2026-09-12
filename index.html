@@ -224,6 +224,14 @@
         display: flex;
         gap: 6px;
     }
+    .sim-controls-right {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 100000;
+        display: flex;
+        gap: 6px;
+    }
     .hands-remaining-hud {
         position: fixed;
         top: 50px;
@@ -383,9 +391,6 @@
     <button id="startBtn">Start</button>
     <button id="stopBtn">Stop</button>
     <button id="deleteBtn">Delete</button>
-    <button id="ballBtn">Ball</button>
-    <button id="rectBtn">Rectangle</button>
-    <button id="targetBtn">Target</button>
     <button id="handBtn">Hand</button>
     <button id="sandboxBtn">Sandbox</button>
     <button id="levelMakerBtn">Level Maker</button>
@@ -393,6 +398,11 @@
     <button id="playLevelBtn">Play</button>
     <button id="winBtn">Win</button>
     <button id="loseBtn">Lose</button>
+</div>
+<div class="sim-controls-right">
+    <button id="ballBtn">Ball</button>
+    <button id="rectBtn">Rectangle</button>
+    <button id="targetBtn">Target</button>
 </div>
 <div id="handsRemainingHud" class="hands-remaining-hud" hidden></div>
 
@@ -4865,11 +4875,13 @@
     targetBtn.addEventListener('click', () => { setTargetPlacementMode(!targetPlacementMode); clearHandModeActiveClass(); });
     handBtn.addEventListener('click', () => setLevelHandMode());
 
-    // Top-level editing context — null (plain Play), 'sandbox' (player-
-    // facing freeform wall/ball placement, no Target/save UI), or
-    // 'levelMaker' (dev-only, adds Target + the Levels save/rename/
-    // delete panel on top of Sandbox's same tools). Mutually exclusive
-    // with each other; both disabled while running (nothing to edit).
+    // Top-level editing context — null (plain Play), 'sandbox' (freeform
+    // wall/ball placement, no Target/save UI), or 'levelMaker' (adds
+    // Target + the Levels save/rename/delete panel on top of Sandbox's
+    // same tools). Both buttons are available to everyone (per explicit
+    // request — Level Maker is no longer DEV_MODE-gated); mutually
+    // exclusive with each other, both disabled while running (nothing to
+    // edit).
     const sandboxBtn = document.getElementById('sandboxBtn');
     const levelMakerBtn = document.getElementById('levelMakerBtn');
     const levelSelect = document.getElementById('levelSelect');
@@ -4879,7 +4891,12 @@
         const editing = levelEditMode !== null;
         [deleteBtn, ballBtn, rectBtn, targetBtn, handBtn].forEach(b => { b.style.display = editing ? '' : 'none'; });
         targetBtn.style.display = (editing && levelEditMode === 'levelMaker') ? '' : 'none';
-        levelMakerBtn.style.display = DEV_MODE ? '' : 'none';
+        // Level Maker is now available to everyone, not just DEV_MODE —
+        // per explicit request. (The dev panel's own visibility was
+        // already independent of DEV_MODE — see CODE_SUMMARY.md's own
+        // gotcha — so this doesn't newly expose anything that wasn't
+        // already reachable by opening the dev panel directly.)
+        levelMakerBtn.style.display = '';
         levelSelect.style.display = editing ? 'none' : '';
         playLevelBtn.style.display = editing ? 'none' : '';
         sandboxBtn.classList.toggle('active', levelEditMode === 'sandbox');
