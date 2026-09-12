@@ -27,17 +27,19 @@ deployed Vercel site committed `data/processed/dev-panel-settings.json`
 straight to GitHub multiple times, pulled into this repo via several
 merges.
 
-**Open item:** `scripts/active/drag-point-annotator.html` (new) lets a
-single anchor point be placed on the last frame of each direction's new
-"Drag" animation set from DICKOCLICKO — built, verified, nothing
-annotated yet (that's the user's own next step, same as
-flick-skeleton-annotator.html's own joint data). 2 real DICKOCLICKO data
-gaps found while building it (verified via md5sum): "front" has NO Drag
-frames at all (both `FRONT DRAG` folders are empty); `FRONT PINKY DRAG`
-and `FRONT THUMB DRAG` are byte-for-byte identical folders (very likely
-one was copy-pasted as a placeholder and never replaced) — both need
-fixing at the DICKOCLICKO source before this direction's own Drag
-animation is real.
+**Open item:** `scripts/active/drag-point-annotator.html` covers all 3
+of DICKOCLICKO's animation-variant sets (Drag, Sciss, Tickle), each
+direction's own first AND last frame (frame numbers verified
+per-category — Sciss actually ends at 045, not 048), multiple points
+per image (click to add, click on a point to remove) — mobile-
+responsive too. Built and verified; **nothing annotated yet**, that's
+the user's own next step (same as flick-skeleton-annotator.html's own
+joint data). "front" originally had no Drag frames at all — fixed at
+the DICKOCLICKO source 2026-09-12. Still open: Drag's `FRONT PINKY
+DRAG`/`FRONT THUMB DRAG` are byte-for-byte identical folders (verified
+via md5sum) — very likely one was copy-pasted as a placeholder and
+never replaced with its own real animation; needs fixing at the
+DICKOCLICKO source before that direction's own Drag animation is real.
 
 **Open item:** a real mobile-lag report ("placing, rotating, moving...
 very very laggy") was addressed with 2 well-established canvas

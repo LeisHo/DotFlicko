@@ -1642,6 +1642,37 @@ switches and a full page reload; exported JSON matches the documented
 {key: {x,y}} shape.
 
 --------------------------------------------------------------------------------
+2026-09-12 (1)
+
+Drag Point Annotator follow-up: front frames, mobile support, then a
+substantial rebuild (3 categories, first+last frames, multi-point).
+
+Added/changed:
+- "front" Drag frames were added to DICKOCLICKO -- copied in, the tool's
+  disabled state and on-page warning removed for it.
+- Mobile support: canvas scales to fit a narrow viewport, touch-action:
+  manipulation stops tap-triggered zoom/scroll, a 700px breakpoint
+  stacks the side panel below the canvas. Added a 4th static-server
+  config (static-alt3, port 8423) to .claude/launch.json since this
+  session's 3 existing ports were all occupied by concurrent sessions.
+- Rebuilt to cover Sciss and Tickle (DICKOCLICKO's other 2 animation-
+  variant sets) alongside Drag -- both verified to have all 8
+  directions with no cross-direction duplicate folders. Each direction
+  now shows its own first AND last frame (frame numbers verified
+  per-category, not assumed: Sciss actually ends at 045, not 048).
+  Points are now an array per category+direction+frame -- click empty
+  space to add, click ON an existing point to remove it, no separate
+  mode toggle. 48 reference images total, consistently named
+  <direction>-<category>-<frame>.png.
+
+Verified: all 48 images load; a real add-3/delete-1 click sequence
+produced exactly the expected result at the exact clicked coordinates;
+category/frame switches keep points independent and correctly
+restored; localStorage persists across reload; exported JSON matches
+the documented nested shape; a real 375x812 mobile screenshot plus an
+actual tap confirmed the rebuilt UI still works at that size.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
