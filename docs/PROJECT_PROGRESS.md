@@ -408,6 +408,28 @@ this note is now complete, committed, and pushed (`751f84d`) — see
   independent of the regular Save/Sync pipeline. See `CHANGELOG.txt`
   (2026-09-14 (4)) for the full verification list.
 
+  **The Dev Panel group's nesting is now actually reliable, not just
+  correct-on-a-fresh-load.** Root cause of the earlier "still doesn't
+  match exactly, floating settings" report: this project's own
+  committed `data/processed/dev-panel-settings.json` predates the
+  nesting feature (a flat, no-subgroups saved order) — every real page
+  load was applying that stale order AFTER the fresh nesting was
+  built, silently flattening it back out. Fixed
+  `applyDefaultDevPanelSubgroupOrder()`'s own correctness check (now
+  verifies the Scroll Strength row's actual current parent group, not
+  just "does a MECHANICS section element exist somewhere" — the latter
+  stayed true even for a hollowed-out shell) and now calls it a 2nd
+  time, inside `applyFullDevPanelState()` itself, so it self-heals on
+  every real load rather than only a page with no saved settings.
+  2 real group/setting NAME mismatches were also found via a direct
+  label-by-label diff against the template and fixed: "Scroll
+  Strength (x):" → "Dev Panel Scroll Strength (x):", and "Enable Label
+  Rename Mode" moved out of the Dev Panel group's own control array
+  into a standalone panel-level checkbox (matching the template
+  exactly) — it had no subgroup home, which was itself one of the
+  reported floating settings. See `CHANGELOG.txt` (2026-09-14 (5)) for
+  the full verification list.
+
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-
 direction Hand Rotation Offset (the original, non-live version); top-edge

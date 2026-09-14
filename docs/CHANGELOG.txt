@@ -1890,6 +1890,60 @@ Delete correctly removed it; the group's own collapse/expand still
 works. assertDevControlsRendered() returns 0 missing.
 
 --------------------------------------------------------------------------------
+2026-09-14 (5)
+
+Fixed the real reason the Dev Panel group's nesting didn't match
+TEMPLATE_DEV_PANEL.html "exactly" despite the earlier (4) port: the
+project's own committed data/processed/dev-panel-settings.json
+predates the nesting feature entirely -- its saved sectionOrder for
+"Dev Panel" is a flat list (subgroups: [], 19 bare rowKeys). Every
+page load applies this saved order AFTER the fresh default nesting is
+built, and applySectionOrder() steals each named row back out to Dev
+Panel's own flat top-level content (appendChild side effect), leaving
+the MECHANICS/PANEL UI/TEXT subgroup shells behind now hollow -- which
+is exactly why some settings kept appearing to "float" directly in the
+Dev Panel group instead of their correct subgroup, on every real page
+load, even though a genuinely fresh/no-saved-data load already nested
+them correctly.
+
+Fixed applyDefaultDevPanelSubgroupOrder()'s own idempotency check: it
+used to test "does a MECHANICS section element exist anywhere" (true
+even for the hollowed-out shell), now it checks the Scroll Strength
+row's OWN actual current parent group -- only true nesting counts.
+When false, it now flattens every row back to the group's own top
+level first (recovering anything still trapped inside a stale
+subgroup) and removes the stale shells before rebuilding, rather than
+silently no-op'ing. Also now called a 2nd time, inside
+applyFullDevPanelState() itself (right after applySectionOrder()) --
+not just once at boot -- so this self-heals on every real load
+(initial boot, Reset, Named Setting State Use/Set Default), not only a
+page with no saved settings at all.
+
+Verified live: manually reproduced the exact stale saved shape (the
+real committed JSON's own flat Dev Panel rowKeys) via
+applyFullDevPanelState(), confirmed the bug (Scroll Strength ends up
+under "Dev Panel" flat, not "MECHANICS") on the OLD code path, then
+confirmed the fix self-heals it back to the exactly correct nesting
+(Scroll Strength -> MECHANICS, Background Color -> PANEL UI, Font
+Family -> TEXT) with 0 missing controls (assertDevControlsRendered()).
+
+Also fixed 2 real group/setting NAME mismatches found via a direct
+label-by-label diff against the template's own DEVPANEL_STYLE_CONTROLS
+(per explicit follow-up: "this change should also include Group and
+Setting names"):
+- "Scroll Strength (x):" -> "Dev Panel Scroll Strength (x):" (the
+  template's own current exact label).
+- "Enable Label Rename Mode" was still registered as a row INSIDE the
+  Dev Panel group's own control array -- the template moved this to a
+  standalone, panel-level checkbox (outside every .dev-section,
+  between Saved Dev Settings and the tabs) specifically because it has
+  no subgroup home; this was itself one of the reported "floating
+  settings." Removed from DEVPANEL_STYLE_CONTROLS and its
+  renderDevPanelStyleControls() special-case; added as the same
+  standalone HTML the template uses, with its initial .checked sync
+  moved into setupDevPanelStyleControls() (matching the template).
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

@@ -591,6 +591,20 @@
             </div>
         </div>
 
+        <!-- Panel-level (not per-group) — deliberately OUTSIDE every
+             .dev-section, above the tabs/group list entirely, matching
+             TEMPLATE_DEV_PANEL.html exactly (moved out of the "Dev
+             Panel" group's own DEVPANEL_STYLE_CONTROLS array, which no
+             longer registers it there — it was the one "floating"
+             setting inside that group with no subgroup home).
+             captureFullDevPanelState()/applyFullDevPanelState() already
+             track textEditModeEnabled as its own top-level field
+             regardless of where this checkbox lives in the DOM. -->
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:10px;">
+            <input type="checkbox" id="checkboxDevTextEditMode">
+            <span class="dev-label" style="min-width:auto;">Enable Label Rename Mode</span>
+        </label>
+
         <div class="dev-tabs">
             <button class="dev-tab-btn active" id="devTabDesktopBtn" onclick="switchDevPanelTab('desktop')">DESKTOP</button>
             <button class="dev-tab-btn" id="devTabMobileBtn" onclick="switchDevPanelTab('mobile')">MOBILE</button>
@@ -1851,7 +1865,7 @@
                 { tab, group: 'Dev Panel', id: idPrefix + 'GroupTitleFontSize', type: 'slider', label: 'Group Title Font Size (px):', min: 6, max: 30, step: 1, value: 11 },
                 { tab, group: 'Dev Panel', id: idPrefix + 'SettingTitleFontSize', type: 'slider', label: 'Setting Title Font Size (px):', min: 6, max: 30, step: 1, value: 12 },
                 { tab, group: 'Dev Panel', id: idPrefix + 'ButtonTextBorder', type: 'slider', label: 'Button Text Border (px):', min: 0, max: 20, step: 1, value: 0 },
-                { tab, group: 'Dev Panel', id: idPrefix + 'ScrollStrength', type: 'slider', label: 'Scroll Strength (x):', min: 0.2, max: 5, step: 0.1, value: 0.2 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'ScrollStrength', type: 'slider', label: 'Dev Panel Scroll Strength (x):', min: 0.2, max: 5, step: 0.1, value: 0.2 },
                 { tab, group: 'Dev Panel', id: idPrefix + 'ButtonHeight', type: 'slider', label: 'Button Height (px):', min: 12, max: 60, step: 1, value: 21 },
                 { tab, group: 'Dev Panel', id: idPrefix + 'ValueFontSize', type: 'slider', label: 'Setting Number Font Size (px):', min: 6, max: 30, step: 1, value: 10 },
                 { tab, group: 'Dev Panel', id: idPrefix + 'TitleLetterSpacing', type: 'slider', label: 'Dev Panel Title Letter Spacing (px):', min: -2, max: 10, step: 0.1, value: 0 },
@@ -1881,7 +1895,6 @@
                 { tab, group: 'Dev Panel', id: 'checkboxDevCapsTabText', type: 'checkbox', label: 'Capitalize Tab Text' },
                 { tab, group: 'Dev Panel', id: 'checkboxDevCapsGroupNames', type: 'checkbox', label: 'Capitalize Group Names' },
                 { tab, group: 'Dev Panel', id: 'checkboxDevCapsSettingsText', type: 'checkbox', label: 'Capitalize Settings Text' },
-                { tab, group: 'Dev Panel', id: 'checkboxDevTextEditMode', type: 'checkbox', label: 'Enable Label Rename Mode' },
                 { tab, group: 'Dev Panel', id: 'colorDevPanelGroupText', type: 'color', label: 'Group Text Color:', value: '#ffffff' },
                 { tab, group: 'Dev Panel', id: 'colorDevPanelButtonText', type: 'color', label: 'Button Text Color:', value: '#ffffff' },
                 { tab, group: 'Dev Panel', id: 'colorDevPanelSettingNumber', type: 'color', label: 'Setting Number Text Color:', value: '#5cc9ff' },
@@ -1919,7 +1932,6 @@
             content.appendChild(row);
             if (ctrl.id === 'selectDevPanelFontFamily') row.querySelector('select').value = devPanelStyle.fontFamily;
             else if (ctrl.id in DEV_PANEL_CAPS_CHECKBOX_KEYS) row.querySelector('input').checked = !!devPanelStyle[DEV_PANEL_CAPS_CHECKBOX_KEYS[ctrl.id]];
-            else if (ctrl.id === 'checkboxDevTextEditMode') row.querySelector('input').checked = textEditModeEnabled;
         });
     }
     // Default nested subgroup arrangement for the built-in "Dev Panel"
@@ -1936,10 +1948,29 @@
     // one per text category (Dev Panel Title, Group Title, Setting
     // Title, TABS, BUTTONS), each holding that category's own Bold/
     // Capitalize/Font-Size/Letter-Spacing/Line-Spacing/Color battery.
-    // Idempotent — checks for its own MECHANICS marker group before
-    // doing anything, so a later real reorganization (the user dragging
-    // things around, or a saved/synced order loading afterward) is never
-    // clobbered by a repeat call.
+    // Idempotent — checks whether the Scroll Strength row (the anchor
+    // for MECHANICS) is ALREADY actually nested inside a group named
+    // "MECHANICS" before doing anything, so a later real reorganization
+    // (the user dragging things around) is never clobbered by a repeat
+    // call.
+    //
+    // Deliberately NOT a "does a MECHANICS section element exist
+    // anywhere" check (what an earlier version of this function used) —
+    // applySectionOrder(), when restoring a saved sectionOrder captured
+    // BEFORE this nesting feature existed (a flat list, no subgroups),
+    // steals every row it names back out to Dev Panel's own top-level
+    // content — appendChild() removes each row from wherever it
+    // currently sits (e.g. inside MECHANICS) as a side effect — but
+    // never deletes the now-hollowed-out MECHANICS/PANEL UI/TEXT
+    // section elements themselves, since nothing in the saved order
+    // references them. A marker-existence check would find that empty
+    // shell and wrongly conclude nesting was already correct, leaving
+    // the stolen rows sitting flat/"floating" directly in Dev Panel
+    // forever (real reported bug, 2026-09-14 — confirmed live against
+    // this project's own git-tracked dev-panel-settings.json, which
+    // predates this feature and has exactly this flat shape). Checking
+    // the anchor ROW's actual current parent group catches this case
+    // and triggers a real rebuild instead.
     function applyDefaultDevPanelSubgroupOrder(tab) {
         const tabEl = document.getElementById(tab + 'TabContent');
         if (!tabEl) return;
@@ -1949,7 +1980,20 @@
         });
         if (!devPanelSec) return;
         const content = devPanelSec.querySelector(':scope > .dev-section-content');
-        if (!content || content.querySelector(':scope > .dev-section[data-sid="MECHANICS"]')) return;
+        if (!content) return;
+        const p = tab === 'desktop' ? 'sliderDevPanel' : tab === 'mobile' ? 'sliderMobileDevPanel' : 'sliderLandscapeDevPanel';
+        const anchorRow = document.getElementById(p + 'ScrollStrength');
+        const anchorGroup = anchorRow && anchorRow.closest('.dev-section');
+        const anchorSid = anchorGroup && anchorGroup.querySelector(':scope > .dev-section-title')?.dataset.sid;
+        if (anchorSid === 'MECHANICS') return;
+        // Not correctly nested — rebuild from scratch. First flatten:
+        // pull every row (at any nesting depth under Dev Panel, e.g.
+        // still trapped inside a hollowed-out subgroup) back to be a
+        // direct child of `content`, then remove any existing top-level
+        // subgroup so the makeGroup() calls below don't create a
+        // duplicate alongside a stale leftover one.
+        content.querySelectorAll('.dev-row').forEach(row => content.appendChild(row));
+        content.querySelectorAll(':scope > .dev-section').forEach(sec => sec.remove());
         const rowsByKey = {};
         content.querySelectorAll(':scope > .dev-row [id]').forEach(el => { rowsByKey[el.id] = el.closest('.dev-row'); });
         function makeGroup(name, ids, parentContent) {
@@ -1959,7 +2003,6 @@
             ids.forEach(id => { const row = rowsByKey[id]; if (row) gc.appendChild(row); });
             return g;
         }
-        const p = tab === 'desktop' ? 'sliderDevPanel' : tab === 'mobile' ? 'sliderMobileDevPanel' : 'sliderLandscapeDevPanel';
         makeGroup('MECHANICS', [p + 'ScrollStrength'], content);
         makeGroup('PANEL UI', ['colorDevPanelBg', 'colorDevPanelAccent', 'colorDevPanelSliderColor', p + 'Opacity'], content);
         const text = makeGroup('TEXT', ['selectDevPanelFontFamily'], content);
@@ -2041,7 +2084,10 @@
             });
         });
         const textEditEl = document.getElementById('checkboxDevTextEditMode');
-        if (textEditEl) textEditEl.addEventListener('change', (e) => { textEditModeEnabled = e.target.checked; });
+        if (textEditEl) {
+            textEditEl.checked = textEditModeEnabled;
+            textEditEl.addEventListener('change', (e) => { textEditModeEnabled = e.target.checked; });
+        }
 
         const scrollContent = document.querySelector('.dev-panel-scroll-content');
         if (scrollContent) scrollContent.addEventListener('wheel', (e) => {
@@ -2135,6 +2181,15 @@
             if (cb) cb.checked = textEditModeEnabled;
         }
         applySectionOrder(state.sectionOrder);
+        // Repairs the built-in "Dev Panel" group's own nested subgroup
+        // structure if the sectionOrder just restored above was captured
+        // BEFORE this nesting feature existed (a flat list) — see this
+        // function's own top comment for the exact mechanism. Placed
+        // here (every time state is applied — initial load, Reset,
+        // Named Setting State Use/Set Default) rather than only once at
+        // boot, so any stale saved snapshot self-heals on every load
+        // instead of just the very first one.
+        DEV_PANEL_TABS.forEach(applyDefaultDevPanelSubgroupOrder);
         applySectionCollapseState(state.sectionCollapseState);
         // Re-derives Mobile/Landscape from Desktop's now-restored order +
         // the devVisibility/devIndependence/devDeviceValues just restored
