@@ -32,16 +32,23 @@ of DICKOCLICKO's animation-variant sets (Drag, Sciss, Tickle), each
 direction's own first AND last frame (frame numbers verified
 per-category — Sciss actually ends at 045, not 048), multiple points
 per image (click to add, click on a point to remove) — mobile-
-responsive too. **Drag category now has real seeded points** (6
-directions x 2 frames, baked into the file as SEED_DRAG_POINTS) —
-Sciss and Tickle still await their own annotation pass, the user's own
-next step (same as flick-skeleton-annotator.html's own joint data).
-"front" originally had no Drag frames at all — fixed at
-the DICKOCLICKO source 2026-09-12. Still open: Drag's `FRONT PINKY
-DRAG`/`FRONT THUMB DRAG` are byte-for-byte identical folders (verified
-via md5sum) — very likely one was copy-pasted as a placeholder and
-never replaced with its own real animation; needs fixing at the
-DICKOCLICKO source before that direction's own Drag animation is real.
+responsive too. "front" originally had no Drag frames at all — fixed
+at the DICKOCLICKO source 2026-09-12. Drag's `FRONT PINKY DRAG`/`FRONT
+THUMB DRAG` used to be byte-for-byte identical folders (verified via
+md5sum) — **fixed at the DICKOCLICKO source 2026-09-14**, re-verified
+via md5sum that frame 001/048 now genuinely differ, and the 2 local
+reference copies in `scripts/active/drag-frames/` were re-synced to
+match.
+
+**Real annotation pass completed 2026-09-14** (a pasted Copy JSON dump
+baked into SEED_DRAG_POINTS, same pattern as flick-skeleton-annotator.html's
+own joint data): **Drag is now fully annotated** — all 8 directions,
+both frames (01 and 48) each, 16 points total, including a fresh
+Front Pinky annotation against the newly-fixed real image (not the old
+placeholder). **Sciss and Tickle are each half-annotated** — all 8
+directions have a point on frame 01, but frame 45 (Sciss) / frame 48
+(Tickle) still have none — 8 points each, 16 total, still open as the
+user's own next step for those 2 categories' own last frame.
 
 **Open item:** a real mobile-lag report ("placing, rotating, moving...
 very very laggy") was addressed with 2 well-established canvas
@@ -349,6 +356,30 @@ this note is now complete, committed, and pushed (`751f84d`) — see
   `CHANGELOG.txt`'s own entry for the full verification list and one
   real bug caught+fixed during implementation (2 dev-panel labels
   sharing a row corrupted each other's text).
+
+- Fixed a real regression from the Level System refactor above: Delete
+  (which pre-dates Level Maker entirely — deletes placed ENTITIES, a
+  core mechanic independent of any editing context) had been swept
+  into the same `editing ? '' : 'none'` visibility gate as Ball/
+  Rectangle/Target/Hand (all genuinely Level-Maker/Sandbox-only
+  authoring tools), so it silently disappeared in plain Play mode.
+  User report: "in regular mode, there should still be a delete
+  button." Fixed in `refreshSimControlsVisibility()` by giving
+  `deleteBtn` its own unconditional `display = ''`, leaving the other
+  4 buttons' editing-only gating untouched — the actual delete-click
+  handler already had zero dependency on `levelEditMode`, so this was
+  a pure visibility fix, no behavior change. Verified live: confirmed
+  via direct DOM inspection that in plain mode `deleteBtn.style.display
+  === ''` while `ballBtn`/`rectBtn`/`targetBtn`/`handBtn` all stay
+  `'none'`, and that Sandbox/Level Maker mode still shows all 5 as
+  before. **Separately flagged, not fixed** (pre-existing, unrelated to
+  this fix): at a narrow browser-pane width, `.sim-controls` (fixed
+  top-left) and `.sim-controls-right` (fixed top-right) visually
+  overlap — confirmed this already happened with the full 5-button
+  Delete/Ball/Rectangle/Target/Hand row in Sandbox/Level Maker mode
+  before this fix, so it's a pre-existing responsive-layout gap this
+  fix newly exposes in plain mode too (since Delete is now visible
+  there), not something this fix introduced.
 
 - Dev panel engine brought up to date with `TEMPLATE_DEV_PANEL.html`'s
   2026-09-14 changes (CLAUDE.md §12): reordering (groups and settings

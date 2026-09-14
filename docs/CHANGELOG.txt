@@ -1982,6 +1982,152 @@ with (5)'s nesting self-heal (Scroll Strength still correctly lands in
 MECHANICS from the same load). 0 missing controls.
 
 --------------------------------------------------------------------------------
+2026-09-14 -- re-sync: Drag's Front Pinky reference images, after the
+DICKOCLICKO-source placeholder bug was fixed
+
+Direct follow-up to a real data caveat documented when
+scripts/active/drag-point-annotator.html was first built: Drag's
+"FRONT PINKY DRAG" and "FRONT THUMB DRAG" source folders in DICKOCLICKO
+were byte-for-byte identical (verified via md5sum at the time),
+strongly suggesting one had been copy-pasted as a placeholder for the
+other and never replaced with its own real animation.
+
+User reported the DICKOCLICKO source had been fixed. Re-verified via
+md5sum rather than trusting the report at face value: frame 001 now
+hashes 769b6de6... (was 2712795a..., matching Front Thumb) and frame
+048 now hashes 66b3a719... (was ba8582d4..., also matching Front
+Thumb) -- confirmed genuinely different from Front Thumb's own current
+hashes, not just different from the old placeholder. Also re-scanned
+Sciss and Tickle's own Front Pinky source folders (this project's
+established "never trust only the named category" discipline) --
+both still hash-identical to their existing local reference copies,
+confirming the fix was Drag-only.
+
+Copied the 2 updated frames (verbatim, same 1920x912 resolution, no
+resize) into scripts/active/drag-frames/front-pinky-drag-01.png and
+-48.png, replacing the stale placeholder copies. Updated the file's own
+top-of-file DATA CAVEATS comment and removed the now-inaccurate
+in-page "Data note" warning box (and its now-dead .warn-box CSS rule)
+describing the bug as still-open.
+
+Cleared Front Pinky's own SEED_DRAG_POINTS.drag entry (2 points, frame
+01 and 48) rather than leaving it in place -- those points were
+annotated against the OLD image (which was actually Front Thumb's own
+pose wearing Front Pinky's label), so they no longer describe anything
+real about the correct Front Pinky pose. Front Pinky now joins Behind
+Pinky as the only 2 Drag directions still awaiting a real annotation
+pass, down from the original 8.
+
+Verified: syntax-checked the file's script block after all edits;
+served live via a static HTTP server (localhost:8423, since the file's
+own PostToolUse hook auto-opens it as a data: URL preview whose origin
+can't resolve the drag-frames/ relative image paths -- see this
+project's own CLAUDE.md gotcha) and confirmed via read_network_requests
+that both new frames return a real 200 OK; visually confirmed via
+screenshot that frame 01 and frame 48 both render a genuine, distinct
+pinky-curl pose (not Front Thumb's), and that both now show "(0
+points)" confirming the stale seed was actually cleared, not just
+edited in source.
+
+--------------------------------------------------------------------------------
+2026-09-14 (continued) -- "set defaults": baked a full Drag/Sciss/Tickle
+annotation pass into SEED_DRAG_POINTS
+
+Direct follow-up to the Front Pinky Drag re-sync above. User pasted a
+Copy JSON export from drag-point-annotator.html (32 points total) and
+asked to "set defaults" -- same pattern this file's own top comment
+documents ("re-export via Copy/Download JSON and paste the result back
+in here... any time this tool is used for real annotation"), the
+localStorage-baked-into-source-as-fallback convention
+flick-skeleton-annotator.html already established for joint data.
+
+Validated the pasted data before touching the file: parsed it, checked
+every frame key against each category's own real frame numbers (Drag
+01/48, Sciss 01/45, Tickle 01/48), and confirmed every x/y value was a
+real number in [0,1] -- 0 shape errors. Replaced SEED_DRAG_POINTS with
+a minified version matching the file's existing style; caught and
+fixed a real off-by-one brace-counting mistake in the first edit attempt
+(one extra trailing `}` from misjudging how many categories now nest
+inside the outer object) via a syntax check before trusting the edit --
+`new Function()` on the script block failed immediately, fixed, then
+passed clean.
+
+Verified with more than a syntax check: parsed the baked-in
+SEED_DRAG_POINTS back out of the file and diff-compared it
+(JSON.stringify equality) against the originally pasted JSON --
+byte-exact match, not just "parses OK". Also verified live: served the
+file over a real HTTP static server (this file's own data: URL
+auto-preview can't resolve relative image paths, per this project's
+own CLAUDE.md gotcha), cleared the tab's own localStorage first so the
+page was forced to load from SEED_DRAG_POINTS rather than a possibly
+-stale cached copy, reloaded, and read the live in-page `data` object
+back out via JS -- exact match to the pasted JSON in the real running
+page, not just in the source file.
+
+Net result: Drag is now fully annotated (8 directions x 2 frames = 16
+points, including a real annotation of the newly-fixed Front Pinky
+image from the task above -- not the old placeholder). Sciss and
+Tickle are each half-annotated (8 directions x frame 01 only = 8
+points each) -- their own last frame (Sciss 45, Tickle 48) is still
+open, the user's own next step.
+
+Left uncommitted per CLAUDE.md Section 9 (commit/push only on explicit
+instruction) -- confirmed via git status that only this task's own
+files (drag-point-annotator.html + the 2 docs) are dirty.
+
+--------------------------------------------------------------------------------
+2026-09-14 (continued) -- fix: Delete button missing in plain Play mode
+(a regression from the Level System refactor)
+
+"in regular mode, there should still be a delete button."
+
+Root-caused via direct code reading: refreshSimControlsVisibility()
+gated Delete into the SAME `[deleteBtn, ballBtn, rectBtn, targetBtn,
+handBtn].forEach(b => b.style.display = editing ? '' : 'none')` group
+as the 4 genuinely Level-Maker/Sandbox-only authoring tools (Ball,
+Rectangle, Target, Hand). Delete pre-dates the Level System entirely --
+it's always deleted placed ENTITIES (and, incidentally, ball spawn
+points/level rects if any exist), a core mechanic independent of any
+editing context, not a level-authoring tool -- so sweeping it into that
+gate silently removed it from plain Play, where a player still needs
+to be able to delete a misplaced entity.
+
+Fixed by giving deleteBtn its own unconditional `display = ''` in
+refreshSimControlsVisibility(), leaving Ball/Rectangle/Target/Hand's
+existing `editing`-gated visibility untouched. The actual delete-click
+handler (the `if (deleteMode) {...}` block in the canvas pointerdown
+listener) already had zero dependency on levelEditMode -- checks
+entities, then ball spawn points, then level rects, generically -- so
+this was a pure visibility fix with no behavior change to verify
+beyond the toggle itself.
+
+Verified live via direct DOM state inspection (not just a visual
+screenshot, which a narrow-viewport button overlap -- see below --
+would have made ambiguous to read): confirmed deleteBtn.style.display
+=== '' in plain mode while ballBtn/rectBtn/targetBtn/handBtn all stay
+'none', and confirmed all 5 still show correctly in Sandbox/Level
+Maker mode (toggled via real button .click() calls, not pixel
+coordinates, precisely because of the overlap below).
+
+Separately flagged, NOT fixed (pre-existing, not introduced by this
+fix): `.sim-controls` (fixed top-left: Start/Stop/Sandbox/Level Maker)
+and `.sim-controls-right` (fixed top-right: Delete/Ball/Rectangle/
+Target/Hand) visually overlap at a narrow browser-pane width. Verified
+this already happened with the full 5-button row in Sandbox/Level
+Maker mode BEFORE this fix (toggled Sandbox on at the same width,
+same overlap) -- this fix only newly exposes the same pre-existing gap
+in plain mode too, since Delete is now visible there. A real
+responsive-layout fix (e.g. wrapping or repositioning at narrow
+widths) was not attempted here -- out of scope for a visibility-only
+bug report, surfaced for a future pass instead of silently expanding
+this fix's scope.
+
+Left uncommitted per CLAUDE.md Section 9 (commit/push only on explicit
+instruction) -- confirmed via git diff --stat that only this task's
+own 8-insertion/1-deletion change is present in index.html, no
+interleaved concurrent-session content.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
