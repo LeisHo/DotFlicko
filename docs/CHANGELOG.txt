@@ -1944,6 +1944,44 @@ Setting names"):
   moved into setupDevPanelStyleControls() (matching the template).
 
 --------------------------------------------------------------------------------
+2026-09-14 (6)
+
+Fixed a real reported bug ("I still see the old accent colors on some
+buttons as well as the dev panel ui") -- same root-cause SHAPE as (5)'s
+nesting fix, but for color VALUES instead of structure: the committed
+data/processed/dev-panel-settings.json's devPanelStyle/
+mobileDevPanelStyle/landscapeDevPanelStyle blocks still had the OLD
+accentColor/sliderColor (#5b85c8, a pre-port leftover) -- Object.assign(devPanelStyle,
+state.devPanelStyle) restores this saved value over the new code
+default on every real load, so the dev panel's own accent-driven chrome
+(buttons, tab borders, slider thumbs, etc. -- all keyed off
+--dev-accent-color/--dev-slider-color) kept showing the old blue
+regardless of what the code's own DEFAULT said.
+
+Cross-checked against Clicko's own actual live saved settings (per
+direct suggestion to check Clicko if in doubt) before fixing anything --
+confirmed Clicko's real current colors (accentColor #005f8f, sliderColor
+#ffffff, groupTextColor/buttonTextColor/tabTextColor #ffffff,
+settingNumberColor #5cc9ff, groupLabelBgColor #005f8f, all Bold
+defaults) match exactly what was ported from the template earlier
+today -- the template's own copy had NOT drifted from Clicko's real
+source. This was purely a stale-saved-data problem on DOTFLICKO's own
+side, not a wrong port.
+
+Fixed by updating the 3 accentColor/sliderColor pairs directly in
+data/processed/dev-panel-settings.json (all 3 blocks) to the correct
+#005f8f/#ffffff -- a plain data correction (this file is app-owned
+state normally rewritten by Save/Sync, not an append-only log), no code
+change needed since the code's own defaults were already correct.
+
+Verified by fetching the real, now-fixed file from the live static
+server and feeding it through applyFullDevPanelState() exactly as a
+real page load would -- confirmed --dev-accent-color/--dev-slider-color
+now resolve to #005f8f/#ffffff, and confirmed this composes correctly
+with (5)'s nesting self-heal (Scroll Strength still correctly lands in
+MECHANICS from the same load). 0 missing controls.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

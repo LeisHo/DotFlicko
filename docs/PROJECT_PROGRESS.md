@@ -430,6 +430,16 @@ this note is now complete, committed, and pushed (`751f84d`) — see
   reported floating settings. See `CHANGELOG.txt` (2026-09-14 (5)) for
   the full verification list.
 
+  **Old accent colors (#5b85c8) were also still showing** — same root
+  cause shape as the nesting bug, but for color values: the committed
+  `data/processed/dev-panel-settings.json` still had the pre-port
+  accentColor/sliderColor, silently overriding the correct code default
+  on every load. Cross-checked against Clicko's own real live saved
+  settings first (confirmed the template's ported palette had NOT
+  drifted — this was purely stale DOTFLICKO data, not a wrong port),
+  then fixed by correcting the 3 saved color pairs directly in that
+  JSON file. See `CHANGELOG.txt` (2026-09-14 (6)).
+
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-
 direction Hand Rotation Offset (the original, non-live version); top-edge
