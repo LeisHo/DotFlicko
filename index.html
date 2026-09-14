@@ -139,7 +139,6 @@
         touch-action: none;
         margin-bottom: 10px;
         color: #0ff;
-        font-weight: bold;
         position: sticky;
         top: 0;
         background: rgba(0,0,0,0.95);
@@ -152,11 +151,15 @@
     .dev-panel-title {
         font-size: calc(var(--dev-panel-title-font-size-px, 16) * 1px);
         color: var(--dev-panel-title-text-color, #fff);
+        letter-spacing: calc(var(--dev-panel-title-letter-spacing-px, 0) * 1px);
+        line-height: var(--dev-panel-title-line-height, 1.2);
     }
+    .dev-panel.dev-bold-title .dev-panel-title { font-weight: bold; }
+    .dev-panel.dev-caps-title-text .dev-panel-title { text-transform: uppercase; }
     .dev-header-buttons { display: flex; gap: 4px; }
     .dev-hide-btn, .dev-collapse-btn {
         background: var(--dev-accent-color, #0ff);
-        color: #000;
+        color: var(--dev-panel-button-text-color, #000);
         border: none;
         border-radius: 3px;
         width: 22px;
@@ -167,8 +170,7 @@
         align-items: center;
         justify-content: center;
         font-size: 14px;
-        font-weight: bold;
-        line-height: 1;
+        line-height: var(--dev-button-text-line-height, 1.2);
         letter-spacing: calc(var(--dev-button-text-letter-spacing-px, 0) * 1px);
         cursor: pointer;
         flex-shrink: 0;
@@ -179,7 +181,7 @@
     .dev-tab-btn {
         flex: 1;
         background: #222;
-        color: var(--dev-accent-color, #0ff);
+        color: var(--dev-tab-text-color, #0ff);
         border: 1px solid var(--dev-accent-color, #0ff);
         border-radius: 3px;
         min-height: calc(var(--dev-button-height-px, 22) * 1px);
@@ -190,11 +192,12 @@
         justify-content: center;
         font-family: var(--dev-panel-font-family, monospace);
         font-size: calc(var(--dev-tab-font-size-px, 12) * 1px);
-        font-weight: bold;
         letter-spacing: calc(var(--dev-tab-text-letter-spacing-px, 0) * 1px);
+        line-height: var(--dev-tab-line-height, 1.2);
         cursor: pointer;
     }
-    .dev-tab-btn.active { background: var(--dev-accent-color, #0ff); color: #000; }
+    .dev-panel.dev-bold-tab .dev-tab-btn { font-weight: bold; }
+    .dev-tab-btn.active { background: var(--dev-accent-color, #0ff); color: var(--dev-tab-text-color, #000); }
 
     .dev-toggle-btn {
         position: fixed;
@@ -202,7 +205,7 @@
         right: 10px;
         z-index: 100000;
         background: var(--dev-accent-color, #0ff);
-        color: #000;
+        color: var(--dev-panel-button-text-color, #000);
         border: none;
         border-radius: 4px;
         padding: 6px 10px;
@@ -355,31 +358,51 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 10px;
+        font-size: calc(var(--dev-button-text-font-size-px, 10) * 1px);
         background: var(--dev-accent-color, #0ff);
-        color: #000;
+        color: var(--dev-panel-button-text-color, #000);
         border: none;
         border-radius: 3px;
         cursor: pointer;
-        font-weight: bold;
         letter-spacing: calc(var(--dev-button-text-letter-spacing-px, 0) * 1px);
+        line-height: var(--dev-button-text-line-height, 1.2);
+    }
+    .dev-panel.dev-bold-button .dev-buttons button,
+    .dev-panel.dev-bold-button .dev-hide-btn,
+    .dev-panel.dev-bold-button .dev-collapse-btn {
+        font-weight: bold;
     }
     .dev-buttons button:hover { filter: brightness(1.3); }
 
-    .dev-section { margin-bottom: 15px; }
+    .dev-section { margin-bottom: 15px; position: relative; }
     .dev-section-title {
-        color: var(--dev-accent-color, #0ff);
-        font-weight: bold;
+        color: var(--dev-panel-group-text-color, #0ff);
         font-size: calc(var(--dev-group-title-font-size-px, 13) * 1px);
         letter-spacing: calc(var(--dev-group-text-letter-spacing-px, 0) * 1px);
+        line-height: var(--dev-group-text-line-height, 1.2);
         margin-bottom: 8px;
         cursor: pointer;
         user-select: none;
-        padding: 5px;
-        background: rgba(0, 255, 255, 0.1);
+        padding: 5px 5px 5px 22px;
+        background: var(--dev-group-label-bg-color, rgba(0, 255, 255, 0.1));
         border-radius: 3px;
     }
-    .dev-section-title:hover { background: rgba(0, 255, 255, 0.2); }
+    .dev-section-title:hover { filter: brightness(1.3); }
+    .dev-panel.dev-bold-group .dev-section-title { font-weight: bold; }
+    .dev-group-drag-handle {
+        position: absolute;
+        top: 5px;
+        left: 8px;
+        font-size: calc(var(--dev-group-title-font-size-px, 13) * 1px);
+        line-height: 1;
+        cursor: grab;
+        user-select: none;
+        z-index: 1;
+        opacity: 0.75;
+        touch-action: none;
+    }
+    .dev-group-drag-handle:hover { opacity: 1; }
+    .dev-group-drag-handle:active { cursor: grabbing; }
     .dev-section-content { display: block; margin-left: 5px; }
     .dev-section-content > .dev-section {
         padding-left: 10px;
@@ -396,13 +419,39 @@
     .dev-section-content.collapsed { display: none; }
 
     .dev-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    /* Dynamic Mobile/Landscape visibility/independence checkboxes -
+       ported from TEMPLATE_DEV_PANEL.html's [JS-4b0] (CLAUDE.md §12f-1).
+       Pushed to the row's own far right; the group-level cascade version
+       sits inline right after a section title's own text instead. */
+    .dev-visibility-checkbox, .dev-independence-checkbox {
+        margin-left: auto;
+        accent-color: var(--dev-accent-color, #0ff);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .dev-group-cascade-checkbox {
+        accent-color: var(--dev-accent-color, #0ff);
+        cursor: pointer;
+        margin-left: 8px;
+        vertical-align: middle;
+    }
     .dev-label {
         min-width: 140px;
         color: var(--dev-panel-non-title-text-color, #aaa);
         font-size: calc(var(--dev-setting-title-font-size-px, 12) * 1px);
         letter-spacing: calc(var(--dev-settings-text-letter-spacing-px, 0) * 1px);
+        line-height: var(--dev-settings-line-height, 1.2);
     }
-    .dev-section-content .dev-label { cursor: grab; user-select: none; }
+    .dev-panel.dev-bold-settings .dev-label { font-weight: bold; }
+    .dev-row-drag-handle {
+        cursor: grab;
+        user-select: none;
+        opacity: 0.6;
+        flex-shrink: 0;
+        touch-action: none;
+    }
+    .dev-row-drag-handle:hover { opacity: 1; }
+    .dev-row-drag-handle:active { cursor: grabbing; }
     .dev-reorder-dragging { opacity: 0.5; }
 
     .dev-slider {
@@ -412,14 +461,14 @@
         cursor: pointer;
         accent-color: var(--dev-slider-color, #3b82f6);
     }
-    .dev-value { min-width: 45px; color: var(--dev-accent-color, #0ff); text-align: right; font-size: 10px; }
+    .dev-value { min-width: 45px; color: var(--dev-value-text-color, #0ff); text-align: right; font-size: calc(var(--dev-value-font-size-px, 10) * 1px); }
     .dev-value-editable { cursor: text; }
     .dev-value-editable:hover { outline: 1px solid var(--dev-accent-color, #0ff); }
     .dev-value-edit-input {
-        width: 52px; background: #000; color: var(--dev-accent-color, #0ff);
+        width: 52px; background: #000; color: var(--dev-value-text-color, #0ff);
         border: 1px solid var(--dev-accent-color, #0ff);
         font-family: var(--dev-panel-font-family, monospace);
-        font-size: 10px; text-align: right; padding: 0;
+        font-size: calc(var(--dev-value-font-size-px, 10) * 1px); text-align: right; padding: 0;
     }
     .dev-text-input {
         width: 52px; background: #000; color: var(--dev-accent-color, #0ff);
@@ -590,15 +639,29 @@
     const DEV_PANEL_TABS = ['desktop', 'mobile', 'landscape'];
     function isNarrowViewport() { return window.innerWidth < 768; }
 
+    // A group title carries a trailing cascade checkbox as a real DOM
+    // child (see createDevGroupElement()/ensureStaticGroupCascadeCheckboxes())
+    // — every plain `titleEl.textContent = ...` rewrite below would
+    // otherwise wipe it (destroying its listeners). Detaches it first,
+    // runs `fn`, reattaches the SAME node (listeners/checked state
+    // intact) after — ported from TEMPLATE_DEV_PANEL.html.
+    function withPreservedTitleCheckbox(titleEl, fn) {
+        const cb = titleEl.querySelector(':scope > .dev-group-cascade-checkbox');
+        if (cb) cb.remove();
+        fn();
+        if (cb) titleEl.appendChild(cb);
+    }
     function toggleSection(titleEl) {
         if (sectionJustDragged) { sectionJustDragged = false; return; }
         if (textEditModeEnabled) { openDevTextEditFor(titleEl, getSectionKey(titleEl), true); return; }
         const content = titleEl.nextElementSibling;
         content.classList.toggle('collapsed');
-        titleEl.textContent = content.classList.contains('collapsed') ? '▶ ' + titleEl.textContent.slice(2) : '▼ ' + titleEl.textContent.slice(2);
+        withPreservedTitleCheckbox(titleEl, () => {
+            titleEl.textContent = content.classList.contains('collapsed') ? '▶ ' + titleEl.textContent.slice(2) : '▼ ' + titleEl.textContent.slice(2);
+        });
     }
 
-    function createDevGroupElement(name) {
+    function createDevGroupElement(name, tab) {
         const section = document.createElement('div');
         section.className = 'dev-section';
         const title = document.createElement('div');
@@ -606,11 +669,294 @@
         title.setAttribute('onclick', 'toggleSection(this)');
         title.dataset.sid = name;
         title.textContent = '▼ ' + name;
+        title.appendChild(buildGroupCascadeCheckbox(section, (tab || 'desktop') === 'desktop' ? 'visibility' : 'independence'));
         const content = document.createElement('div');
         content.className = 'dev-section-content';
         section.appendChild(title);
         section.appendChild(content);
+        addGroupDragHandle(section);
         return section;
+    }
+
+    // Reordering/nesting now starts only from a dedicated drag-handle icon
+    // (⠿), never from the title/label itself — ported from
+    // TEMPLATE_DEV_PANEL.html's 2026-09-14 update (CLAUDE.md §12n). A
+    // plain SIBLING of .dev-section-title (not a child — the title's own
+    // rename mechanism rewrites its whole textContent, which would
+    // silently delete a child element). Idempotent so calling it again on
+    // an already-handled section just replaces the icon.
+    function addGroupDragHandle(section) {
+        const existing = section.querySelector(':scope > .dev-group-drag-handle');
+        if (existing) existing.remove();
+        const titleEl = section.querySelector(':scope > .dev-section-title');
+        if (!titleEl) return;
+        const handle = document.createElement('span');
+        handle.className = 'dev-group-drag-handle';
+        handle.textContent = '⠿';
+        handle.title = 'Drag to reorder or nest this group';
+        section.appendChild(handle);
+    }
+    // One-time pass over every group already in the DOM at panel-build
+    // time (createDevGroupElement() covers any group added after this).
+    function injectGroupDragHandles() {
+        DEV_PANEL_TABS.forEach(tab => {
+            const tabEl = document.getElementById(tab + 'TabContent');
+            if (!tabEl) return;
+            tabEl.querySelectorAll('.dev-section').forEach(addGroupDragHandle);
+        });
+    }
+    // Row-level counterpart — a plain first child of .dev-row (not of
+    // .dev-label, whose textContent the rename mechanism rewrites).
+    // Idempotent (skips a row that already has one).
+    function injectRowDragHandles() {
+        document.querySelectorAll('.dev-row').forEach(row => {
+            if (row.querySelector(':scope > .dev-row-drag-handle')) return;
+            const handle = document.createElement('span');
+            handle.className = 'dev-row-drag-handle';
+            handle.textContent = '⠿';
+            handle.title = 'Drag to reorder or move to another group';
+            row.insertBefore(handle, row.firstChild);
+        });
+    }
+
+    // ================================================================
+    // DYNAMIC MOBILE/LANDSCAPE VISIBILITY + INDEPENDENCE — ported from
+    // TEMPLATE_DEV_PANEL.html's [JS-4b0] (CLAUDE.md §12f-1). Per control,
+    // opt in via `dynamicDevice: true` on its DESKTOP registration only
+    // (don't also author separate Mobile/Landscape entries for it — this
+    // system creates/removes those dynamically). A control without this
+    // flag is completely unaffected, exactly matching pre-existing
+    // behavior — see buildUniformControlRow()'s own check below.
+    //
+    // Keyed by the DESKTOP row's own id (or the Desktop group's own
+    // data-sid for groups) — never a Mobile/Landscape-prefixed id, since
+    // these maps ARE the source of truth for whether/how a Mobile/
+    // Landscape counterpart exists.
+    let devVisibility = {}; // { [desktopId]: boolean } - default true (visible) when absent
+    let devIndependence = { mobile: {}, landscape: {} }; // { [desktopId]: boolean } - default false (mirrors Desktop) when absent
+    let devDeviceValues = { mobile: {}, landscape: {} }; // { [desktopId]: lastIndependentValue } - retained even while hidden/non-independent
+
+    function isDevRowVisible(desktopId) { return devVisibility[desktopId] !== false; }
+    function isDevRowIndependent(tab, desktopId) { return !!(devIndependence[tab] && devIndependence[tab][desktopId]); }
+
+    function findRegisteredControlById(id) {
+        for (const { array } of DEV_PANEL_REGISTERED_ARRAYS) {
+            const found = array.find(c => c.id === id);
+            if (found) return found;
+        }
+        return null;
+    }
+    function readDevControlValue(id) {
+        const el = document.getElementById(id);
+        if (!el) return undefined;
+        return el.type === 'checkbox' ? el.checked : (el.type === 'range' || el.type === 'number') ? parseFloat(el.value) : el.value;
+    }
+    function writeDevControlValue(id, value) {
+        const el = document.getElementById(id);
+        if (!el || value === undefined) return;
+        if (el.type === 'checkbox') el.checked = !!value;
+        else el.value = value;
+        if (el.type === 'range') {
+            const valEl = document.getElementById(id.replace(/^slider/, 'value'));
+            if (valEl && !valEl.querySelector('input')) valEl.textContent = value;
+        }
+    }
+    // Pushes Desktop's CURRENT value into every non-independent Mobile/
+    // Landscape counterpart's own DOM — called live, on every Desktop
+    // control's own input/change, not just on tab-switch (all 3 tabs
+    // stay simultaneously live in this panel architecture).
+    function applyDesktopMirror(desktopId) {
+        const value = readDevControlValue(desktopId);
+        if (value === undefined) return;
+        ['mobile', 'landscape'].forEach(tab => {
+            if (isDevRowIndependent(tab, desktopId)) return;
+            const devicePrefix = tab === 'landscape' ? 'Landscape' : 'Mobile';
+            const targetId = desktopId.replace(/^(slider|color|select|checkbox)/, '$1' + devicePrefix);
+            writeDevControlValue(targetId, value);
+        });
+    }
+    function wireDesktopMirrorSource(el, desktopId) {
+        if (!el || el.dataset.mirrorWired) return;
+        el.dataset.mirrorWired = '1';
+        el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', () => applyDesktopMirror(desktopId));
+    }
+    // Editing a non-independent Mobile/Landscape control is understood
+    // as editing Desktop's own value it's just mirroring (redirected
+    // there, then re-broadcast to any OTHER non-independent tab too).
+    // While independent, the edit just updates this tab's own retained
+    // value store.
+    function onDevTargetControlEdited(tab, desktopId, targetId) {
+        if (isDevRowIndependent(tab, desktopId)) {
+            devDeviceValues[tab][desktopId] = readDevControlValue(targetId);
+            return;
+        }
+        const value = readDevControlValue(targetId);
+        writeDevControlValue(desktopId, value);
+        const desktopEl = document.getElementById(desktopId);
+        if (desktopEl) desktopEl.dispatchEvent(new Event(desktopEl.type === 'checkbox' || desktopEl.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+    }
+    // Desktop-only: "Show in Mobile/Landscape."
+    function buildVisibilityCheckbox(controlEl, desktopId) {
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'dev-visibility-checkbox';
+        cb.title = 'Show in Mobile/Landscape';
+        cb.checked = isDevRowVisible(desktopId);
+        cb.addEventListener('click', e => e.stopPropagation());
+        cb.addEventListener('change', () => {
+            devVisibility[desktopId] = cb.checked;
+            syncTabOrderToDesktop('mobile');
+            syncTabOrderToDesktop('landscape');
+            refreshGroupCascadeCheckboxState('desktop', desktopId);
+        });
+        wireDesktopMirrorSource(controlEl, desktopId);
+        return cb;
+    }
+    // Mobile/Landscape-only: "Independent from Desktop."
+    function buildIndependenceCheckbox(tab, desktopId, targetEl) {
+        const targetId = targetEl ? targetEl.id : null;
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'dev-independence-checkbox';
+        cb.title = 'Independent from Desktop';
+        cb.checked = isDevRowIndependent(tab, desktopId);
+        cb.addEventListener('click', e => e.stopPropagation());
+        cb.addEventListener('change', () => {
+            devIndependence[tab][desktopId] = cb.checked;
+            if (cb.checked) {
+                const restored = devDeviceValues[tab][desktopId];
+                if (restored !== undefined) writeDevControlValue(targetId, restored);
+            } else {
+                writeDevControlValue(targetId, readDevControlValue(desktopId));
+            }
+            refreshGroupCascadeCheckboxState(tab, desktopId);
+        });
+        if (targetEl && !targetEl.dataset.indepWired) {
+            targetEl.dataset.indepWired = '1';
+            targetEl.addEventListener(targetEl.type === 'checkbox' || targetEl.tagName === 'SELECT' ? 'change' : 'input', () => onDevTargetControlEdited(tab, desktopId, targetId));
+        }
+        return cb;
+    }
+    // Shared cascade behavior for BOTH group-level checkbox kinds
+    // (Desktop visibility, Mobile/Landscape independence) — neither has
+    // persisted state of its own; checking/unchecking just writes
+    // through to every CURRENT child row's real flag.
+    function buildGroupCascadeCheckbox(sectionEl, kind) {
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'dev-group-cascade-checkbox';
+        cb.dataset.cascadeKind = kind;
+        cb.title = kind === 'visibility' ? 'Show in Mobile/Landscape (whole group)' : 'Independent from Desktop (whole group)';
+        cb.style.display = 'none';
+        cb.addEventListener('click', e => e.stopPropagation());
+        cb.addEventListener('change', () => {
+            const checked = cb.checked;
+            const content = sectionEl.querySelector(':scope > .dev-section-content');
+            if (!content) return;
+            content.querySelectorAll(':scope > .dev-row [id]').forEach(idEl => {
+                const rowCb = idEl.closest('.dev-row').querySelector(kind === 'visibility' ? '.dev-visibility-checkbox' : '.dev-independence-checkbox');
+                if (rowCb && rowCb.checked !== checked) { rowCb.checked = checked; rowCb.dispatchEvent(new Event('change')); }
+            });
+            content.querySelectorAll(':scope > .dev-section').forEach(subSec => {
+                const subCb = subSec.querySelector(':scope > .dev-section-title > .dev-group-cascade-checkbox[data-cascade-kind="' + kind + '"]');
+                if (subCb && subCb.checked !== checked) { subCb.checked = checked; subCb.dispatchEvent(new Event('change')); }
+            });
+        });
+        return cb;
+    }
+    function refreshGroupCascadeCheckboxState(tab, desktopId) {
+        const kind = tab === 'desktop' ? 'visibility' : 'independence';
+        const id = tab === 'desktop' ? desktopId : desktopId.replace(/^(slider|color|select|checkbox)/, '$1' + (tab === 'landscape' ? 'Landscape' : 'Mobile'));
+        const rowEl = document.getElementById(id)?.closest('.dev-row');
+        let sectionEl = rowEl ? rowEl.closest('.dev-section') : null;
+        while (sectionEl) {
+            recomputeOneGroupCascadeCheckbox(sectionEl, kind);
+            sectionEl = sectionEl.parentElement ? sectionEl.parentElement.closest('.dev-section') : null;
+        }
+    }
+    function recomputeOneGroupCascadeCheckbox(sectionEl, kind) {
+        const cb = sectionEl.querySelector(':scope > .dev-section-title > .dev-group-cascade-checkbox[data-cascade-kind="' + kind + '"]');
+        if (!cb) return;
+        const rowSelector = kind === 'visibility' ? '.dev-visibility-checkbox' : '.dev-independence-checkbox';
+        const content = sectionEl.querySelector(':scope > .dev-section-content');
+        const states = [];
+        content.querySelectorAll(':scope > .dev-row').forEach(r => {
+            const rcb = r.querySelector(rowSelector);
+            if (rcb) states.push(rcb.checked);
+        });
+        content.querySelectorAll(':scope > .dev-section').forEach(sub => {
+            const scb = sub.querySelector(':scope > .dev-section-title > .dev-group-cascade-checkbox[data-cascade-kind="' + kind + '"]');
+            if (scb) states.push(scb.indeterminate ? 'mixed' : scb.checked);
+        });
+        const allChecked = states.length > 0 && states.every(s => s === true);
+        const allUnchecked = states.every(s => s === false);
+        cb.checked = allChecked;
+        cb.indeterminate = !allChecked && !allUnchecked && states.length > 0;
+    }
+    // Full, one-shot refresh of EVERY group's own cascade checkbox (both
+    // kinds) — needed once after a batch of rows is built with an
+    // already-checked/unchecked default (no 'change' event fires for
+    // that). Depth-sorted (deepest groups first) so a parent's own
+    // computation always sees its children's already-current state.
+    function refreshAllGroupCascadeCheckboxes() {
+        function depth(el) {
+            let d = 0, cur = el.parentElement;
+            while (cur) { if (cur.classList.contains('dev-section')) d++; cur = cur.parentElement; }
+            return d;
+        }
+        const sections = Array.from(document.querySelectorAll('.dev-section')).sort((a, b) => depth(b) - depth(a));
+        ['visibility', 'independence'].forEach(kind => {
+            sections.forEach(sec => recomputeOneGroupCascadeCheckbox(sec, kind));
+        });
+    }
+    // Backfills a group cascade checkbox onto every EXISTING static
+    // .dev-section-title that doesn't already have one (this project's
+    // pre-declared HTML groups — createDevGroupElement() already adds
+    // one to any group it creates). Runs once at init.
+    function ensureStaticGroupCascadeCheckboxes() {
+        document.querySelectorAll('.dev-section-title').forEach(titleEl => {
+            if (titleEl.querySelector(':scope > .dev-group-cascade-checkbox')) return;
+            const tabContentEl = titleEl.closest('[id$="TabContent"]');
+            const tab = tabContentEl ? tabContentEl.id.replace('TabContent', '') : 'desktop';
+            const section = titleEl.closest('.dev-section');
+            titleEl.appendChild(buildGroupCascadeCheckbox(section, tab === 'desktop' ? 'visibility' : 'independence'));
+        });
+    }
+    // Creates (or finds) a Mobile/Landscape counterpart row for one
+    // Desktop control, per its own devVisibility flag — called from
+    // syncTabOrderToDesktop() for EVERY Desktop row it walks, opted-in
+    // or not. Returns the target-tab control's own id, or null if this
+    // row shouldn't exist on this tab right now.
+    function ensureDynamicTargetRow(targetTab, desktopId, targetRowByDesktopId, scratch) {
+        const existingId = targetRowByDesktopId[desktopId];
+        const desktopCtrl = findRegisteredControlById(desktopId);
+        if (!desktopCtrl || !desktopCtrl.dynamicDevice) {
+            return existingId || null;
+        }
+        const visible = isDevRowVisible(desktopId);
+        if (!visible) {
+            if (existingId) {
+                const el = document.getElementById(existingId);
+                const rowEl = el ? el.closest('.dev-row') : null;
+                if (rowEl) rowEl.remove();
+                delete targetRowByDesktopId[desktopId];
+            }
+            return null;
+        }
+        if (existingId) return existingId;
+        if (!UNIFORM_ROW_BUILDERS[desktopCtrl.type]) return null;
+        const devicePrefix = targetTab === 'landscape' ? 'Landscape' : 'Mobile';
+        const newId = desktopId.replace(/^(slider|color|select|checkbox)/, '$1' + devicePrefix);
+        const clonedCtrl = Object.assign({}, desktopCtrl, { id: newId, tab: targetTab });
+        const row = buildUniformControlRow(clonedCtrl);
+        if (clonedCtrl.type === 'select') row.querySelector('select').value = clonedCtrl.value;
+        else if (clonedCtrl.type === 'checkbox') row.querySelector('input').checked = !!clonedCtrl.value;
+        scratch.appendChild(row);
+        const restored = devDeviceValues[targetTab][desktopId];
+        if (isDevRowIndependent(targetTab, desktopId) && restored !== undefined) writeDevControlValue(newId, restored);
+        else writeDevControlValue(newId, readDevControlValue(desktopId));
+        targetRowByDesktopId[desktopId] = newId;
+        return newId;
     }
 
     function addDevGroup(tab) {
@@ -621,7 +967,7 @@
         let name = 'New Group';
         let n = 2;
         while (existingNames.has(name)) { name = 'New Group (' + n + ')'; n++; }
-        const section = createDevGroupElement(name);
+        const section = createDevGroupElement(name, tab);
         tabEl.appendChild(section);
         section.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -752,7 +1098,9 @@
             const content = titleEl.nextElementSibling;
             if (content.classList.contains('collapsed') !== shouldCollapse) {
                 content.classList.toggle('collapsed');
-                titleEl.textContent = content.classList.contains('collapsed') ? '▶ ' + titleEl.textContent.slice(2) : '▼ ' + titleEl.textContent.slice(2);
+                withPreservedTitleCheckbox(titleEl, () => {
+                    titleEl.textContent = content.classList.contains('collapsed') ? '▶ ' + titleEl.textContent.slice(2) : '▼ ' + titleEl.textContent.slice(2);
+                });
             }
         });
     }
@@ -801,7 +1149,7 @@
                 let sec = sectionsByKey[savedSec.key];
                 if (!sec) {
                     const name = savedSec.key.split('>').pop().replace(new RegExp('^(' + DEV_PANEL_TABS.join('|') + '):'), '');
-                    sec = createDevGroupElement(name);
+                    sec = createDevGroupElement(name, tab);
                     sectionsByKey[savedSec.key] = sec;
                 }
                 parentContainer.appendChild(sec);
@@ -828,12 +1176,29 @@
             targetRowByDesktopId[resolveDevControlId(idEl.id).desktopId] = idEl.id;
         });
         const placedRowIds = new Set();
+        // Temporary parking spot for a row ensureDynamicTargetRow() just
+        // created dynamically — needs to sit inside SOME .dev-section-content
+        // for applySectionOrder()'s own rowsByKey lookup to find it by id;
+        // removed once applySectionOrder() has moved every real row out
+        // of it (always empty by then — see below).
+        const scratch = document.createElement('div');
+        scratch.className = 'dev-section-content';
+        scratch.style.display = 'none';
+        targetTabEl.appendChild(scratch);
 
         function translateGroup(savedGroup) {
             const sid = savedGroup.key.slice(savedGroup.key.indexOf(':') + 1);
             const rowKeys = [];
             savedGroup.rowKeys.forEach(desktopRowKey => {
-                const targetId = targetRowByDesktopId[desktopRowKey];
+                // A row's presence here is decided by its OWN devVisibility
+                // flag (default visible), not by whether a target-tab DOM
+                // row happens to already exist — ensureDynamicTargetRow()
+                // creates one on the fly (cloning Desktop's own control
+                // metadata) or removes an existing one, whichever the flag
+                // currently says; returns null only when neither applies
+                // (row hidden, or a control not opted into dynamicDevice
+                // and with no pre-authored target-tab counterpart).
+                const targetId = ensureDynamicTargetRow(targetTab, desktopRowKey, targetRowByDesktopId, scratch);
                 if (!targetId) return;
                 rowKeys.push(targetId);
                 placedRowIds.add(targetId);
@@ -870,6 +1235,14 @@
         });
 
         applySectionOrder({ [targetTabId]: translated });
+        // Always empty by now — every row ensureDynamicTargetRow() ever
+        // parked here was included in `translated` above, so
+        // applySectionOrder() just moved each one out into its real
+        // group. Safe to remove unconditionally.
+        scratch.remove();
+        // A freshly-created dynamic row needs its own drag handle too —
+        // injectRowDragHandles() is idempotent, safe to re-run here.
+        injectRowDragHandles();
     }
 
     function resolveDevControlId(id) {
@@ -997,7 +1370,17 @@
             row.className = 'dev-row';
             return row;
         }
-        return builder(ctrl);
+        const row = builder(ctrl);
+        // Dynamic Mobile/Landscape visibility/independence checkboxes are
+        // explicit opt-in via ctrl.dynamicDevice — see this feature's own
+        // top comment near findRegisteredControlById() for why this isn't
+        // automatic for every control.
+        if (ctrl.dynamicDevice) {
+            const controlEl = row.querySelector('#' + CSS.escape(ctrl.id));
+            if (ctrl.tab === 'desktop') row.appendChild(buildVisibilityCheckbox(controlEl, ctrl.id));
+            else row.appendChild(buildIndependenceCheckbox(ctrl.tab, resolveDevControlId(ctrl.id).desktopId, controlEl));
+        }
+        return row;
     }
 
     const DEV_PANEL_REGISTERED_ARRAYS = [];
@@ -1130,7 +1513,9 @@
             const key = getSectionKey(titleEl);
             const arrow = titleEl.textContent.slice(0, 2);
             const original = devTextOriginalFor(key, titleEl.textContent.slice(2));
-            titleEl.textContent = arrow + (devTextOverrides[key] != null ? devTextOverrides[key] : original);
+            withPreservedTitleCheckbox(titleEl, () => {
+                titleEl.textContent = arrow + (devTextOverrides[key] != null ? devTextOverrides[key] : original);
+            });
         });
         document.querySelectorAll('.dev-label').forEach(labelEl => {
             const key = getDevLabelKey(labelEl);
@@ -1340,7 +1725,20 @@
         accentColor: '#5b85c8', sliderColor: '#5b85c8', fontFamily: 'Verdana, Geneva, sans-serif',
         capsButtonText: true, capsTabText: true, capsGroupNames: true, capsSettingsText: false,
         buttonTextLetterSpacing: 0, tabTextLetterSpacing: 0, groupTextLetterSpacing: 0, settingsTextLetterSpacing: 0,
-        buttonHeight: 21,
+        buttonHeight: 21, valueFontSize: 10,
+        // Added — porting TEMPLATE_DEV_PANEL.html's 2026-09-14 "Dev Panel"
+        // group expansion (CLAUDE.md §12i): per-category Bold/Capitalize/
+        // Letter Spacing/Line Spacing/Text Color battery for
+        // Title/Group/Settings/Tab/Button, plus Button Font Size, Setting
+        // Number Font Size, and a Group Label Background Color. Defaults
+        // below preserve this project's own current look exactly (colors
+        // matched to the existing hardcoded values they replace; bold
+        // defaults match what was previously always-on via hardcoded CSS).
+        groupLabelBgColor: '#5b85c8',
+        titleLetterSpacing: 0, titleLineHeight: 1.2, tabLineHeight: 1.2, buttonLineHeight: 1.2, settingsLineHeight: 1.2, groupLineHeight: 1.2,
+        buttonFontSize: 10,
+        titleBold: true, tabBold: true, buttonBold: true, settingsBold: false, groupBold: true, titleCapitalize: false,
+        groupTextColor: '#5b85c8', buttonTextColor: '#000000', settingNumberColor: '#5b85c8', tabTextColor: '#ffffff',
     };
     const mobileDevPanelStyle = { ...devPanelStyle };
     const landscapeDevPanelStyle = { ...devPanelStyle };
@@ -1353,11 +1751,21 @@
         fontFamily: '--dev-panel-font-family', buttonHeight: '--dev-button-height-px',
         buttonTextLetterSpacing: '--dev-button-text-letter-spacing-px', tabTextLetterSpacing: '--dev-tab-text-letter-spacing-px',
         groupTextLetterSpacing: '--dev-group-text-letter-spacing-px', settingsTextLetterSpacing: '--dev-settings-text-letter-spacing-px',
+        valueFontSize: '--dev-value-font-size-px', groupLabelBgColor: '--dev-group-label-bg-color',
+        titleLetterSpacing: '--dev-panel-title-letter-spacing-px', titleLineHeight: '--dev-panel-title-line-height',
+        tabLineHeight: '--dev-tab-line-height', buttonLineHeight: '--dev-button-text-line-height',
+        settingsLineHeight: '--dev-settings-line-height', groupLineHeight: '--dev-group-text-line-height',
+        buttonFontSize: '--dev-button-text-font-size-px',
+        groupTextColor: '--dev-panel-group-text-color', buttonTextColor: '--dev-panel-button-text-color',
+        settingNumberColor: '--dev-value-text-color', tabTextColor: '--dev-tab-text-color',
     };
-    const DEV_PANEL_STYLE_SHARED_KEYS = ['opacity', 'bgColor', 'titleTextColor', 'nonTitleTextColor', 'accentColor', 'sliderColor', 'fontFamily', 'capsButtonText', 'capsTabText', 'capsGroupNames', 'capsSettingsText', 'buttonTextLetterSpacing', 'tabTextLetterSpacing', 'groupTextLetterSpacing', 'settingsTextLetterSpacing'];
+    const DEV_PANEL_STYLE_SHARED_KEYS = ['opacity', 'bgColor', 'titleTextColor', 'nonTitleTextColor', 'accentColor', 'sliderColor', 'fontFamily', 'capsButtonText', 'capsTabText', 'capsGroupNames', 'capsSettingsText', 'buttonTextLetterSpacing', 'tabTextLetterSpacing', 'groupTextLetterSpacing', 'settingsTextLetterSpacing', 'groupLabelBgColor', 'groupTextColor', 'buttonTextColor', 'settingNumberColor', 'tabTextColor', 'titleBold', 'tabBold', 'buttonBold', 'settingsBold', 'groupBold', 'titleCapitalize'];
     const DEV_PANEL_CAPS_CLASS_MAP = {
         capsButtonText: 'dev-caps-button-text', capsTabText: 'dev-caps-tab-text',
         capsGroupNames: 'dev-caps-group-names', capsSettingsText: 'dev-caps-settings-text',
+        titleCapitalize: 'dev-caps-title-text', titleBold: 'dev-bold-title',
+        tabBold: 'dev-bold-tab', buttonBold: 'dev-bold-button',
+        settingsBold: 'dev-bold-settings', groupBold: 'dev-bold-group',
     };
     function applyDevPanelOwnStyling(tab) {
         const style = tab === 'desktop' ? devPanelStyle : tab === 'mobile' ? mobileDevPanelStyle : landscapeDevPanelStyle;
@@ -1380,6 +1788,14 @@
                 { tab, group: 'Dev Panel', id: idPrefix + 'ButtonTextBorder', type: 'slider', label: 'Button Text Border (px):', min: 0, max: 20, step: 1, value: 0 },
                 { tab, group: 'Dev Panel', id: idPrefix + 'ScrollStrength', type: 'slider', label: 'Scroll Strength (x):', min: 0.2, max: 5, step: 0.1, value: 0.2 },
                 { tab, group: 'Dev Panel', id: idPrefix + 'ButtonHeight', type: 'slider', label: 'Button Height (px):', min: 12, max: 60, step: 1, value: 21 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'ValueFontSize', type: 'slider', label: 'Setting Number Font Size (px):', min: 6, max: 30, step: 1, value: 10 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'TitleLetterSpacing', type: 'slider', label: 'Dev Panel Title Letter Spacing (px):', min: -2, max: 10, step: 0.1, value: 0 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'TitleLineHeight', type: 'slider', label: 'Dev Panel Title Line Spacing (x):', min: 0.8, max: 3, step: 0.05, value: 1.2 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'TabLineHeight', type: 'slider', label: 'Tab Line Spacing (x):', min: 0.8, max: 3, step: 0.05, value: 1.2 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'GroupLineHeight', type: 'slider', label: 'Group Text Line Spacing (x):', min: 0.8, max: 3, step: 0.05, value: 1.2 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'SettingsLineHeight', type: 'slider', label: 'Settings Text Line Spacing (x):', min: 0.8, max: 3, step: 0.05, value: 1.2 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'ButtonLineHeight', type: 'slider', label: 'Button Text Line Spacing (x):', min: 0.8, max: 3, step: 0.05, value: 1.2 },
+                { tab, group: 'Dev Panel', id: idPrefix + 'ButtonFontSize', type: 'slider', label: 'Button Text Font Size (px):', min: 6, max: 30, step: 1, value: 10 },
             ];
             if (sharedOnly) return rows;
             return [
@@ -1390,6 +1806,7 @@
                 { tab, group: 'Dev Panel', id: 'colorDevPanelNonTitleText', type: 'color', label: 'Settings Title Text Color:', value: '#ffffff' },
                 { tab, group: 'Dev Panel', id: 'colorDevPanelAccent', type: 'color', label: 'Accent Color (Buttons/UI):', value: '#5b85c8' },
                 { tab, group: 'Dev Panel', id: 'colorDevPanelSliderColor', type: 'color', label: 'Slider Color:', value: '#5b85c8' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelGroupLabelBg', type: 'color', label: 'Group Label Background Color:', value: '#5b85c8' },
                 { tab, group: 'Dev Panel', id: 'selectDevPanelFontFamily', type: 'select', label: 'Font (All Text):', options: [
                     { value: 'monospace', text: 'Monospace' }, { value: 'Arial, Helvetica, sans-serif', text: 'Arial' },
                     { value: "'Segoe UI', Arial, sans-serif", text: 'Segoe UI' }, { value: 'Verdana, Geneva, sans-serif', text: 'Verdana' },
@@ -1400,6 +1817,20 @@
                 { tab, group: 'Dev Panel', id: 'checkboxDevCapsGroupNames', type: 'checkbox', label: 'Capitalize Group Names' },
                 { tab, group: 'Dev Panel', id: 'checkboxDevCapsSettingsText', type: 'checkbox', label: 'Capitalize Settings Text' },
                 { tab, group: 'Dev Panel', id: 'checkboxDevTextEditMode', type: 'checkbox', label: 'Enable Label Rename Mode' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelGroupText', type: 'color', label: 'Group Text Color:', value: '#5b85c8' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelButtonText', type: 'color', label: 'Button Text Color:', value: '#000000' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelSettingNumber', type: 'color', label: 'Setting Number Text Color:', value: '#5b85c8' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelTabText', type: 'color', label: 'Tab Text Color:', value: '#ffffff' },
+                { tab, group: 'Dev Panel', id: 'sliderDevTabTextLetterSpacing', type: 'slider', label: 'Tab Letter Spacing (px):', min: -2, max: 10, step: 0.1, value: 0 },
+                { tab, group: 'Dev Panel', id: 'sliderDevGroupTextLetterSpacing', type: 'slider', label: 'Group Letter Spacing (px):', min: -2, max: 10, step: 0.1, value: 0 },
+                { tab, group: 'Dev Panel', id: 'sliderDevSettingsTextLetterSpacing', type: 'slider', label: 'Settings Letter Spacing (px):', min: -2, max: 10, step: 0.1, value: 0 },
+                { tab, group: 'Dev Panel', id: 'sliderDevButtonTextLetterSpacing', type: 'slider', label: 'Buttons Letter Spacing (px):', min: -2, max: 10, step: 0.1, value: 0 },
+                { tab, group: 'Dev Panel', id: 'checkboxDevCapsTitleText', type: 'checkbox', label: 'Capitalize Title' },
+                { tab, group: 'Dev Panel', id: 'checkboxDevBoldTitle', type: 'checkbox', label: 'Bold Title' },
+                { tab, group: 'Dev Panel', id: 'checkboxDevBoldGroup', type: 'checkbox', label: 'Bold Group Text' },
+                { tab, group: 'Dev Panel', id: 'checkboxDevBoldSettings', type: 'checkbox', label: 'Bold Settings Text' },
+                { tab, group: 'Dev Panel', id: 'checkboxDevBoldTab', type: 'checkbox', label: 'Bold Tab' },
+                { tab, group: 'Dev Panel', id: 'checkboxDevBoldButton', type: 'checkbox', label: 'Bold Button' },
             ];
         };
         return [
@@ -1411,6 +1842,9 @@
     const DEV_PANEL_CAPS_CHECKBOX_KEYS = {
         checkboxDevCapsButtonText: 'capsButtonText', checkboxDevCapsTabText: 'capsTabText',
         checkboxDevCapsGroupNames: 'capsGroupNames', checkboxDevCapsSettingsText: 'capsSettingsText',
+        checkboxDevCapsTitleText: 'titleCapitalize', checkboxDevBoldTitle: 'titleBold',
+        checkboxDevBoldTab: 'tabBold', checkboxDevBoldButton: 'buttonBold',
+        checkboxDevBoldSettings: 'settingsBold', checkboxDevBoldGroup: 'groupBold',
     };
     function renderDevPanelStyleControls() {
         DEVPANEL_STYLE_CONTROLS.forEach(ctrl => {
@@ -1432,6 +1866,14 @@
             ['buttonTextBorder', 'sliderDevPanelButtonTextBorder', 'sliderMobileDevPanelButtonTextBorder', 'sliderLandscapeDevPanelButtonTextBorder'],
             ['scrollStrength', 'sliderDevPanelScrollStrength', 'sliderMobileDevPanelScrollStrength', 'sliderLandscapeDevPanelScrollStrength'],
             ['buttonHeight', 'sliderDevPanelButtonHeight', 'sliderMobileDevPanelButtonHeight', 'sliderLandscapeDevPanelButtonHeight'],
+            ['valueFontSize', 'sliderDevPanelValueFontSize', 'sliderMobileDevPanelValueFontSize', 'sliderLandscapeDevPanelValueFontSize'],
+            ['titleLetterSpacing', 'sliderDevPanelTitleLetterSpacing', 'sliderMobileDevPanelTitleLetterSpacing', 'sliderLandscapeDevPanelTitleLetterSpacing'],
+            ['titleLineHeight', 'sliderDevPanelTitleLineHeight', 'sliderMobileDevPanelTitleLineHeight', 'sliderLandscapeDevPanelTitleLineHeight'],
+            ['tabLineHeight', 'sliderDevPanelTabLineHeight', 'sliderMobileDevPanelTabLineHeight', 'sliderLandscapeDevPanelTabLineHeight'],
+            ['groupLineHeight', 'sliderDevPanelGroupLineHeight', 'sliderMobileDevPanelGroupLineHeight', 'sliderLandscapeDevPanelGroupLineHeight'],
+            ['settingsLineHeight', 'sliderDevPanelSettingsLineHeight', 'sliderMobileDevPanelSettingsLineHeight', 'sliderLandscapeDevPanelSettingsLineHeight'],
+            ['buttonLineHeight', 'sliderDevPanelButtonLineHeight', 'sliderMobileDevPanelButtonLineHeight', 'sliderLandscapeDevPanelButtonLineHeight'],
+            ['buttonFontSize', 'sliderDevPanelButtonFontSize', 'sliderMobileDevPanelButtonFontSize', 'sliderLandscapeDevPanelButtonFontSize'],
         ];
         sliderKeys.forEach(([key, deskId, mobId, landId]) => {
             [[deskId, devPanelStyle, 'desktop'], [mobId, mobileDevPanelStyle, 'mobile'], [landId, landscapeDevPanelStyle, 'landscape']].forEach(([id, store, tab]) => {
@@ -1453,16 +1895,37 @@
             if (valEl) valEl.textContent = e.target.value;
         });
         [['bgColor', 'colorDevPanelBg'], ['titleTextColor', 'colorDevPanelTitleText'], ['nonTitleTextColor', 'colorDevPanelNonTitleText'],
-         ['accentColor', 'colorDevPanelAccent'], ['sliderColor', 'colorDevPanelSliderColor']].forEach(([key, id]) => {
+         ['accentColor', 'colorDevPanelAccent'], ['sliderColor', 'colorDevPanelSliderColor'], ['groupLabelBgColor', 'colorDevPanelGroupLabelBg'],
+         ['groupTextColor', 'colorDevPanelGroupText'], ['buttonTextColor', 'colorDevPanelButtonText'],
+         ['settingNumberColor', 'colorDevPanelSettingNumber'], ['tabTextColor', 'colorDevPanelTabText']].forEach(([key, id]) => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', (e) => { devPanelStyle[key] = e.target.value; applyDevPanelOwnStyling('desktop'); });
         });
         const fontEl = document.getElementById('selectDevPanelFontFamily');
         if (fontEl) fontEl.addEventListener('change', (e) => { devPanelStyle.fontFamily = e.target.value; applyDevPanelOwnStyling('desktop'); });
         [['capsButtonText', 'checkboxDevCapsButtonText'], ['capsTabText', 'checkboxDevCapsTabText'],
-         ['capsGroupNames', 'checkboxDevCapsGroupNames'], ['capsSettingsText', 'checkboxDevCapsSettingsText']].forEach(([key, id]) => {
+         ['capsGroupNames', 'checkboxDevCapsGroupNames'], ['capsSettingsText', 'checkboxDevCapsSettingsText'],
+         ['titleCapitalize', 'checkboxDevCapsTitleText'], ['titleBold', 'checkboxDevBoldTitle'],
+         ['tabBold', 'checkboxDevBoldTab'], ['buttonBold', 'checkboxDevBoldButton'],
+         ['settingsBold', 'checkboxDevBoldSettings'], ['groupBold', 'checkboxDevBoldGroup']].forEach(([key, id]) => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', (e) => { devPanelStyle[key] = e.target.checked; applyDevPanelOwnStyling('desktop'); });
+        });
+        // Desktop-only letter-spacing sliders for Tab/Group/Settings/Button
+        // text - these reuse the SAME state keys the shared-key list above
+        // already carries (tabTextLetterSpacing etc.), which previously had
+        // no UI row at all; a single un-suffixed id each, matching the
+        // other desktop-only color/checkbox rows in this same group.
+        [['tabTextLetterSpacing', 'sliderDevTabTextLetterSpacing'], ['groupTextLetterSpacing', 'sliderDevGroupTextLetterSpacing'],
+         ['settingsTextLetterSpacing', 'sliderDevSettingsTextLetterSpacing'], ['buttonTextLetterSpacing', 'sliderDevButtonTextLetterSpacing']].forEach(([key, id]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', (e) => {
+                devPanelStyle[key] = parseFloat(e.target.value);
+                applyDevPanelOwnStyling('desktop');
+                const valEl = document.getElementById(id.replace('slider', 'value'));
+                if (valEl) valEl.textContent = e.target.value;
+            });
         });
         const textEditEl = document.getElementById('checkboxDevTextEditMode');
         if (textEditEl) textEditEl.addEventListener('change', (e) => { textEditModeEnabled = e.target.checked; });
@@ -1524,11 +1987,28 @@
             // author's own test-play placements are never part of a saved
             // level, per explicit spec).
             levels: JSON.parse(JSON.stringify(levels)),
+            // Dynamic Mobile/Landscape visibility/independence state —
+            // not covered by `controls` above (a dynamically-created
+            // row's own ctrl object is never passed to
+            // registerDevControlArray()), deliberately: a non-independent
+            // row's live value is always just Desktop's own (already
+            // captured normally, via `controls`), and an independent
+            // row's is devDeviceValues below, so nothing is missing.
+            devVisibility: { ...devVisibility },
+            devIndependence: { mobile: { ...devIndependence.mobile }, landscape: { ...devIndependence.landscape } },
+            devDeviceValues: { mobile: { ...devDeviceValues.mobile }, landscape: { ...devDeviceValues.landscape } },
         };
     }
     function applyFullDevPanelState(state) {
         if (!state) return;
         applyControlValues(state.controls);
+        // Restored before the syncTabOrderToDesktop() calls further down
+        // this function — devVisibility/devIndependence/devDeviceValues
+        // must already be in place before rows get dynamically rebuilt,
+        // or every dynamic row would rebuild against stale defaults.
+        if (state.devVisibility) devVisibility = { ...state.devVisibility };
+        if (state.devIndependence) devIndependence = { mobile: { ...(state.devIndependence.mobile || {}) }, landscape: { ...(state.devIndependence.landscape || {}) } };
+        if (state.devDeviceValues) devDeviceValues = { mobile: { ...(state.devDeviceValues.mobile || {}) }, landscape: { ...(state.devDeviceValues.landscape || {}) } };
         if (state.layout) { Object.assign(DEV_PANEL_LAYOUT, state.layout); applyDevPanelLayout(); }
         if (state.devPanelStyle) Object.assign(devPanelStyle, state.devPanelStyle);
         if (state.mobileDevPanelStyle) Object.assign(mobileDevPanelStyle, state.mobileDevPanelStyle);
@@ -1543,6 +2023,13 @@
         }
         applySectionOrder(state.sectionOrder);
         applySectionCollapseState(state.sectionCollapseState);
+        // Re-derives Mobile/Landscape from Desktop's now-restored order +
+        // the devVisibility/devIndependence/devDeviceValues just restored
+        // above — creates any dynamic row that doesn't exist in the DOM
+        // yet and seeds its value correctly. Needed here too since a
+        // restore isn't necessarily followed by opening either tab.
+        syncTabOrderToDesktop('mobile');
+        syncTabOrderToDesktop('landscape');
         if (state.scenes) {
             scenes = state.scenes;
             refreshSceneSelectOptions();
@@ -1824,6 +2311,20 @@
         setupDevPanelTextEdit();
         assertDevControlsRendered();
         validateDevControlMappings();
+        // Dynamic Mobile/Landscape visibility/independence — backfill
+        // cascade checkboxes onto the pre-declared static groups, then
+        // create every dynamicDevice-opted-in control's own Mobile/
+        // Landscape row for the first time (a fresh page load has none
+        // yet), then give every group's own cascade checkbox its correct
+        // initial checked/indeterminate display. Order matters: AFTER
+        // every render*Controls() call above (Desktop rows must exist
+        // first) and BEFORE anything else that might otherwise be the
+        // only thing creating them (i.e. not until the user opens that
+        // tab).
+        ensureStaticGroupCascadeCheckboxes();
+        syncTabOrderToDesktop('mobile');
+        syncTabOrderToDesktop('landscape');
+        refreshAllGroupCascadeCheckboxes();
 
         function devGroupNestingDepth(contentEl, tabRoot) {
             let depth = 0;
@@ -1834,13 +2335,15 @@
             }
             return depth;
         }
-        setupDragReorder('.dev-section-title', '.dev-section', () => {}, (tabRoot, dragging) => {
+        injectGroupDragHandles();
+        injectRowDragHandles();
+        setupDragReorder('.dev-group-drag-handle', '.dev-section', () => {}, (tabRoot, dragging) => {
             const groupContents = Array.from(tabRoot.querySelectorAll('.dev-section > .dev-section-content'))
                 .filter(content => !dragging.contains(content));
             groupContents.sort((a, b) => devGroupNestingDepth(b, tabRoot) - devGroupNestingDepth(a, tabRoot));
             return [...groupContents, tabRoot];
         });
-        setupDragReorder('.dev-label', '.dev-row', () => {}, (tabRoot, dragging) => {
+        setupDragReorder('.dev-row-drag-handle', '.dev-row', () => {}, (tabRoot, dragging) => {
             const groupContents = Array.from(tabRoot.querySelectorAll('.dev-section-content'));
             groupContents.sort((a, b) => devGroupNestingDepth(b, tabRoot) - devGroupNestingDepth(a, tabRoot));
             return groupContents;

@@ -1699,6 +1699,111 @@ blocking, but the gap suggests that direction's own update may be
 incomplete. BEHHIND THUMB DRAG has no such gap.
 
 --------------------------------------------------------------------------------
+2026-09-14
+
+Brought the dev panel's engine chrome up to date with
+TEMPLATE_DEV_PANEL.html's 2026-09-14 changes (CLAUDE.md Section 12):
+
+1) Drag-handle-only reordering -- groups and settings rows now reorder
+only from a dedicated far-left "handle" icon (a dot-grid glyph), never
+from clicking/dragging the title/label text itself. Added
+addGroupDragHandle()/injectGroupDragHandles()/injectRowDragHandles();
+the 2 setupDragReorder() calls in initDevPanelEngine() now target
+.dev-group-drag-handle/.dev-row-drag-handle instead of
+.dev-section-title/.dev-label. Group-title click-to-collapse is
+unaffected (verified in-browser: title click still toggles collapse,
+doesn't arm a drag).
+
+2) Built-in "Dev Panel" self-styling group expanded to match the
+template's new standard set: per-category Bold toggles (Title/Group/
+Settings/Tab/Button), a Title Capitalize toggle, per-category Line
+Spacing, a Setting Number Font Size + Text Color, a Button Text Color
+(decoupled from a hardcoded black), a Tab Text Color (now shared
+between active/inactive state instead of switching to black when
+active), a Group Text Color + Group Label Background Color (both
+decoupled from Accent Color), a Button Text Font Size, and Tab/Group/
+Settings/Button Letter Spacing sliders -- the last 4 reuse state keys
+(tabTextLetterSpacing etc.) this project already had wired to CSS
+variables but had no slider UI for; this closes that pre-existing gap
+as a side effect of the port. New defaults were chosen to preserve the
+panel's current look exactly (colors matched to the hardcoded values
+they replace; bold defaults match what was previously always-on via
+hardcoded CSS).
+
+Deliberately NOT ported: the template's optional dynamicDevice / "Show
+in Mobile/Independent from Desktop" per-control system (opt-in,
+requires per-control decisions this project hasn't made) and its
+literal 3-level nested MECHANICS/PANEL UI/TEXT subgroup arrangement
+(the template achieves that via a one-time default-order pass over an
+otherwise-flat control array, not a different data model -- skipped
+here since the new drag-handle-only reordering above already lets a
+user organize the flat "Dev Panel" group by hand if wanted).
+
+Verified in-browser (?dev=1, localhost static server): all 42 rows in
+the "Dev Panel" group render with matching DOM ids
+(assertDevControlsRendered() returns 0 missing); unchecking "Bold
+Title" removes the dev-bold-title class live; group-title click still
+toggles collapse; no new console errors (the 4 pre-existing
+ERR_CONNECTION_RESET lines are the git-settings-log Tier-1 fetch
+failing against the static file server, present before this change
+too, unrelated).
+
+--------------------------------------------------------------------------------
+2026-09-14 (2)
+
+Ported TEMPLATE_DEV_PANEL.html's dynamicDevice / "Show in Mobile-
+Landscape" + "Independent from Desktop" system (CLAUDE.md Section
+12f-1, [JS-4b0]) -- the piece deliberately left out of the earlier
+2026-09-14 dev-panel-template catch-up (see that entry above). Adds:
+per-control opt-in via `dynamicDevice: true` on a Desktop-only
+registration; a "Show in Mobile/Landscape" checkbox on Desktop rows
+(default checked); an "Independent from Desktop" checkbox on Mobile/
+Landscape rows (default unchecked, live-mirrors Desktop until turned
+on); a group-level cascade checkbox (no persisted state of its own,
+writes through to every current child); a retained-value cache
+(devDeviceValues) so hiding/un-independent-izing a control never
+discards its last-tuned value. Integrated into this project's own
+syncTabOrderToDesktop() (each Desktop row it walks now resolves
+through ensureDynamicTargetRow(), which creates/removes/reuses the
+Mobile/Landscape counterpart per its own devVisibility flag) and into
+captureFullDevPanelState()/applyFullDevPanelState() (devVisibility/
+devIndependence/devDeviceValues are now part of the same snapshot
+every other panel state already rides through).
+
+Real bug caught and fixed during verification, not present in the
+template's own architecture: this project's toggleSection()/
+applySectionCollapseState()/applyDevTextOverrides() all do a plain
+`titleEl.textContent = ...` rewrite on every group title -- which
+silently deletes the new cascade checkbox (a real DOM child of the
+title) the first time a group collapses/expands or text-overrides are
+re-applied. Ported the template's own withPreservedTitleCheckbox()
+guard (detach the checkbox, run the rewrite, reattach the same node)
+around all 3 call sites. Caught by direct testing (0/30 groups had
+their checkbox surviving past the first applyDevTextOverrides() call
+during init) before it could ship silently broken.
+
+Scoped deliberately NOT to retrofit any of this project's existing
+per-tab-authored controls (Hand Rotation Offset, Animation X Offset,
+Button style controls, the "Dev Panel" group itself) onto the new
+system -- that's a data-migration-shaped change with its own risk
+(converting an already-tuned, independently-authored Mobile/Landscape
+value into "mirrors Desktop by default"), left for a separate,
+explicitly-requested pass.
+
+Verified in-browser end-to-end with an ad-hoc test control (added at
+the console, never saved to disk): visibility checkbox appears on the
+Desktop row; live-editing Desktop mirrors to the dynamically-created
+Mobile row; marking Mobile independent stops the mirror; unchecking
+"Show in Mobile/Landscape" removes both the Mobile and Landscape rows;
+re-checking it recreates them; a full captureFullDevPanelState() ->
+mutate -> applyFullDevPanelState() round-trip correctly restores the
+hidden state. Also confirmed a static browser-cache false alarm along
+the way (an un-cache-busted reload served a stale pre-edit copy of
+index.html from the python http.server, briefly looking like the port
+hadn't taken effect at all) -- not a real bug, resolved by a cache-
+busting query param.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

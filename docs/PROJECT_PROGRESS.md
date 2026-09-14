@@ -350,6 +350,37 @@ this note is now complete, committed, and pushed (`751f84d`) — see
   real bug caught+fixed during implementation (2 dev-panel labels
   sharing a row corrupted each other's text).
 
+- Dev panel engine brought up to date with `TEMPLATE_DEV_PANEL.html`'s
+  2026-09-14 changes (CLAUDE.md §12): reordering (groups and settings
+  rows) now starts only from a dedicated drag-handle icon, never from
+  clicking the title/label text; the built-in "Dev Panel" self-styling
+  group gained per-category Bold/Capitalize toggles, per-category Line
+  Spacing, and several new independently-editable colors (Group Text,
+  Group Label Background, Button Text, Setting Number, Tab Text — all
+  previously hardcoded or tied to Accent Color). Defaults were chosen to
+  preserve the panel's existing look. The opt-in per-control Mobile/
+  Landscape "dynamicDevice" visibility/independence system (§12f-1) has
+  now also been ported — a control opts in via `dynamicDevice: true` on
+  its Desktop registration to get a live "Show in Mobile/Landscape" +
+  "Independent from Desktop" checkbox pair, a group-level cascade
+  checkbox, and a retained-value cache, fully wired into this project's
+  own `syncTabOrderToDesktop()`/`captureFullDevPanelState()`/
+  `applyFullDevPanelState()`. A real bug this project's own architecture
+  introduced (not present in the template) was caught and fixed along
+  the way: `toggleSection()`/`applySectionCollapseState()`/
+  `applyDevTextOverrides()` all rewrite a group title's `textContent`
+  directly, which was silently deleting the new cascade checkbox — now
+  guarded by a ported `withPreservedTitleCheckbox()` wrapper around all
+  3 call sites. See `CHANGELOG.txt` (2026-09-14 (2)) for the full
+  verification list. Deliberately **not** retrofitted: none of this
+  project's existing per-tab-authored controls (Hand Rotation Offset,
+  Animation X Offset, Button style controls, the Dev Panel group's own
+  settings) have been converted to `dynamicDevice: true` — that's a
+  separate, riskier data-migration-shaped change, left for an explicit
+  future request. The template's cosmetic-only nested subgroup
+  arrangement for the built-in Dev Panel group remains un-ported too
+  (organizable by hand now via the drag-handle reordering above).
+
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-
 direction Hand Rotation Offset (the original, non-live version); top-edge
