@@ -453,6 +453,23 @@
     .dev-row-drag-handle:hover { opacity: 1; }
     .dev-row-drag-handle:active { cursor: grabbing; }
     .dev-reorder-dragging { opacity: 0.5; }
+    /* Mouse Log (built-in "Debug" group feature) live display — a plain
+       scrollable list, one child <div> per entry. Ported from
+       TEMPLATE_DEV_PANEL.html. */
+    .dev-mouse-log {
+        height: 140px;
+        overflow-y: auto;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--dev-accent-color, #0ff);
+        border-radius: 4px;
+        padding: 4px 6px;
+        font: 10px/1.5 ui-monospace, Consolas, monospace;
+        color: var(--dev-panel-non-title-text-color, #aaa);
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin-top: 4px;
+    }
+    .dev-mouse-log-empty { opacity: 0.6; }
 
     .dev-slider {
         flex: 1;
@@ -1032,14 +1049,36 @@
                 const containers = typeof crossContainerSelector === 'function'
                     ? crossContainerSelector(tabRoot, dragging)
                     : Array.from(tabRoot.querySelectorAll(crossContainerSelector));
-                let targetContainer = containers.find(c => {
+                // A candidate container is normally a .dev-section-content
+                // div, but a COLLAPSED group's content is display:none —
+                // getBoundingClientRect() on it returns an all-zero rect, so
+                // every collapsed group's content ties at the same
+                // degenerate {top:0,bottom:0,height:0}. Groups default to
+                // collapsed, so this is the common case — it silently broke
+                // both the "pointer is over this container" check and the
+                // "nearest by center" fallback below (real incident, ported
+                // from TEMPLATE_DEV_PANEL.html: "cant seem to reorder or
+                // modify group nesting" — cross-group drop worked only when
+                // the target was pre-expanded). Fixed with a hit-test rect
+                // that falls back to the group's own TITLE BAR (always
+                // rendered, never zero-size) whenever its content is
+                // collapsed — also the correct visual target, since that's
+                // the only part of a collapsed group a user can actually
+                // see and aim at.
+                function hitTestRect(c) {
                     const r = c.getBoundingClientRect();
+                    if (r.height > 0) return r;
+                    const titleEl = c.previousElementSibling;
+                    return (titleEl && titleEl.classList.contains('dev-section-title')) ? titleEl.getBoundingClientRect() : r;
+                }
+                let targetContainer = containers.find(c => {
+                    const r = hitTestRect(c);
                     return e.clientY >= r.top && e.clientY <= r.bottom;
                 });
                 if (!targetContainer) {
                     let minDist = Infinity;
                     containers.forEach(c => {
-                        const r = c.getBoundingClientRect();
+                        const r = hitTestRect(c);
                         const dist = Math.abs(e.clientY - (r.top + r.height / 2));
                         if (dist < minDist) { minDist = dist; targetContainer = c; }
                     });
@@ -1721,8 +1760,13 @@
     const devPanelStyle = {
         titleFontSize: 22, tabFontSize: 12, groupTitleFontSize: 11, settingTitleFontSize: 12,
         buttonTextBorder: 0, scrollStrength: 0.2, opacity: 1,
+        // Colors below match TEMPLATE_DEV_PANEL.html's own current live
+        // palette exactly, per direct request ("i also wanted Dev panel
+        // colors to be ported too") — not this project's own prior
+        // choices. Non-color fields (sizes/bold defaults/etc.) are
+        // unaffected, still tuned to this project's own prior values.
         bgColor: '#000000', titleTextColor: '#ffffff', nonTitleTextColor: '#ffffff',
-        accentColor: '#5b85c8', sliderColor: '#5b85c8', fontFamily: 'Verdana, Geneva, sans-serif',
+        accentColor: '#005f8f', sliderColor: '#ffffff', fontFamily: 'Verdana, Geneva, sans-serif',
         capsButtonText: true, capsTabText: true, capsGroupNames: true, capsSettingsText: false,
         buttonTextLetterSpacing: 0, tabTextLetterSpacing: 0, groupTextLetterSpacing: 0, settingsTextLetterSpacing: 0,
         buttonHeight: 21, valueFontSize: 10,
@@ -1730,15 +1774,12 @@
         // group expansion (CLAUDE.md §12i): per-category Bold/Capitalize/
         // Letter Spacing/Line Spacing/Text Color battery for
         // Title/Group/Settings/Tab/Button, plus Button Font Size, Setting
-        // Number Font Size, and a Group Label Background Color. Defaults
-        // below preserve this project's own current look exactly (colors
-        // matched to the existing hardcoded values they replace; bold
-        // defaults match what was previously always-on via hardcoded CSS).
-        groupLabelBgColor: '#5b85c8',
+        // Number Font Size, and a Group Label Background Color.
+        groupLabelBgColor: '#005f8f',
         titleLetterSpacing: 0, titleLineHeight: 1.2, tabLineHeight: 1.2, buttonLineHeight: 1.2, settingsLineHeight: 1.2, groupLineHeight: 1.2,
         buttonFontSize: 10,
         titleBold: true, tabBold: true, buttonBold: true, settingsBold: false, groupBold: true, titleCapitalize: false,
-        groupTextColor: '#5b85c8', buttonTextColor: '#000000', settingNumberColor: '#5b85c8', tabTextColor: '#ffffff',
+        groupTextColor: '#ffffff', buttonTextColor: '#ffffff', settingNumberColor: '#5cc9ff', tabTextColor: '#ffffff',
     };
     const mobileDevPanelStyle = { ...devPanelStyle };
     const landscapeDevPanelStyle = { ...devPanelStyle };
@@ -1804,9 +1845,9 @@
                 { tab, group: 'Dev Panel', id: 'colorDevPanelBg', type: 'color', label: 'Background Color:', value: '#000000' },
                 { tab, group: 'Dev Panel', id: 'colorDevPanelTitleText', type: 'color', label: 'Title Text Color:', value: '#ffffff' },
                 { tab, group: 'Dev Panel', id: 'colorDevPanelNonTitleText', type: 'color', label: 'Settings Title Text Color:', value: '#ffffff' },
-                { tab, group: 'Dev Panel', id: 'colorDevPanelAccent', type: 'color', label: 'Accent Color (Buttons/UI):', value: '#5b85c8' },
-                { tab, group: 'Dev Panel', id: 'colorDevPanelSliderColor', type: 'color', label: 'Slider Color:', value: '#5b85c8' },
-                { tab, group: 'Dev Panel', id: 'colorDevPanelGroupLabelBg', type: 'color', label: 'Group Label Background Color:', value: '#5b85c8' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelAccent', type: 'color', label: 'Accent Color (Buttons/UI):', value: '#005f8f' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelSliderColor', type: 'color', label: 'Slider Color:', value: '#ffffff' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelGroupLabelBg', type: 'color', label: 'Group Label Background Color:', value: '#005f8f' },
                 { tab, group: 'Dev Panel', id: 'selectDevPanelFontFamily', type: 'select', label: 'Font (All Text):', options: [
                     { value: 'monospace', text: 'Monospace' }, { value: 'Arial, Helvetica, sans-serif', text: 'Arial' },
                     { value: "'Segoe UI', Arial, sans-serif", text: 'Segoe UI' }, { value: 'Verdana, Geneva, sans-serif', text: 'Verdana' },
@@ -1817,9 +1858,9 @@
                 { tab, group: 'Dev Panel', id: 'checkboxDevCapsGroupNames', type: 'checkbox', label: 'Capitalize Group Names' },
                 { tab, group: 'Dev Panel', id: 'checkboxDevCapsSettingsText', type: 'checkbox', label: 'Capitalize Settings Text' },
                 { tab, group: 'Dev Panel', id: 'checkboxDevTextEditMode', type: 'checkbox', label: 'Enable Label Rename Mode' },
-                { tab, group: 'Dev Panel', id: 'colorDevPanelGroupText', type: 'color', label: 'Group Text Color:', value: '#5b85c8' },
-                { tab, group: 'Dev Panel', id: 'colorDevPanelButtonText', type: 'color', label: 'Button Text Color:', value: '#000000' },
-                { tab, group: 'Dev Panel', id: 'colorDevPanelSettingNumber', type: 'color', label: 'Setting Number Text Color:', value: '#5b85c8' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelGroupText', type: 'color', label: 'Group Text Color:', value: '#ffffff' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelButtonText', type: 'color', label: 'Button Text Color:', value: '#ffffff' },
+                { tab, group: 'Dev Panel', id: 'colorDevPanelSettingNumber', type: 'color', label: 'Setting Number Text Color:', value: '#5cc9ff' },
                 { tab, group: 'Dev Panel', id: 'colorDevPanelTabText', type: 'color', label: 'Tab Text Color:', value: '#ffffff' },
                 { tab, group: 'Dev Panel', id: 'sliderDevTabTextLetterSpacing', type: 'slider', label: 'Tab Letter Spacing (px):', min: -2, max: 10, step: 0.1, value: 0 },
                 { tab, group: 'Dev Panel', id: 'sliderDevGroupTextLetterSpacing', type: 'slider', label: 'Group Letter Spacing (px):', min: -2, max: 10, step: 0.1, value: 0 },
@@ -1856,6 +1897,54 @@
             else if (ctrl.id in DEV_PANEL_CAPS_CHECKBOX_KEYS) row.querySelector('input').checked = !!devPanelStyle[DEV_PANEL_CAPS_CHECKBOX_KEYS[ctrl.id]];
             else if (ctrl.id === 'checkboxDevTextEditMode') row.querySelector('input').checked = textEditModeEnabled;
         });
+    }
+    // Default nested subgroup arrangement for the built-in "Dev Panel"
+    // group — ported from TEMPLATE_DEV_PANEL.html's 2026-09-14 update
+    // (CLAUDE.md §12i), matching its exact group names, nesting, and row
+    // order. Every control is still REGISTERED flat under the top-level
+    // "Dev Panel" group (findGroupContent only ever resolves a TOP-LEVEL
+    // group) — nesting is a runtime construct built by relocating
+    // already-rendered rows, exactly how createDevGroupElement() (the
+    // same function "+ Add Group"/applySectionOrder() use) already
+    // builds any other group. 3 top-level subgroups — MECHANICS (Scroll
+    // Strength), PANEL UI (background/accent/slider color, opacity), and
+    // TEXT (font family) — with TEXT itself nesting 5 further subgroups,
+    // one per text category (Dev Panel Title, Group Title, Setting
+    // Title, TABS, BUTTONS), each holding that category's own Bold/
+    // Capitalize/Font-Size/Letter-Spacing/Line-Spacing/Color battery.
+    // Idempotent — checks for its own MECHANICS marker group before
+    // doing anything, so a later real reorganization (the user dragging
+    // things around, or a saved/synced order loading afterward) is never
+    // clobbered by a repeat call.
+    function applyDefaultDevPanelSubgroupOrder(tab) {
+        const tabEl = document.getElementById(tab + 'TabContent');
+        if (!tabEl) return;
+        const devPanelSec = Array.from(tabEl.querySelectorAll(':scope > .dev-section')).find(s => {
+            const t = s.querySelector(':scope > .dev-section-title');
+            return t && (t.dataset.sid || t.textContent.replace(/^[▼▶]\s*/, '')) === 'Dev Panel';
+        });
+        if (!devPanelSec) return;
+        const content = devPanelSec.querySelector(':scope > .dev-section-content');
+        if (!content || content.querySelector(':scope > .dev-section[data-sid="MECHANICS"]')) return;
+        const rowsByKey = {};
+        content.querySelectorAll(':scope > .dev-row [id]').forEach(el => { rowsByKey[el.id] = el.closest('.dev-row'); });
+        function makeGroup(name, ids, parentContent) {
+            const g = createDevGroupElement(name, tab);
+            parentContent.appendChild(g);
+            const gc = g.querySelector(':scope > .dev-section-content');
+            ids.forEach(id => { const row = rowsByKey[id]; if (row) gc.appendChild(row); });
+            return g;
+        }
+        const p = tab === 'desktop' ? 'sliderDevPanel' : tab === 'mobile' ? 'sliderMobileDevPanel' : 'sliderLandscapeDevPanel';
+        makeGroup('MECHANICS', [p + 'ScrollStrength'], content);
+        makeGroup('PANEL UI', ['colorDevPanelBg', 'colorDevPanelAccent', 'colorDevPanelSliderColor', p + 'Opacity'], content);
+        const text = makeGroup('TEXT', ['selectDevPanelFontFamily'], content);
+        const textContent = text.querySelector(':scope > .dev-section-content');
+        makeGroup('Dev Panel Title', ['checkboxDevBoldTitle', 'checkboxDevCapsTitleText', p + 'TitleFontSize', p + 'TitleLetterSpacing', p + 'TitleLineHeight', p + 'ButtonTextBorder', 'colorDevPanelTitleText'], textContent);
+        makeGroup('Group Title', ['checkboxDevBoldGroup', 'checkboxDevCapsGroupNames', p + 'GroupTitleFontSize', 'sliderDevGroupTextLetterSpacing', p + 'GroupLineHeight', 'colorDevPanelGroupText', 'colorDevPanelGroupLabelBg'], textContent);
+        makeGroup('Setting Title', ['checkboxDevCapsSettingsText', 'checkboxDevBoldSettings', p + 'SettingTitleFontSize', p + 'ValueFontSize', p + 'SettingsLineHeight', 'sliderDevSettingsTextLetterSpacing', 'colorDevPanelNonTitleText', 'colorDevPanelSettingNumber'], textContent);
+        makeGroup('TABS', ['checkboxDevBoldTab', 'checkboxDevCapsTabText', p + 'TabFontSize', 'sliderDevTabTextLetterSpacing', p + 'TabLineHeight', 'colorDevPanelTabText'], textContent);
+        makeGroup('BUTTONS', ['checkboxDevBoldButton', 'checkboxDevCapsButtonText', p + 'ButtonFontSize', 'sliderDevButtonTextLetterSpacing', p + 'ButtonLineHeight', 'colorDevPanelButtonText', p + 'ButtonHeight'], textContent);
     }
     function setupDevPanelStyleControls() {
         const sliderKeys = [
@@ -2298,10 +2387,324 @@
         applyFullDevPanelState(await loadDevPanelSettingsAsync());
     }
 
+    // ================================================================
+    // MOUSE LOG (built-in "Debug" group feature) — ported from
+    // TEMPLATE_DEV_PANEL.html's 2026-09-14 update. A live log of mouse/
+    // touch position, click type, and what it hit. Unified mouse+touch
+    // capture via Pointer Events; e.pointerType ('mouse'/'touch'/'pen')
+    // is the input-source axis, isNarrowViewport() is the separate
+    // device/layout axis (a touch-capable laptop at a wide viewport
+    // still logs as "desktop" device context).
+    //
+    // SINGLE INSTANCE, not tripled per tab: there is exactly one real
+    // mouse/touch input stream regardless of which Desktop/Mobile/
+    // Landscape tab happens to be showing, so the widget (checkbox,
+    // slider, buttons, live display) is only ever built once, inside
+    // Desktop's own Debug group.
+    const MOUSE_LOG_MAX_ENTRIES = 500;
+    const MOUSE_LOG_HOLD_MS = 500;
+    const MOUSE_LOG_MULTICLICK_MS = 350;
+    const MOUSE_LOG_MOVE_THRESHOLD_PX = 10;
+    let mouseLog = [];
+    let mouseLogEl = null;
+    let mouseLogPositionEnabled = false;
+    let mouseLogPositionIntervalMs = 1000;
+    let mouseLogPositionTimer = null;
+    let mouseLogLastPointerPos = null;
+    let mouseLogLastViewport = null;
+    const mouseLogActivePointers = new Map();
+    let mouseLogClickCount = 0;
+    let mouseLogClickTimer = null;
+    let mouseLogHoldTimer = null;
+    let mouseLogPinchStartDist = null;
+    let mouseLogPinchActive = false;
+
+    function mouseLogDeviceContext() { return isNarrowViewport() ? 'mobile' : 'desktop'; }
+    function formatMouseLogTime(d) {
+        const pad2 = n => String(n).padStart(2, '0');
+        const pad3 = n => String(n).padStart(3, '0');
+        return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()) + '.' + pad3(d.getMilliseconds());
+    }
+    // Resolves WHAT a mouse/touch action hit — a Dev Panel control (by
+    // its own .dev-label text, or a button's own text) vs. something in
+    // the project's own app/game area (by id, else tag+first-class, else
+    // "(background)") — and a best-effort "triggered" guess: true for
+    // any genuinely interactive element, false otherwise (a structural
+    // guess, not app-logic awareness).
+    function describeMouseLogTarget(el) {
+        if (!el || el === document.documentElement || el === document.body) return { target: '(background)', triggered: false };
+        const inPanel = el.closest && el.closest('.dev-panel');
+        if (inPanel) {
+            const row = el.closest('.dev-row');
+            const label = row && row.querySelector('.dev-label');
+            const btn = el.closest('button');
+            const titleEl = el.closest('.dev-section-title');
+            const name = label ? label.textContent.trim() : btn ? btn.textContent.trim() : titleEl ? '(group) ' + titleEl.textContent.replace(/^[▼▶]\s*/, '').trim() : (el.id || el.tagName.toLowerCase());
+            const interactive = !!(btn || titleEl || el.matches('input, select, textarea, [onclick]'));
+            return { target: 'Dev Panel: ' + name, triggered: interactive };
+        }
+        const interactiveEl = el.closest && el.closest('button, a[href], input, select, textarea, [onclick], label');
+        if (interactiveEl) {
+            const id = interactiveEl.id ? '#' + interactiveEl.id : '';
+            const text = (interactiveEl.textContent || '').trim().slice(0, 30);
+            return { target: 'App: ' + interactiveEl.tagName.toLowerCase() + id + (text ? ' "' + text + '"' : ''), triggered: true };
+        }
+        const id = el.id ? '#' + el.id : '';
+        const cls = el.className && typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/)[0] : '';
+        return { target: 'App: ' + el.tagName.toLowerCase() + id + cls, triggered: false };
+    }
+    function renderMouseLogEntry(entry) {
+        if (!mouseLogEl) return;
+        const empty = mouseLogEl.querySelector('.dev-mouse-log-empty');
+        if (empty) empty.remove();
+        const line = document.createElement('div');
+        let text = entry.time + '  [' + entry.device + '/' + entry.pointerType + ']  ' + entry.type + '  (' + entry.x + ', ' + entry.y + ')';
+        if (entry.target) text += '  -> ' + entry.target;
+        if (entry.triggered === true) text += '  [OK]';
+        else if (entry.triggered === false) text += '  [no-op]';
+        if (entry.detail) text += '  ' + entry.detail;
+        line.textContent = text;
+        mouseLogEl.appendChild(line);
+        while (mouseLogEl.children.length > MOUSE_LOG_MAX_ENTRIES) mouseLogEl.removeChild(mouseLogEl.firstChild);
+        mouseLogEl.scrollTop = mouseLogEl.scrollHeight;
+    }
+    function pushMouseLogEntry(entry) {
+        entry.time = formatMouseLogTime(new Date());
+        mouseLog.push(entry);
+        if (mouseLog.length > MOUSE_LOG_MAX_ENTRIES) mouseLog.shift();
+        renderMouseLogEntry(entry);
+    }
+    // Context entries (device + viewport dims + pixel ratio) — logged
+    // once when logging starts, and again whenever the viewport actually
+    // changes size while the log has content, without repeating full
+    // viewport info on every single move/click entry.
+    function logMouseLogContext(reason) {
+        const w = window.innerWidth, h = window.innerHeight;
+        if (reason === 'resize' && mouseLogLastViewport && mouseLogLastViewport.w === w && mouseLogLastViewport.h === h) return;
+        mouseLogLastViewport = { w, h };
+        pushMouseLogEntry({
+            type: 'context', x: '-', y: '-', device: mouseLogDeviceContext(), pointerType: '-',
+            target: null, triggered: null,
+            detail: reason + ': ' + w + 'x' + h + ' dpr:' + (window.devicePixelRatio || 1).toFixed(2),
+        });
+    }
+    function clearMouseLog() {
+        mouseLog = [];
+        if (mouseLogEl) {
+            mouseLogEl.innerHTML = '';
+            const empty = document.createElement('div');
+            empty.className = 'dev-mouse-log-empty';
+            empty.textContent = '(no mouse activity logged yet)';
+            mouseLogEl.appendChild(empty);
+        }
+        mouseLogLastViewport = null;
+    }
+    function mouseLogEntryToLine(e) {
+        let text = e.time + '  [' + e.device + '/' + e.pointerType + ']  ' + e.type + '  (' + e.x + ', ' + e.y + ')';
+        if (e.target) text += '  -> ' + e.target;
+        if (e.triggered === true) text += '  [OK]';
+        else if (e.triggered === false) text += '  [no-op]';
+        if (e.detail) text += '  ' + e.detail;
+        return text;
+    }
+    function copyMouseLog(btn) {
+        const text = mouseLog.map(mouseLogEntryToLine).join('\n');
+        const flash = (msg) => { const orig = btn.textContent; btn.textContent = msg; setTimeout(() => { btn.textContent = orig; }, 900); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => flash('Copied!')).catch(() => flash('Copy failed'));
+        } else {
+            flash('Copy failed');
+        }
+    }
+    // Save as a .md file — a plain in-page Blob + <a download>, works
+    // fine for a real dev session in an actual browser.
+    function saveMouseLog() {
+        const header = '# Mouse Log\n\n' + mouseLog.filter(e => e.type === 'context').map(mouseLogEntryToLine).join('\n') + '\n\n';
+        const body = mouseLog.map(e => '- ' + mouseLogEntryToLine(e)).join('\n');
+        const md = header + body + '\n';
+        const blob = new Blob([md], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        a.href = url;
+        a.download = 'mouse-log-' + stamp + '.md';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+    function restartMouseLogPositionTimer() {
+        clearInterval(mouseLogPositionTimer);
+        mouseLogPositionTimer = null;
+        if (!mouseLogPositionEnabled) return;
+        mouseLogPositionTimer = setInterval(() => {
+            if (!mouseLogLastPointerPos) return;
+            pushMouseLogEntry({
+                type: 'position', x: mouseLogLastPointerPos.x, y: mouseLogLastPointerPos.y,
+                device: mouseLogDeviceContext(), pointerType: mouseLogLastPointerPos.pointerType || '-',
+                target: null, triggered: null,
+            });
+        }, mouseLogPositionIntervalMs);
+    }
+    function buildMouseLogWidget() {
+        const debugContent = findGroupContent('desktop', 'Debug', 'buildMouseLogWidget', 'mouseLogWidget');
+        if (!debugContent || mouseLogEl) return;
+        const section = createDevGroupElement('Mouse Log', 'desktop');
+        debugContent.appendChild(section);
+        const content = section.querySelector(':scope > .dev-section-content');
+
+        const posRow = document.createElement('div');
+        posRow.className = 'dev-row';
+        const posCheckbox = document.createElement('input');
+        posCheckbox.type = 'checkbox';
+        posCheckbox.id = 'checkboxMouseLogPosition';
+        const posLabel = document.createElement('span');
+        posLabel.className = 'dev-label';
+        posLabel.textContent = 'Log Mouse Position (continuous)';
+        posRow.append(posCheckbox, posLabel);
+        content.appendChild(posRow);
+        posCheckbox.addEventListener('change', (e) => {
+            mouseLogPositionEnabled = e.target.checked;
+            restartMouseLogPositionTimer();
+        });
+
+        const intervalCtrl = { id: 'sliderMouseLogInterval', type: 'slider', label: 'Position Log Interval (Ms):', min: 100, max: 5000, step: 50, value: mouseLogPositionIntervalMs };
+        const intervalRow = buildUniformControlRow(intervalCtrl);
+        content.appendChild(intervalRow);
+        document.getElementById('sliderMouseLogInterval').addEventListener('input', (e) => {
+            mouseLogPositionIntervalMs = parseFloat(e.target.value);
+            restartMouseLogPositionTimer();
+        });
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'dev-buttons';
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.textContent = 'COPY';
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.textContent = 'SAVE';
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.textContent = 'CLEAR';
+        btnRow.append(copyBtn, saveBtn, clearBtn);
+        content.appendChild(btnRow);
+        copyBtn.addEventListener('click', () => copyMouseLog(copyBtn));
+        saveBtn.addEventListener('click', saveMouseLog);
+        clearBtn.addEventListener('click', clearMouseLog);
+
+        mouseLogEl = document.createElement('div');
+        mouseLogEl.className = 'dev-mouse-log';
+        content.appendChild(mouseLogEl);
+        clearMouseLog();
+        logMouseLogContext('start');
+    }
+    function setupMouseLog() {
+        window.addEventListener('pointermove', (e) => {
+            mouseLogLastPointerPos = { x: Math.round(e.clientX), y: Math.round(e.clientY), pointerType: e.pointerType };
+            const info = mouseLogActivePointers.get(e.pointerId);
+            if (!info) return;
+            info.curX = e.clientX; info.curY = e.clientY;
+            if (!info.moved && Math.hypot(e.clientX - info.startX, e.clientY - info.startY) > MOUSE_LOG_MOVE_THRESHOLD_PX) info.moved = true;
+        });
+        window.addEventListener('pointerdown', (e) => {
+            mouseLogActivePointers.set(e.pointerId, { startX: e.clientX, startY: e.clientY, curX: e.clientX, curY: e.clientY, startTime: performance.now(), moved: false, target: e.target });
+            if (e.pointerType === 'touch' && mouseLogActivePointers.size === 2) {
+                const pts = Array.from(mouseLogActivePointers.values());
+                mouseLogPinchStartDist = Math.hypot(pts[0].curX - pts[1].curX, pts[0].curY - pts[1].curY);
+                mouseLogPinchActive = true;
+                clearTimeout(mouseLogHoldTimer);
+                return;
+            }
+            if (e.button === 2 || mouseLogActivePointers.size > 1) return;
+            clearTimeout(mouseLogHoldTimer);
+            mouseLogHoldTimer = setTimeout(() => {
+                const info2 = mouseLogActivePointers.get(e.pointerId);
+                if (info2 && !info2.moved) {
+                    const { target, triggered } = describeMouseLogTarget(e.target);
+                    pushMouseLogEntry({ type: 'hold', x: Math.round(e.clientX), y: Math.round(e.clientY), device: mouseLogDeviceContext(), pointerType: e.pointerType, target, triggered });
+                }
+            }, MOUSE_LOG_HOLD_MS);
+        });
+        window.addEventListener('pointerup', (e) => {
+            clearTimeout(mouseLogHoldTimer);
+            const info = mouseLogActivePointers.get(e.pointerId);
+            const wasPinching = mouseLogPinchActive && mouseLogActivePointers.size === 2;
+            mouseLogActivePointers.delete(e.pointerId);
+            if (!info) return;
+            const x = Math.round(e.clientX), y = Math.round(e.clientY);
+            const device = mouseLogDeviceContext();
+            if (wasPinching) {
+                mouseLogPinchActive = false;
+                const remaining = Array.from(mouseLogActivePointers.values())[0];
+                if (remaining && mouseLogPinchStartDist) {
+                    const endDist = Math.hypot(x - remaining.curX, y - remaining.curY);
+                    const scale = mouseLogPinchStartDist > 0 ? endDist / mouseLogPinchStartDist : 1;
+                    pushMouseLogEntry({ type: 'pinch', x, y, device, pointerType: 'touch', target: null, triggered: null, detail: (scale > 1 ? 'out' : 'in') + ' scale:' + scale.toFixed(2) });
+                }
+                return;
+            }
+            const heldMs = performance.now() - info.startTime;
+            const { target, triggered } = describeMouseLogTarget(info.target);
+            if (e.pointerType === 'touch') {
+                if (info.moved) {
+                    const dx = e.clientX - info.startX, dy = e.clientY - info.startY;
+                    const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+                    pushMouseLogEntry({ type: 'swipe', x, y, device, pointerType: 'touch', target, triggered, detail: 'dir:' + dir + ' dist:' + Math.round(Math.hypot(dx, dy)) });
+                    return;
+                }
+                if (heldMs > MOUSE_LOG_HOLD_MS) return;
+                mouseLogClickCount++;
+                clearTimeout(mouseLogClickTimer);
+                mouseLogClickTimer = setTimeout(() => {
+                    pushMouseLogEntry({ type: mouseLogClickCount >= 2 ? 'doubletap' : 'tap', x, y, device, pointerType: 'touch', target, triggered });
+                    mouseLogClickCount = 0;
+                }, MOUSE_LOG_MULTICLICK_MS);
+                return;
+            }
+            if (e.button === 2) {
+                pushMouseLogEntry({ type: 'rightclick', x, y, device, pointerType: e.pointerType, target, triggered });
+                return;
+            }
+            if (info.moved) {
+                pushMouseLogEntry({ type: 'drag-release', x, y, device, pointerType: e.pointerType, target, triggered, detail: 'heldMs:' + Math.round(heldMs) });
+                return;
+            }
+            if (heldMs > MOUSE_LOG_HOLD_MS) {
+                pushMouseLogEntry({ type: 'release', x, y, device, pointerType: e.pointerType, target, triggered, detail: 'heldMs:' + Math.round(heldMs) });
+                return;
+            }
+            mouseLogClickCount++;
+            clearTimeout(mouseLogClickTimer);
+            mouseLogClickTimer = setTimeout(() => {
+                const kind = mouseLogClickCount >= 3 ? 'tripleclick' : mouseLogClickCount === 2 ? 'dblclick' : 'click';
+                pushMouseLogEntry({ type: kind, x, y, device, pointerType: e.pointerType, target, triggered });
+                mouseLogClickCount = 0;
+            }, MOUSE_LOG_MULTICLICK_MS);
+        });
+        window.addEventListener('pointercancel', (e) => {
+            clearTimeout(mouseLogHoldTimer);
+            mouseLogActivePointers.delete(e.pointerId);
+            mouseLogPinchActive = false;
+        });
+        window.addEventListener('wheel', (e) => {
+            const { target, triggered } = describeMouseLogTarget(e.target);
+            pushMouseLogEntry({ type: 'scroll', x: Math.round(e.clientX), y: Math.round(e.clientY), device: mouseLogDeviceContext(), pointerType: 'wheel', target, triggered, detail: 'deltaY:' + Math.round(e.deltaY) });
+        }, { passive: true });
+        window.addEventListener('resize', () => { if (mouseLogEl) logMouseLogContext('resize'); });
+    }
+
     function initDevPanelEngine() {
         applyDevPanelLayout();
         applyDevPanelOwnStyling('desktop');
         renderDevPanelStyleControls();
+        // Built-in "Debug" group's own Mouse Log feature — finds the
+        // static "Debug" group and appends its own nested "Mouse Log"
+        // subgroup; setupMouseLog() wires the (global, only-ever-
+        // registered-once, since initDevPanelEngine() itself only ever
+        // runs once) window-level pointer/wheel listeners.
+        buildMouseLogWidget();
+        setupMouseLog();
 
         renderProjectControls();
         wireProjectControls();
@@ -2337,6 +2740,14 @@
         }
         injectGroupDragHandles();
         injectRowDragHandles();
+        // Runs BEFORE the saved-settings load further down on purpose —
+        // gives a fresh panel (no saved order yet) this nice default
+        // structure immediately; a project with its OWN saved Dev Panel
+        // order still wins, since applySectionOrder() (called from
+        // applyFullDevPanelState() via the loaded state's sectionOrder)
+        // relocates rows by their own stable key regardless of whatever
+        // parent this default pass already put them in.
+        DEV_PANEL_TABS.forEach(applyDefaultDevPanelSubgroupOrder);
         setupDragReorder('.dev-group-drag-handle', '.dev-section', () => {}, (tabRoot, dragging) => {
             const groupContents = Array.from(tabRoot.querySelectorAll('.dev-section > .dev-section-content'))
                 .filter(content => !dragging.contains(content));

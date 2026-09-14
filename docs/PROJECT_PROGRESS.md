@@ -377,9 +377,29 @@ this note is now complete, committed, and pushed (`751f84d`) — see
   Animation X Offset, Button style controls, the Dev Panel group's own
   settings) have been converted to `dynamicDevice: true` — that's a
   separate, riskier data-migration-shaped change, left for an explicit
-  future request. The template's cosmetic-only nested subgroup
-  arrangement for the built-in Dev Panel group remains un-ported too
-  (organizable by hand now via the drag-handle reordering above).
+  future request.
+
+  The template's exact nested subgroup arrangement for the built-in Dev
+  Panel group has now ALSO been ported (`applyDefaultDevPanelSubgroupOrder()`)
+  — MECHANICS / PANEL UI / TEXT top-level, TEXT nesting 5 further
+  subgroups (Dev Panel Title, Group Title, Setting Title, TABS,
+  BUTTONS) — along with the template's own current color palette
+  (Accent/Slider/Group Label Background/Group Text/Button Text/Setting
+  Number/Tab Text), superseding this project's own earlier color
+  choices. A real, previously-undiscovered bug in group/setting
+  **nesting** was also found and fixed: dragging a group onto a
+  **collapsed** target failed (the target's zero-height, `display:none`
+  content div broke the drop hit-test) — this was the actual cause of
+  a "can't nest groups" report, not a missing feature; fixed by porting
+  the template's `hitTestRect()` fallback (uses the group's title bar
+  when its content is collapsed). "Scroll Strength" was investigated
+  and found already working correctly — no code change was needed
+  there. The template's new **Mouse Log** system (a live mouse/touch
+  interaction log — clicks, taps, drags, swipes, pinches, scroll, with
+  target resolution — nested under the built-in "Debug" group) has also
+  been ported in full. See `CHANGELOG.txt` (2026-09-14 (3)) for the
+  full verification list. **Not yet committed/pushed** — this pass
+  wasn't accompanied by a push request.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

@@ -1804,6 +1804,68 @@ hadn't taken effect at all) -- not a real bug, resolved by a cache-
 busting query param.
 
 --------------------------------------------------------------------------------
+2026-09-14 (3)
+
+4-part dev-panel-template catch-up, all against TEMPLATE_DEV_PANEL.html's
+current state:
+
+1) Scroll Strength -- investigated, found already correctly implemented
+(wheel handler scales scrollTop by the slider's own value, matches the
+template exactly). Verified via synthetic wheel events and a live
+slider drag (strength 0.2 -> 20px scroll from a 100px delta; strength
+5 -> ~50px). No code change.
+
+2) Group/setting nesting -- found and fixed a REAL bug, not merely a
+missing port. setupDragReorder()'s cross-group hit-test used raw
+getBoundingClientRect() on candidate drop containers; a COLLAPSED
+group's .dev-section-content is display:none, so its rect is all-zero
+-- every collapsed group ties at the same degenerate {top:0,height:0},
+breaking both the "pointer is over this container" check and the
+"nearest by center" fallback. Groups default to collapsed, so this
+reproduced essentially every time a user tried to nest into a group
+they hadn't already expanded -- matches the exact incident
+TEMPLATE_DEV_PANEL.html's own comment documents from Clicko ("cant
+seem to reorder or modify group nesting... broke again the moment it
+was collapsed"). Fixed by porting the template's hitTestRect() helper,
+which falls back to the group's own title bar (never zero-size) when
+its content is collapsed. Verified via a real synthetic pointer-drag:
+nesting into a confirmed-collapsed group ("Entity") now succeeds
+(previously would only have worked if the target happened to already
+be expanded).
+
+3) Dev Panel group's exact subgroup structure -- ported
+applyDefaultDevPanelSubgroupOrder() verbatim: 3 top-level subgroups
+(MECHANICS, PANEL UI, TEXT), TEXT nesting 5 further subgroups (Dev
+Panel Title, Group Title, Setting Title, TABS, BUTTONS), each holding
+that category's own Bold/Capitalize/Font-Size/Letter-Spacing/Line-
+Spacing/Color battery -- exact names/order/nesting from the template.
+Also updated devPanelStyle's color defaults (accent/slider/group-
+label-bg/group-text/button-text/setting-number/tab-text) to match the
+template's own current live palette exactly, per explicit follow-up
+request, superseding this project's own prior color choices from
+earlier today. Idempotent (checks for its own MECHANICS marker before
+running), called once at init before any saved state loads.
+
+4) Mouse Log system (new in the template as of today) -- ported in
+full: a live log of mouse/touch position, click/tap/double-tap/hold/
+swipe/pinch/scroll classification, and what it hit (a Dev Panel
+control vs. the app itself vs. background), nested as a "Mouse Log"
+subgroup inside the built-in "Debug" group. Includes a continuous
+position-logging checkbox + interval slider, and Copy/Save(.md)/Clear
+buttons. Single global instance (one real input stream regardless of
+which tab is showing), wired via window-level Pointer Events. Verified
+live: toggling the position-log checkbox and moving the pointer
+produced real logged entries with correct device/pointerType tagging
+and target resolution.
+
+Verified in-browser (?dev=1): all 4 changes render/behave correctly
+together, assertDevControlsRendered() returns 0 missing, no new
+console errors beyond the pre-existing git-settings-log
+ERR_CONNECTION_RESET lines.
+
+Not committed/pushed this pass -- no push was requested this time.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================
