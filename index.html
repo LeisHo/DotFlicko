@@ -6392,7 +6392,14 @@
     const handsRemainingHud = document.getElementById('handsRemainingHud');
     function refreshSimControlsVisibility() {
         const editing = levelEditMode !== null;
-        [deleteBtn, ballBtn, rectBtn, targetBtn, handBtn].forEach(b => { b.style.display = editing ? '' : 'none'; });
+        // Delete is a pre-existing, always-available core control (deletes
+        // placed ENTITIES — and, harmlessly, ball spawn points/level rects
+        // if any exist — regardless of editing context), NOT a Level-Maker/
+        // Sandbox-only authoring tool like the other 4 below it — it must
+        // stay visible in plain Play too, unlike Ball/Rectangle/Target/Hand
+        // (which only make sense while actually editing a level).
+        deleteBtn.style.display = '';
+        [ballBtn, rectBtn, targetBtn, handBtn].forEach(b => { b.style.display = editing ? '' : 'none'; });
         targetBtn.style.display = (editing && levelEditMode === 'levelMaker') ? '' : 'none';
         // Level Maker is now available to everyone, not just DEV_MODE —
         // per explicit request. (The dev panel's own visibility was
