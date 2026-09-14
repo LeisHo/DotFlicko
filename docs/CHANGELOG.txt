@@ -1866,6 +1866,30 @@ ERR_CONNECTION_RESET lines.
 Not committed/pushed this pass -- no push was requested this time.
 
 --------------------------------------------------------------------------------
+2026-09-14 (4)
+
+Ported TEMPLATE_DEV_PANEL.html's "Named Setting States" (Saved Dev
+Settings) feature — was not previously implemented in this project at
+all (confirmed via grep before starting). Adds a collapsible "Saved
+Dev Settings" group right under Copy/Reset/Save, panel-level (not
+per-tab, not part of the reorderable group system) with a name
+dropdown + SAVE/USE/DELETE/SET DEFAULT buttons. Save prompts for a
+name and snapshots captureFullDevPanelState() under it (confirms
+before overwriting an existing name); Use applies a saved state live
+without touching what Reset/a fresh load would restore (a reversible
+"try it"); Delete removes just that saved state; Set Default applies
+the state AND runs it through saveDevPanelSettings(), so it becomes
+the new baseline. Stored under its own localStorage key
+(devPanelSavedStates), independent of the regular Save/Sync pipeline.
+
+Verified in-browser end-to-end (prompt/confirm monkey-patched for
+scripted testing): Save correctly captured and listed a named state;
+Use correctly restored the saved value after the live value had since
+drifted; the saved state round-tripped through localStorage correctly;
+Delete correctly removed it; the group's own collapse/expand still
+works. assertDevControlsRendered() returns 0 missing.
+
+--------------------------------------------------------------------------------
 <next entry follows the same divider + dated-header pattern>
 
 ================================================================================

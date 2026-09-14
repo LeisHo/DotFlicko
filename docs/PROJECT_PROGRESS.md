@@ -398,8 +398,15 @@ this note is now complete, committed, and pushed (`751f84d`) — see
   interaction log — clicks, taps, drags, swipes, pinches, scroll, with
   target resolution — nested under the built-in "Debug" group) has also
   been ported in full. See `CHANGELOG.txt` (2026-09-14 (3)) for the
-  full verification list. **Not yet committed/pushed** — this pass
-  wasn't accompanied by a push request.
+  full verification list. Pushed (`da183c0`).
+
+  The template's **"Saved Dev Settings" (Named Setting States)**
+  feature has now been ported too — a collapsible group under Copy/
+  Reset/Save with a name dropdown + SAVE/USE/DELETE/SET DEFAULT,
+  letting multiple full-panel-state snapshots be tried without losing
+  the actual synced settings. Stored under its own localStorage key,
+  independent of the regular Save/Sync pipeline. See `CHANGELOG.txt`
+  (2026-09-14 (4)) for the full verification list.
 
 Earlier (pre-spawn-placement-mode, also on `main`): mouse-follow entity
 with center-pointing rotation and 8-direction angle bucketing; per-

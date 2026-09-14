@@ -567,6 +567,30 @@
             <span class="dev-save-sync-status" id="devSaveSyncStatus"></span>
         </div>
 
+        <!-- Named Setting States (Save/Use/Delete/Set as Default) — ported
+             from TEMPLATE_DEV_PANEL.html. Sits right under Copy/Reset/Save,
+             wrapped in a collapsible "Saved Dev Settings" group — a single,
+             PANEL-LEVEL group (not tripled per tab), deliberately NOT part
+             of the per-tab reorderable group system (setupDragReorder/
+             section-order persistence/drag-handle-injection are all scoped
+             to search inside #desktopTabContent etc. — this sits outside
+             all 3, same level as Copy/Reset/Save above). Just reuses the
+             plain .dev-section/-title/-content markup for its collapse/
+             expand behavior, since toggleSection() itself has no
+             dependency on where in the DOM its target lives. -->
+        <div class="dev-section">
+            <div class="dev-section-title" onclick="toggleSection(this)">▼ Saved Dev Settings</div>
+            <div class="dev-section-content">
+                <select class="dev-select" id="devSavedStatesSelect" style="width:100%; margin-bottom:5px;"></select>
+                <div class="dev-buttons">
+                    <button onclick="saveNamedDevPanelState()">SAVE</button>
+                    <button onclick="useNamedDevPanelState()">USE</button>
+                    <button onclick="deleteNamedDevPanelState()">DELETE</button>
+                    <button onclick="setNamedDevPanelStateAsDefault()">SET DEFAULT</button>
+                </div>
+            </div>
+        </div>
+
         <div class="dev-tabs">
             <button class="dev-tab-btn active" id="devTabDesktopBtn" onclick="switchDevPanelTab('desktop')">DESKTOP</button>
             <button class="dev-tab-btn" id="devTabMobileBtn" onclick="switchDevPanelTab('mobile')">MOBILE</button>
@@ -2136,6 +2160,85 @@
             window.prompt('Copy:', text);
         }
     }
+
+    // ================================================================
+    // NAMED SETTING STATES (SAVE / USE / DELETE / SET AS DEFAULT) —
+    // ported from TEMPLATE_DEV_PANEL.html's [JS-13b]. Multiple named,
+    // full-panel-state snapshots to switch between without losing the
+    // actual synced settings — reuses captureFullDevPanelState()/
+    // applyFullDevPanelState() (the exact snapshot Copy/Save/Reset
+    // already use) as what gets saved/restored.
+    //
+    // Save: prompts for a name, snapshots captureFullDevPanelState()
+    // under it — asks before overwriting an existing name. Use: applies
+    // the selected saved state to the live panel/game WITHOUT touching
+    // whatever Save/Reset would restore — a reversible "try it". Delete:
+    // removes the selected saved state only. Set as Default: applies
+    // the selected state, THEN runs it straight through
+    // saveDevPanelSettings() — THAT's what actually replaces what
+    // Reset/a fresh load restores; Use alone never does.
+    const DEV_PANEL_SAVED_STATES_KEY = 'devPanelSavedStates';
+    function getSavedDevPanelStates() {
+        try {
+            const raw = localStorage.getItem(DEV_PANEL_SAVED_STATES_KEY);
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) { return {}; }
+    }
+    function setSavedDevPanelStates(states) {
+        try { localStorage.setItem(DEV_PANEL_SAVED_STATES_KEY, JSON.stringify(states)); } catch (e) { /* ignore */ }
+    }
+    function renderSavedDevPanelStatesList() {
+        const select = document.getElementById('devSavedStatesSelect');
+        if (!select) return;
+        const states = getSavedDevPanelStates();
+        const prevValue = select.value;
+        select.innerHTML = '';
+        Object.keys(states).forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+        if (states[prevValue]) select.value = prevValue;
+    }
+    function saveNamedDevPanelState() {
+        const name = prompt('Save current settings as:');
+        if (!name) return;
+        const states = getSavedDevPanelStates();
+        if (states[name] && !confirm('"' + name + '" already exists. Overwrite it?')) return;
+        states[name] = captureFullDevPanelState();
+        setSavedDevPanelStates(states);
+        renderSavedDevPanelStatesList();
+        const select = document.getElementById('devSavedStatesSelect');
+        if (select) select.value = name;
+    }
+    function useNamedDevPanelState() {
+        const select = document.getElementById('devSavedStatesSelect');
+        const name = select && select.value;
+        if (!name) return;
+        const states = getSavedDevPanelStates();
+        if (states[name]) applyFullDevPanelState(states[name]);
+    }
+    function deleteNamedDevPanelState() {
+        const select = document.getElementById('devSavedStatesSelect');
+        const name = select && select.value;
+        if (!name) return;
+        if (!confirm('Delete "' + name + '"?')) return;
+        const states = getSavedDevPanelStates();
+        delete states[name];
+        setSavedDevPanelStates(states);
+        renderSavedDevPanelStatesList();
+    }
+    function setNamedDevPanelStateAsDefault() {
+        const select = document.getElementById('devSavedStatesSelect');
+        const name = select && select.value;
+        if (!name) return;
+        const states = getSavedDevPanelStates();
+        const state = states[name];
+        if (!state) return;
+        applyFullDevPanelState(state);
+        saveDevPanelSettings();
+    }
     // ================================================================
     // Save Settings: git-tracked settings log (CLAUDE.md §12l), ported
     // from Clicko/DickoClicko's own established 3-tier implementation
@@ -2698,6 +2801,7 @@
         applyDevPanelLayout();
         applyDevPanelOwnStyling('desktop');
         renderDevPanelStyleControls();
+        renderSavedDevPanelStatesList();
         // Built-in "Debug" group's own Mouse Log feature — finds the
         // static "Debug" group and appends its own nested "Mouse Log"
         // subgroup; setupMouseLog() wires the (global, only-ever-
